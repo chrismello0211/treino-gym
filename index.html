@@ -169,6 +169,7 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 /* v2: mapa muscular */
 .musc .m{fill:#2A323D}
 .musc .on{fill:var(--brand)}
+body.claro .musc .m{fill:#D9DEE5}
 
 /* v2: calendário */
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
@@ -230,6 +231,18 @@ img.avatar{object-fit:cover}
 .fpg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .fpg img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:pointer}
 .drag-cab{touch-action:none;cursor:grab}
+body.claro{
+  --bg:#F4F5F7; --surf:#FFFFFF; --surf2:#F0F2F4; --surf3:#E8EBEF; --line:#E3E6EA;
+  --tx:#101828; --tx2:#475467; --tx3:#98A2B3;
+  --brand:#F25C1A; --brand2:#D9500F; --brand-dim:#FFE7DA;
+  --ok:#188A4C; --okbg:#E3F5EB; --warn:#A97D00; --warnbg:#FFF3D1; --err:#D92D20;
+  --azul:#0B7BC0;
+}
+@supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)){
+  body.claro #topo{background:rgba(244,245,247,.78)!important}
+  body.claro #tabbar{background:rgba(255,255,255,.72)!important}
+  body.claro #folha{background:rgba(255,255,255,.9)!important}
+}
 </style>
 </head>
 <body>
@@ -301,7 +314,7 @@ img.avatar{object-fit:cover}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.1';
+const APP_VER='5.2';
 
 /*CORE-START*/
 const CORE = {
@@ -831,7 +844,10 @@ function thumbEl(exId, tam){
   const xf=BIB.porId[exId];
   if(xf && xf.foto) return h('img',{class:'thumb', src:xf.foto, alt:'', loading:'lazy'});
   const src = BIB.gif(exId);
-  if(src) return h('img',{class:'thumb', src, loading:'lazy', alt:'', onerror:function(){ this.replaceWith(thumbIni(exId)); }});
+  if(src) return h('img',{class:'thumb', src, loading:'lazy', alt:'', onerror:function(){
+    if(!this._r){ this._r=1; const s0=this.src.split('?')[0]; setTimeout(()=>{ this.src=s0+'?r='+Date.now(); }, 900); }
+    else this.replaceWith(thumbIni(exId));
+  }});
   return thumbIni(exId);
 }
 function thumbIni(exId){
@@ -871,6 +887,12 @@ const UI = {
   },
   fechaFolha(){ $('#veu').classList.remove('on'); $('#folha').classList.remove('on'); document.body.style.overflow=''; }
 };
+function aplicaTema(t){
+  document.body.classList.toggle('claro', t==='claro');
+  const mt=document.querySelector('meta[name="theme-color"]');
+  if(mt) mt.setAttribute('content', t==='claro' ? '#F4F5F7' : '#0B0D10');
+}
+try{ aplicaTema(S.cfg && S.cfg.tema); }catch(e){}
 $('#veu').addEventListener('click', UI.fechaFolha);
 (function(){
   let sx=0, sy=0, t0=0, ok=false;
@@ -932,43 +954,49 @@ $('#tb-pular').addEventListener('click',()=>DESC.para());
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && DESC.fim) DESC.tic(); });
 
 /* ---------- gráfico canvas ---------- */
+function temaCanvas(){
+  const claro=document.body.classList.contains('claro');
+  return claro
+    ? {vazio:'#E4E7EC', rot:'#667085', txt:'#475467', grade:'#E4E7EC'}
+    : {vazio:'#242B34', rot:'#5B6572', txt:'#8B95A3', grade:'#242B34'};
+}
 function grafBarras(canvas, dados, formata){
   const dpr=window.devicePixelRatio||1, W=canvas.clientWidth||320, H=canvas.clientHeight||170;
   canvas.width=W*dpr; canvas.height=H*dpr;
-  const c=canvas.getContext('2d'); c.scale(dpr,dpr); c.clearRect(0,0,W,H);
+  const c=canvas.getContext('2d'); const T=temaCanvas(); c.scale(dpr,dpr); c.clearRect(0,0,W,H);
   const max=Math.max(1,...dados.map(d=>d.v));
   const n=dados.length, gap=n>20?2:6, bw=Math.min(34,(W-40-gap*(n-1))/n);
   const x0=(W-(bw*n+gap*(n-1)))/2, base=H-24, alt=base-16;
   c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
   dados.forEach((d,i)=>{
     const x=x0+i*(bw+gap), bh=Math.max(2, alt*d.v/max);
-    c.fillStyle = d.v>0 ? '#FF6B2C' : '#242B34';
+    c.fillStyle = d.v>0 ? '#FF6B2C' : T.vazio;
     c.beginPath(); c.roundRect(x, base-bh, bw, bh, 5); c.fill();
-    c.fillStyle='#5B6572'; c.textAlign='center';
+    c.fillStyle=T.rot; c.textAlign='center';
     if(d.rot) c.fillText(d.rot, x+bw/2, H-8);
   });
-  c.fillStyle='#8B95A3'; c.textAlign='left'; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif';
+  c.fillStyle=T.txt; c.textAlign='left'; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif';
   c.fillText(formata?formata(max):String(max), 4, 14);
 }
 function grafLinha(canvas, pontos, formata){
   const dpr=window.devicePixelRatio||1, W=canvas.clientWidth||320, H=canvas.clientHeight||170;
   canvas.width=W*dpr; canvas.height=H*dpr;
-  const c=canvas.getContext('2d'); c.scale(dpr,dpr); c.clearRect(0,0,W,H);
+  const c=canvas.getContext('2d'); const T=temaCanvas(); c.scale(dpr,dpr); c.clearRect(0,0,W,H);
   if(!pontos.length) return;
   const vs=pontos.map(p=>p.v), max=Math.max(...vs), min=Math.min(...vs);
   const pad=18, base=H-26, topo=14, span=(max-min)||1;
   const X=i=>pad+ (W-pad*2)*(pontos.length===1?0.5:i/(pontos.length-1));
   const Y=v=>base-(base-topo)*(v-min)/span;
-  c.strokeStyle='#242B34'; c.lineWidth=1;
+  c.strokeStyle=T.vazio; c.lineWidth=1;
   [0,.5,1].forEach(f=>{ const y=topo+(base-topo)*f; c.beginPath(); c.moveTo(pad,y); c.lineTo(W-pad,y); c.stroke(); });
   c.strokeStyle='#FF6B2C'; c.lineWidth=2.4; c.lineJoin='round'; c.beginPath();
   pontos.forEach((p,i)=>{ const x=X(i),y=Y(p.v); i?c.lineTo(x,y):c.moveTo(x,y); }); c.stroke();
   c.fillStyle='#FF8B4C';
   pontos.forEach((p,i)=>{ c.beginPath(); c.arc(X(i),Y(p.v),3.4,0,7); c.fill(); });
-  c.fillStyle='#8B95A3'; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif'; c.textAlign='left';
+  c.fillStyle=T.txt; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif'; c.textAlign='left';
   c.fillText(formata?formata(max):String(max), 4, 12);
   c.fillText(formata?formata(min):String(min), 4, base+4);
-  c.fillStyle='#5B6572'; c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
+  c.fillStyle=T.rot; c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
   c.textAlign='center';
   if(pontos[0].rot) c.fillText(pontos[0].rot, X(0)+10, H-8);
   const u=pontos.length-1;
@@ -1811,6 +1839,12 @@ TELAS.config = function(){
   const m=$('#main'); m.innerHTML='';
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;margin-bottom:10px'},'Versão '+APP_VER));
   const salvaCfg=()=>{ S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg); };
+  m.appendChild(h('div',{class:'card'},
+    h('div',{class:'secao',style:'margin:0 0 10px'},'Aparência'),
+    h('div',{class:'linha',style:'gap:8px'},
+      h('button',{class:'chip'+(S.cfg.tema!=='claro'?' on':''),onclick:()=>{ S.cfg.tema='escuro'; salvaCfg(); aplicaTema('escuro'); UI.refaz(); }},'Escuro'),
+      h('button',{class:'chip'+(S.cfg.tema==='claro'?' on':''),onclick:()=>{ S.cfg.tema='claro'; salvaCfg(); aplicaTema('claro'); UI.refaz(); }},'Claro')),
+    h('div',{class:'f12 mut2',style:'margin-top:8px'},'O escuro é o padrão do app.')));
   const salvaPerfil=()=>{ S.perfil.atualizado=agora(); salva('perfil'); NET.agenda('app/perfil',S.perfil);
     if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, atualizado:agora()}); };
 
@@ -2396,7 +2430,7 @@ function desenhaAmigo(r, dono, tid){
   }
   (r.ex||[]).forEach(e=>{
     const card=h('div',{class:'card'});
-    card.append(h('div',{class:'linha',style:'margin-bottom:8px'}, thumbNome(e.n),
+    card.append(h('div',{class:'linha',style:'margin-bottom:8px'}, (e.id? thumbEl(e.id) : thumbNome(e.n)),
       h('div',{class:'esp b700'},e.n)));
     if(e.sr && e.sr.length){
       card.append(h('div',{class:'gtab cab'},h('div',{},'Série'),h('div'),
@@ -2476,9 +2510,11 @@ function radarSVG(eixos, A, B){
   const W=260,H=214,cx=W/2,cy=H/2+4,R=72,n=eixos.length;
   const pt=(i,f)=>{ const a=-Math.PI/2 + i*2*Math.PI/n; return [cx+Math.cos(a)*R*f, cy+Math.sin(a)*R*f]; };
   const poly=v=>v.map((f,i)=>pt(i,Math.max(.05,f)).join(',')).join(' ');
+  const claroR=document.body.classList.contains('claro');
+  const gr1=claroR?'rgba(16,24,40,.14)':'rgba(255,255,255,.10)', gr2=claroR?'rgba(16,24,40,.10)':'rgba(255,255,255,.08)';
   let s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">';
-  [1,.66,.33].forEach(f=>{ s+='<polygon points="'+eixos.map((_,i)=>pt(i,f).join(',')).join(' ')+'" fill="none" stroke="rgba(255,255,255,.10)"/>'; });
-  eixos.forEach((_,i)=>{ const p2=pt(i,1); s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p2[0]+'" y2="'+p2[1]+'" stroke="rgba(255,255,255,.08)"/>'; });
+  [1,.66,.33].forEach(f=>{ s+='<polygon points="'+eixos.map((_,i)=>pt(i,f).join(',')).join(' ')+'" fill="none" stroke="'+gr1+'"/>'; });
+  eixos.forEach((_,i)=>{ const p2=pt(i,1); s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p2[0]+'" y2="'+p2[1]+'" stroke="'+gr2+'"/>'; });
   s+='<polygon points="'+poly(B)+'" fill="rgba(76,195,255,.16)" stroke="#4CC3FF" stroke-width="2"/>';
   s+='<polygon points="'+poly(A)+'" fill="rgba(255,107,44,.20)" stroke="#FF6B2C" stroke-width="2"/>';
   eixos.forEach((rot,i)=>{ const p2=pt(i,1.26);
@@ -2559,7 +2595,7 @@ TELAS.perfilAmigo = function({uid:alvo}){
 };
 function abreRotinaPub(alvo, r){
   const linhas=(r.ex||[]).map(e=>h('div',{class:'med-row'},
-    thumbNome(e.n||'?'),
+    ((e.exId && BIB.porId[e.exId])? thumbEl(e.exId) : thumbNome(e.n||'?')),
     h('div',{class:'esp',style:'min-width:0'},
       h('div',{class:'b700',style:'font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},e.n||'Exercício'),
       h('div',{class:'f12 mut'},(e.ser||3)+' séries × '+(e.reps||'10')))));
@@ -3302,7 +3338,7 @@ const CONTA = {
 function resumoTreino(t){
   const r0={ id:t.id, v:2, nome:S.perfil?.nome||'Atleta', user:S.perfil?.user||'', titulo:t.titulo,
     inicio:t.inicio, fim:t.fim, volume:t.volume||0, series:t.series||0, recordes:t.recordes||0,
-    ex:(t.ex||[]).map(e=>({ n:BIB.ex(e.exId).n, g:BIB.ex(e.exId).g, s:e.series.length,
+    ex:(t.ex||[]).map(e=>({ id:e.exId, n:BIB.ex(e.exId).n, g:BIB.ex(e.exId).g, s:e.series.length,
       sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
     atualizado:agora() };
   if(t.temFoto) r0.f=1;
@@ -3541,7 +3577,8 @@ const NOTIF = {
   }
 };
 function thumbNome(n){
-  const x=BIB.lista.find(q=>q._busca===BIB.norm(n));
+  const nn=BIB.norm(n);
+  const x=BIB.lista.find(q=>q._nn===nn);
   if(x) return thumbEl(x.id);
   return h('div',{class:'thumb-ini',style:'width:44px;height:44px;font-size:16px'},(n||'?')[0].toUpperCase());
 }
@@ -3629,7 +3666,12 @@ TELAS.boasVindas = function(){
     h('img',{src:'icon-192.png',style:'width:88px;height:88px;border-radius:22px;margin-bottom:18px'}),
     h('div',{class:'b800',style:'font-size:26px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
-      'Séries, cargas, recordes e evolução, registrados na hora. Funciona sem sinal na academia. Com conta, você sincroniza em qualquer aparelho e participa do feed.'),
+      'Registre séries, cargas e recordes em segundos.',
+      h('div',{class:'f14',style:'margin-top:12px;line-height:2.1;text-align:left;display:inline-block'},
+        h('div',{},'📈  Evolução com gráficos e relatório mensal'),
+        h('div',{},'📶  Funciona offline, direto da academia'),
+        h('div',{},'👥  Feed com amigos, curtidas e comparações'),
+        h('div',{},'☁️  Com conta: seus dados em qualquer aparelho'))),
     inp, h('div',{style:'height:12px'}),
     h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:async function(){
       const n=(inp.value||'').trim(); if(!n){ UI.toast('Informe um nome'); return; }

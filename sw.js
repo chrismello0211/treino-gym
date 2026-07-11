@@ -3,7 +3,7 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v4.4', GCACHE='tg-gifs-v1';
+const CACHE='tg-v4.5', GCACHE='tg-gifs-v1';
 const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install',e=>{ self.skipWaiting();
@@ -27,7 +27,8 @@ self.addEventListener('fetch',e=>{
   }
   const doc = req.mode==='navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html') || url.pathname.endsWith('exercicios.json');
   if(doc){
-    e.respondWith(fetch(req).then(res=>{ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); return res; })
+    const fresco = new Request(req, {cache:'reload'});
+    e.respondWith(fetch(fresco).then(res=>{ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); return res; })
       .catch(()=>caches.match(req).then(r=>r||caches.match('./index.html'))));
     return;
   }

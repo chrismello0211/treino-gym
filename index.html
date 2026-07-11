@@ -252,6 +252,33 @@ img.avatar{object-fit:cover}
    ============================================================ */
 'use strict';
 
+/* ---- detector de erros visível (diagnóstico) ---- */
+(function(){
+  function mostra(msg){
+    try{
+      var b=document.getElementById('errbar');
+      if(!b){ b=document.createElement('div'); b.id='errbar';
+        b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#B3261E;color:#fff;font:600 12px/1.4 system-ui,sans-serif;padding:10px 40px 10px 12px;white-space:pre-wrap;word-break:break-word;max-height:45vh;overflow:auto;box-shadow:0 -4px 20px rgba(0,0,0,.5)';
+        var x=document.createElement('button'); x.textContent='✕';
+        x.style.cssText='position:absolute;top:6px;right:8px;background:none;border:none;color:#fff;font-size:16px;font-weight:800';
+        x.onclick=function(){ b.remove(); };
+        b.appendChild(x);
+        (document.body||document.documentElement).appendChild(b);
+      }
+      var p=document.createElement('div'); p.textContent='⚠ '+msg; b.appendChild(p);
+    }catch(e){}
+  }
+  window.addEventListener('error', function(ev){
+    mostra((ev.message||'erro')+(ev.filename?(' · linha '+ev.lineno):''));
+  });
+  window.addEventListener('unhandledrejection', function(ev){
+    var r=ev.reason; mostra('promessa: '+((r&&(r.message||r))||'erro'));
+  });
+  window.__errbar_mostra=mostra;
+})();
+
+const APP_VER='4.5';
+
 /*CORE-START*/
 const CORE = {
   est1RM(kg, reps){ if(!kg||!reps) return 0; if(reps===1) return kg; return Math.round(kg*(1+reps/30)*10)/10; },
@@ -1113,6 +1140,37 @@ const ATIVO = {
     $('#ta-progresso').style.width = tot? Math.min(100, 100*ser/tot)+'%' : '0%';
     const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 92)); }
   },
+  editaTempo(){
+    const t=S.ativo; if(!t) return;
+    const durMin=Math.max(0, Math.round((agora()-t.inicio)/60000));
+    const inpDur=h('input',{type:'number',inputmode:'numeric',value:String(durMin)});
+    const d=new Date(t.inicio);
+    const pad=n=>String(n).padStart(2,'0');
+    const inpHora=h('input',{type:'time',value:pad(d.getHours())+':'+pad(d.getMinutes())});
+    UI.folha('Ajustar tempo do treino',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Comeceçou antes e esqueceu de iniciar? Ajuste a duração já decorrida ou o horário de início.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Duração até agora (minutos)'), inpDur,
+      h('div',{style:'height:12px'}),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Ou horário de início'), inpHora,
+      h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:()=>{
+        // prioridade: se mexeu no horário e ele difere, usa horário; senão usa duração
+        let novoInicio=t.inicio;
+        const hhmm=(inpHora.value||'').split(':');
+        if(hhmm.length===2){
+          const cand=new Date(t.inicio); cand.setHours(+hhmm[0], +hhmm[1], 0, 0);
+          if(cand.getTime()>agora()) cand.setDate(cand.getDate()-1); // início no futuro => foi ontem
+          novoInicio=cand.getTime();
+        }
+        const durInformada=parseInt(inpDur.value,10);
+        if(!isNaN(durInformada) && Math.abs(durInformada-durMin)>=1){
+          novoInicio=agora()-durInformada*60000;
+        }
+        t.inicio=novoInicio; salva('ativo');
+        const el=$('#ta-cron'); if(el) el.textContent=CORE.fmtDur((agora()-t.inicio)/1000);
+        UI.fechaFolha(); UI.toast('Tempo ajustado');
+      }},'Salvar')]);
+  },
   descarta(){
     UI.folha('Descartar treino?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'As séries registradas hoje serão perdidas. Essa ação não tem volta.'),
@@ -1180,7 +1238,7 @@ TELAS.ativo = function(){
   m.appendChild(h('div',{class:'card',style:'position:sticky;top:calc(var(--sat) + 58px);z-index:30'},
     h('div',{class:'linha'},
       h('div',{class:'stats3',style:'flex:1'},
-        h('div',{},h('div',{class:'k'},'Duração'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
+        h('button',{style:'background:none;border:none;text-align:left;padding:0',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k'},'Duração ✎'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol'},'0 kg')),
         h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0'))),
       h('div',{id:'ta-musc'}))));
@@ -1271,6 +1329,30 @@ TELAS.ativo = function(){
 };
 
 /* ---------- DETALHE DO TREINO ---------- */
+function editaTempoTreino(t){
+  const pad=n=>String(n).padStart(2,'0');
+  const di=new Date(t.inicio), df=new Date(t.fim);
+  const iniH=h('input',{type:'time',value:pad(di.getHours())+':'+pad(di.getMinutes())});
+  const durMin=Math.max(0, Math.round((t.fim-t.inicio)/60000));
+  const inpDur=h('input',{type:'number',inputmode:'numeric',value:String(durMin)});
+  UI.folha('Ajustar tempo do treino',[
+    h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Corrija o horário de início e a duração deste treino.'),
+    h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Horário de início'), iniH,
+    h('div',{style:'height:12px'}),
+    h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Duração (minutos)'), inpDur,
+    h('div',{style:'height:14px'}),
+    h('button',{class:'btn btn-p',onclick:()=>{
+      const hhmm=(iniH.value||'').split(':');
+      let ini=t.inicio;
+      if(hhmm.length===2){ const c=new Date(t.inicio); c.setHours(+hhmm[0],+hhmm[1],0,0); ini=c.getTime(); }
+      let dur=parseInt(inpDur.value,10); if(isNaN(dur)||dur<0) dur=durMin;
+      t.inicio=ini; t.fim=ini+dur*60000; t.atualizado=agora();
+      salva('treinos'); NET.agenda('treinos/'+t.id, t);
+      if(t.temFoto && S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+      else if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+      UI.fechaFolha(); UI.refaz(); UI.toast('Tempo ajustado');
+    }},'Salvar')]);
+}
 TELAS.treinoDet = function({id}){
   const t=S.treinos[id]; if(!t){ UI.volta(); return; }
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},t.titulo,h('small',{},dataLonga(t.inicio))),
@@ -1278,7 +1360,7 @@ TELAS.treinoDet = function({id}){
   const m=$('#main'); m.innerHTML='';
   m.appendChild(h('div',{class:'card'},h('div',{class:'linha'},
     h('div',{class:'stats3',style:'flex:1'},
-      h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
+      h('button',{style:'background:none;border:none;text-align:left;padding:0',onclick:()=>editaTempoTreino(t)},h('div',{class:'k'},'Tempo ✎'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
     corpoSVG(gruposDoTreino(t), 92))));
@@ -1459,6 +1541,7 @@ TELAS.perfil = function(){
 TELAS.config = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Ajustes'));
   const m=$('#main'); m.innerHTML='';
+  m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;margin-bottom:10px'},'Versão '+APP_VER));
   const salvaCfg=()=>{ S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg); };
   const salvaPerfil=()=>{ S.perfil.atualizado=agora(); salva('perfil'); NET.agenda('app/perfil',S.perfil);
     if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, atualizado:agora()}); };
@@ -1534,7 +1617,7 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v4.4', h('br'),
+    'Treino Gym v'+APP_VER, h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){

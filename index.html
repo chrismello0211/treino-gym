@@ -186,6 +186,15 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .hbar .fill{height:100%;background:var(--brand);border-radius:7px}
 .hbar .val{width:34px;font-size:12.5px;font-weight:800;color:var(--tx2)}
 .periodo{display:flex;gap:8px;margin:0 0 6px}
+
+/* v3: superssérie, rpe, social */
+.ss-tag{font-size:10px;font-weight:800;letter-spacing:.6px;padding:2px 7px;border-radius:6px;margin-bottom:6px;display:inline-block}
+.stipo{position:relative}
+.stipo .rpe{position:absolute;top:-5px;right:-7px;font-size:9px;font-weight:800;color:var(--brand2);background:var(--surf);padding:0 2px;border-radius:4px}
+.rpe-tag{font-size:11px;font-weight:800;color:var(--brand2);margin-left:6px}
+.heart{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--tx3);font-size:13.5px;font-weight:800;padding:8px 2px 0}
+.heart.on{color:var(--brand2)}
+.heart svg{width:19px;height:19px}
 </style>
 </head>
 <body>
@@ -264,6 +273,11 @@ const CORE = {
     Object.values(treinos||{}).forEach(t=>{ const w=CORE.semanaKey(t.inicio); if(mapa[w]){ mapa[w].dur+=(t.fim-t.inicio)/1000; mapa[w].vol+=t.volume||0; mapa[w].ser+=t.series||0; mapa[w].qtd++; } });
     return semanas.map(w=>({w, ...mapa[w]}));
   }
+};
+CORE.descansaApos = function(exList, ix){
+  const ss=exList[ix] && exList[ix].ss;
+  if(!ss) return true;
+  return !exList.slice(ix+1).some(q=>q.ss===ss);
 };
 CORE.recomputaPRs = function(lista){
   const prs={};
@@ -381,6 +395,7 @@ const S = {
   prs: LS.get('prs', {}),                   // exId -> {kg:{v,tid,data},...}
   custom: LS.get('custom', {}),             // exercícios criados pelo usuário
   medidas: LS.get('medidas', {}),           // registros corporais
+  social: LS.get('social', {seguindo:{}}),  // quem eu sigo (cache local)
   ativo: LS.get('ativo', null),             // treino em andamento
   auth: LS.get('auth', null),               // {uid, refreshToken, idToken, exp}
   fila: LS.get('fila', [])                  // [{path, val, ts}]
@@ -413,7 +428,51 @@ const NET = {
       return S.auth.idToken;
     }catch(e){ return null; }
   },
-  caminho(p){ return FB.db+'/usuarios/'+S.auth.uid+'/'+p+'.json'; },
+  caminho(p){ return p[0]==='/' ? FB.db+p+'.json' : FB.db+'/usuarios/'+S.auth.uid+'/'+p+'.json'; },
+  async get(p){
+    try{
+      const tk=await NET.token(); if(!tk) return null;
+      const [base, qs]=p.split('?');
+      const r=await fetch(NET.caminho(base)+'?'+(qs? qs+'&':'')+'auth='+tk);
+      if(!r.ok) return null;
+      return await r.json();
+    }catch(e){ return null; }
+  },
+  async criarConta(email, senha){
+    const tk=await NET.token(); if(!tk) throw new Error('Sem conexão');
+    const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key='+FB.key,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({idToken:tk, email, password:senha, returnSecureToken:true})});
+    const d=await r.json();
+    if(!r.ok){ const c=d.error?.message||''; throw new Error(
+      c.includes('EMAIL_EXISTS')?'Esse e-mail já tem conta. Use Entrar.':
+      c.includes('WEAK_PASSWORD')?'Senha fraca: mínimo 6 caracteres.':
+      c.includes('INVALID_EMAIL')?'E-mail inválido.':'Não deu para criar a conta agora.'); }
+    S.auth={uid:d.localId, refreshToken:d.refreshToken||S.auth.refreshToken, idToken:d.idToken, exp:Date.now()+((+d.expiresIn||3600)-300)*1000};
+    salva('auth');
+  },
+  async entrar(email, senha){
+    const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+FB.key,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email, password:senha, returnSecureToken:true})});
+    const d=await r.json();
+    if(!r.ok){ const c=d.error?.message||''; throw new Error(
+      c.includes('INVALID_LOGIN')||c.includes('INVALID_PASSWORD')||c.includes('EMAIL_NOT_FOUND')?'E-mail ou senha incorretos.':
+      c.includes('TOO_MANY')?'Muitas tentativas. Aguarde um pouco.':'Não deu para entrar agora.'); }
+    return {uid:d.localId, refreshToken:d.refreshToken, idToken:d.idToken, exp:Date.now()+((+d.expiresIn||3600)-300)*1000, email};
+  },
+  async resetSenha(email){
+    const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key='+FB.key,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({requestType:'PASSWORD_RESET', email})});
+    if(!r.ok) throw new Error('Não achei conta com esse e-mail.');
+  },
+  async putD(p, val){
+    const tk=await NET.token(); if(!tk) throw new Error('offline');
+    const r=await fetch(NET.caminho(p)+'?auth='+tk,{method:'PUT',body:JSON.stringify(val===undefined?null:val)});
+    if(!r.ok) throw new Error('put');
+    return true;
+  },
   agenda(path, val){ S.fila.push({path, val, ts:Date.now()}); if(S.fila.length>400) S.fila.splice(0, S.fila.length-400); salva('fila'); NET.despacha(); },
   async despacha(){
     if(NET.sincronizando || !S.fila.length || !S.auth || !navigator.onLine) return;
@@ -900,6 +959,7 @@ TELAS.rotinaEditor = function(){
     const x=BIB.ex(e.exId);
     const rot=TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps;
     const card=h('div',{class:'card'});
+    const sstag=SS.aplica(card, r.ex, e); if(sstag) card.append(sstag);
     card.append(
       h('div',{class:'linha',style:'margin-bottom:8px'},
         thumbEl(e.exId),
@@ -931,6 +991,8 @@ TELAS.rotinaEditor = function(){
   }
   function menuEx(e,ix){
     UI.folha(BIB.ex(e.exId).n,[
+      ix<r.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(r.ex,ix); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
+      e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(r.ex,ix); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
       h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[r.ex[ix-1],r.ex[ix]]=[r.ex[ix],r.ex[ix-1]];UI.fechaFolha();UI.refaz();} }},'Mover para cima'),
       h('button',{class:'menu-op',onclick:()=>{ if(ix<r.ex.length-1){[r.ex[ix+1],r.ex[ix]]=[r.ex[ix],r.ex[ix+1]];UI.fechaFolha();UI.refaz();} }},'Mover para baixo'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }); }},'Substituir exercício'),
@@ -955,7 +1017,7 @@ const ATIVO = {
       id:uid(), rid:rid||null,
       titulo: r ? r.titulo : 'Treino de '+new Date().toLocaleDateString('pt-BR',{weekday:'long'}).replace('-feira',''),
       inicio: agora(),
-      ex: r ? r.ex.map(e=>({ exId:e.exId, descanso:e.descanso, notas:e.notas||'',
+      ex: r ? r.ex.map(e=>({ exId:e.exId, descanso:e.descanso, notas:e.notas||'', ss:e.ss||null,
         series: e.series.map(s=>({tipo:s.tipo, kg:s.kg, reps:s.reps, ok:false})) })) : []
     };
     salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
@@ -981,7 +1043,9 @@ const ATIVO = {
         prs.forEach(([t])=>NET.agenda('prs/'+e.exId+'/'+t, S.prs[e.exId][t]));
         SOM.pr(); UI.toast('Recorde pessoal · '+x.n+' 🏅', true);
       }
-      if(e.descanso>0) DESC.inicia(e.descanso, x.n);
+      const ixE=S.ativo.ex.indexOf(e);
+      if(e.descanso>0 && CORE.descansaApos(S.ativo.ex, ixE)) DESC.inicia(e.descanso, x.n);
+      else if(e.ss && !CORE.descansaApos(S.ativo.ex, ixE)) UI.toast('Superssérie: próximo exercício');
     } else { s.ok=false; delete s.pr; }
     salva('ativo'); ATIVO.pinta();
   },
@@ -1013,6 +1077,7 @@ const ATIVO = {
           ex:feitos, volume:CORE.volumeTreino(t), series:CORE.seriesFeitas(t),
           recordes:feitos.reduce((a,e)=>a+e.series.filter(s=>s.pr).length,0), atualizado:fim };
         S.treinos[salvo.id]=salvo; salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo);
+        if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, resumoTreino(salvo));
         // sugere atualizar rotina com as cargas de hoje
         S.ativo=null; salva('ativo'); DESC.para();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('inicio',null,false);
@@ -1064,6 +1129,7 @@ TELAS.ativo = function(){
     const x=BIB.ex(e.exId);
     const rot=TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps;
     const card=h('div',{class:'card'});
+    const sstag=SS.aplica(card, t.ex, e); if(sstag) card.append(sstag);
     card.append(
       h('div',{class:'linha',style:'margin-bottom:6px'},
         thumbEl(e.exId),
@@ -1084,8 +1150,8 @@ TELAS.ativo = function(){
     const ant=ATIVO.serieAnterior(e.exId, si);
     const antTxt = ant ? (x.t==='peso_reps' ? CORE.fmtKg(ant.kg)+'kg × '+ant.reps : ant.reps+(x.t==='tempo'?'s':' reps')) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
-      h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(!s.ok){ s.tipo={N:'W',W:'D',D:'F',F:'N'}[s.tipo]; salva('ativo'); UI.refaz(); } }},
-        s.tipo==='N'?String(numerada||1):s.tipo),
+      h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(!s.ok) tipoRpe(s); }},
+        s.tipo==='N'?String(numerada||1):s.tipo, s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null),
       h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(ant&&!s.ok){ s.kg=ant.kg; s.reps=ant.reps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
         ? h('input',{type:'number',inputmode:'decimal',value:s.kg,placeholder:ant?String(ant.kg):'kg',oninput:ev=>{s.kg=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok})
@@ -1099,8 +1165,23 @@ TELAS.ativo = function(){
     const ops=[0,30,45,60,75,90,120,150,180,240,300];
     UI.folha('Descanso entre séries',[h('div',{},...ops.map(v=>h('button',{class:'menu-op',onclick:()=>{e.descanso=v;salva('ativo');UI.fechaFolha();UI.refaz();}}, v===0?'Desligado':CORE.fmtDur(v))))]);
   }
+  function tipoRpe(s){
+    const chip=(v)=>h('button',{class:'chip'+(s.rpe===v?' on':''),onclick:()=>{ if(s.rpe===v) delete s.rpe; else s.rpe=v; salva('ativo'); UI.fechaFolha(); UI.refaz(); }},String(v));
+    UI.folha('Série',[
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Tipo'),
+      h('div',{style:'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px'},
+        ...[['N','Normal'],['W','Aquecimento'],['D','Drop set'],['F','Falha']].map(([v,rot])=>
+          h('button',{class:'chip'+(s.tipo===v?' on':''),onclick:()=>{ s.tipo=v; salva('ativo'); UI.fechaFolha(); UI.refaz(); }},rot))),
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Esforço (RPE)'),
+      h('div',{style:'display:flex;gap:8px;flex-wrap:wrap'},
+        ...[6,7,7.5,8,8.5,9,9.5,10].map(chip),
+        s.rpe? h('button',{class:'chip',onclick:()=>{ delete s.rpe; salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Limpar'):null)
+    ]);
+  }
   function menuEx(e,ix){
     UI.folha(BIB.ex(e.exId).n,[
+      ix<t.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
+      e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{s.ok=false;delete s.pr;}); salva('ativo'); UI.refaz(); }); }},'Substituir exercício'),
       h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[t.ex[ix-1],t.ex[ix]]=[t.ex[ix],t.ex[ix-1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'Mover para cima'),
       h('button',{class:'menu-op',onclick:()=>{ if(ix<t.ex.length-1){[t.ex[ix+1],t.ex[ix]]=[t.ex[ix],t.ex[ix+1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'Mover para baixo'),
@@ -1124,6 +1205,7 @@ TELAS.treinoDet = function({id}){
   (t.ex||[]).forEach(e=>{
     const x=BIB.ex(e.exId);
     const card=h('div',{class:'card'});
+    const sstag=SS.aplica(card, t.ex, e); if(sstag) card.append(sstag);
     card.append(h('div',{class:'linha',style:'margin-bottom:8px'},
       thumbEl(e.exId),
       h('div',{class:'esp'},h('div',{class:'b700',style:'color:var(--brand2)',onclick:()=>UI.vai('exercicio',{id:e.exId})},x.n),
@@ -1134,7 +1216,7 @@ TELAS.treinoDet = function({id}){
         h('div',{class:'stipo '+s.tipo},s.tipo==='N'?String(num||1):s.tipo),
         h('div'),
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? CORE.fmtKg(s.kg)+' kg':'—'),
-        h('div',{style:'text-align:center;font-weight:700'}, s.reps+(x.t==='tempo'?' s':'')),
+        h('div',{style:'text-align:center;font-weight:700'}, s.reps+(x.t==='tempo'?' s':''), s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
         h('div',{style:'text-align:center'}, s.pr?'🏅':'')));
     });
     m.appendChild(card);
@@ -1144,11 +1226,11 @@ TELAS.treinoDet = function({id}){
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha();
         if(S.ativo){ UI.toast('Já existe um treino em andamento'); return; }
         S.ativo={ id:uid(), rid:t.rid, titulo:t.titulo, inicio:agora(),
-          ex:t.ex.map(e=>({exId:e.exId, descanso:e.descanso??S.cfg.descanso, notas:e.notas||'',
+          ex:t.ex.map(e=>({exId:e.exId, descanso:e.descanso??S.cfg.descanso, notas:e.notas||'', ss:e.ss||null,
             series:e.series.map(s=>({tipo:s.tipo,kg:s.kg,reps:s.reps,ok:false}))})) };
         salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
       }},'Repetir este treino'),
-      h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); UI.fechaFolha(); UI.volta(); }},'Excluir do histórico')
+      h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); if(S.perfil?.user) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, null); UI.fechaFolha(); UI.volta(); }},'Excluir do histórico')
     ]);
   }
 };
@@ -1218,7 +1300,8 @@ TELAS.perfil = function(){
       h('div',{class:'thumb-ini',style:'width:60px;height:60px;font-size:22px;border-radius:18px'},(S.perfil?.nome||'?')[0].toUpperCase()),
       h('div',{class:'esp'},
         h('div',{class:'b800 f20'},S.perfil?.nome||'Atleta'),
-        h('div',{class:'f13 mut'},ts.length+' treinamento'+(ts.length===1?'':'s')))),
+        h('div',{class:'f13 mut'},ts.length+' treinamentos · ',
+          h('span',{id:'pf-segrs'},'· seguidores'),' · '+Object.keys(S.social.seguindo||{}).length+' seguindo'))),
     h('div',{class:'stats3',style:'margin-top:14px'},
       h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v'},nestaSemana.length+'x')),
       h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
@@ -1246,6 +1329,7 @@ TELAS.perfil = function(){
   m.appendChild(card);
   requestAnimationFrame(desenha);
 
+  if(S.auth) NET.get('/seguidores/'+S.auth.uid).then(v=>{ const el=$('#pf-segrs'); if(el) el.textContent=Object.keys(v||{}).length+' seguidores'; });
   m.appendChild(h('div',{class:'secao'},'Painel'));
   m.appendChild(h('div',{class:'grade2'},
     h('button',{class:'btn',onclick:()=>UI.vai('stats')},'Estatísticas'),
@@ -1264,6 +1348,29 @@ TELAS.config = function(){
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Seu nome'),
     h('input',{value:S.perfil?.nome||'',oninput:e=>{ if(!S.perfil) S.perfil={criado:agora()}; S.perfil.nome=e.target.value; },onblur:()=>{ if(S.perfil?.nome) salvaPerfil(); }})));
+
+  const cardConta=h('div',{class:'card'}, h('div',{class:'secao',style:'margin:0 0 8px'},'Conta'));
+  if(S.perfil?.email){
+    cardConta.append(
+      h('div',{class:'f13 mut',style:'line-height:1.7;margin-bottom:10px'},'Conectado como ',
+        h('span',{class:'b700',style:'color:var(--tx)'},S.perfil.email),
+        S.perfil.user? h('span',{}, ' · @'+S.perfil.user):null),
+      h('button',{class:'menu-op',onclick:function(){ S.cfg.feedPub=!S.cfg.feedPub; salvaCfg(); this.querySelector('.chip').textContent=S.cfg.feedPub?'Ligado':'Desligado'; this.querySelector('.chip').classList.toggle('on',!!S.cfg.feedPub); }},
+        'Publicar treinos no feed', h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg.feedPub?' on':'')},S.cfg.feedPub?'Ligado':'Desligado')),
+      h('button',{class:'btn',style:'margin:8px 0',onclick:()=>{
+        const ts=Object.values(S.treinos).filter(t=>!t.apagado);
+        if(!ts.length){ UI.toast('Nada para publicar ainda'); return; }
+        ts.forEach(t=>NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)));
+        UI.toast(ts.length+' treinos enviados para o feed', true);
+      }},'Enviar histórico para o feed'),
+      h('button',{class:'btn',onclick:CONTA.sair},'Sair da conta'));
+  } else {
+    cardConta.append(
+      h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:10px'},'Sua conta anônima vive só neste aparelho. Com e-mail, você entra de qualquer lugar, não perde nada se trocar de celular e libera o feed com amigos.'),
+      h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:CONTA.folhaCriar},'Criar conta com e-mail'),
+      h('button',{class:'btn',onclick:CONTA.folhaEntrar},'Entrar em uma conta'));
+  }
+  m.appendChild(cardConta);
 
   const descOps=[30,45,60,75,90,120,150,180];
   m.appendChild(h('div',{class:'card'},
@@ -1291,7 +1398,7 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v2.0', h('br'),
+    'Treino Gym v3.0', h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
@@ -1304,6 +1411,35 @@ TELAS.config = function(){
 
 const HEVY_MAPA={"Cadeira Extensora (Máquina)": "pernas__cadeira-extensora", "Rosca Scott (Máquina)": "biceps__rosca-scott-com-alavanca", "Rosca Direta (Barra)": "biceps__rosca-direta-com-barra", "Puxada Alta na Polia (Máquina)": "costas__puxada-alta", "Tríceps na Polia com Corda": "triceps__triceps-pulley-corda", "Cadeira Adutora (Máquina)": "inferiores__cadeira-adutora", "Cadeira Abdutora (Máquina)": "inferiores__cadeira-abdutora", "Mesa Flexora (Máquina)": "pernas__mesa-flexora", "Agachamento Hack (Máquina)": "pernas__agachamento-na-maquina-hack", "Elevação Lateral (Máquina)": "ombros__elevacao-lateral-na-maquina", "Tríceps na Paralela": "triceps__mergulho-de-triceps", "Esteira": "cardio__esteira-ergometrica", "Crucifixo na Polia (Máquina)": "peito__crucifixo-no-cross-em-pe", "Supino Declinado (Máquina)": "peito__supino-declinada-na-maquina", "Crucifixo no Voador (Máquina)": "peito__voador-maquina", "Flexão de Punho Invertida (Barra)": "antebraco__rosca-de-punho-reversa-com-barra", "Leg Press 45º (Máquina)": "pernas__leg-press", "Máquina De Fundos Sentado": "triceps__arnold-dips-maschine", "Remada Sentada com Pegada em V (Cabo)": "costas__remada-beixa-no-pulley-triangulo", "Remada Inclinada Apoiada No Peito (Halter)": "costas__remada-aberta-no-banco-inclinado-com-halteres", "Levantamento Terra Sumô": "pernas__levantamento-terra-sumo", "Flexão": "calistenia__flexao", "Elevação de Panturrilha Sentado (Máquina)": "panturrilha__elevacao-de-panturrilha-sentado-com-alavanca", "Supino Inclinado (Halter)": "peito__supino-inclinado-com-halteres", "Encolhimento (Halter)": "trapezio__encolhimento-com-halteres", "Supino Inclinado (Barra)": "peito__supino-inclinado-com-barra", "Supino (Barra)": "peito__supino", "Elevação Lateral (Halter)": "ombros__elevacao-lateral-de-bracos-com-halteres", "Elevação de Panturrilha em Pé (Máquina)": "panturrilha__elevacao-de-panturrilha-em-maquina-em-pe", "Overhead Triceps Extension (Cable)": "triceps__extensao-de-triceps-no-cabo-alto", "Extensão de tríceps acima da cabeça (cabo)": "triceps__extensao-de-triceps-no-cabo-alto", "Prensa De Ombros (Sentada) (Máquina)": "ombros__desenvolvimento-de-ombros-na-maquina", "Remadas Dobradas (Barra)": "costas__remada-curvada-com-barra", "Rosca Direta (Máquina)": "biceps__maquina-de-rosca-direta", "Remadas Iso-Lateral (Máquina)": "costas__remada-frontal-com-alavanca", "Supino (Halter)": "peito__supino-reto-com-halteres", "Abdominal": "abdomen__abdominal-supra", "Desenvolvimento (Halter)": "ombros__desenvolvimento-com-halteres", "Abdominal Na Máquina": "abdomen__abdominal-maquina", "Puxada Alta - Pegada Triângulo": "costas__puxada-alta-com-triangulo", "Rolo Antebraço": "antebraco__rolinho-de-antebraco", "Extensão de Tríceps (Barra)": "triceps__extensao-de-triceps-com-deitado-com-barra", "Tríceps na Polia": "triceps__triceps-pulley-barra", "Supino Sentado (Máquina)": "peito__supino-na-maquina", "Supino Inclinado Na Máquina": "peito__supino-inclinado-na-maquina", "Leg Press Horizontal (Máquina)": "pernas__leg-press-horizontal", "Puxada Alta (Máquina)": "costas__puxada-maquina", "Rosca Scott (Barra)": "biceps__rosca-scott-com-barra-w", "Cadeira Flexora (Máquina)": "pernas__cadeira-flexora", "Pec Deck": "peito__voador-no-pec-deck", "Agachamento no Smith (Máquina)": "pernas__agachamento-no-smith", "Elevação Lateral Unilateral (Cabo)": "ombros__elevacao-lateral-unilateral-com-cabo", "Extensão de Tríceps Atrás (Cabo)": "triceps__triceps-coice-com-cabo", "Remadas Altas Iso-Lateral (Máquina)": "costas__puxada-alta-com-alavanca", "Rosca Martelo (Halter)": "biceps__rosca-martelo", "Rosca Inclinada (Halter)": "biceps__rosca-banco-inclinado", "Desenvolvimento de Ombros (Máquina de Placas)": "ombros__desenvolvimento-de-ombros-na-maquina", "Rosca Martelo Alternada": "biceps__rosca-alternada-pegada-neutra", "Rosca com Corda (Máquina)": "biceps__rosca-martelo-com-corda", "Remada Baixa Iso-Lateral": "costas__remada-articulada", "Rosca Direta na Polia": "biceps__rosca-no-cabo", "Barra Fixa": "costas__barra-fixa", "Prancha Abdominal": "abdomen__prancha", "Remo Sentado (Máquina)": "costas__remada-sentada-com-cabo", "Peso Morto Com Pernas Esticadas": "pernas__stiff-com-barra", "Aberturas Invertidas De Ombro Posterior (Na Máquina)": "trapezio__voador-na-maquina-para-deltoides-posteriores", "Remada na Barra T": "costas__remada-curvada-em-t", "Supino (Máquina)": "peito__supino-na-maquina", "Rosca Martelo com Corda na Polia": "biceps__rosca-martelo-com-corda", "Puxada Com Braços Esticados (Corda)": "costas__pulldown-com-corda", "Press De Peito Iso-Lateral (Máquina)": "peito__supino-com-alavanca", "Supino Inclinado no Smith (Máquina)": "peito__supino-inclinado-no-smith", "Encolhimento (Máquina)": "trapezio__encolhimento-maquina", "Crucifixo Sentado (Cabo)": "peito__crucifixo-no-cross-banco-reto", "Triceps Testa (Barra)": "triceps__triceps-testa-com-barra", "Bicicleta": "cardio__bike", "Rosca de Pulso Atrás das Costas (Barra)": "antebraco__rosca-de-punho-com-barra-atras-das-costas", "Aberturas De Peito Inclinadas (Halter)": "peito__crucifixo-com-halteres-inclinado", "Levantamento Terra (Halter)": "pernas__levantamento-terra-com-halteres", "Pendurado Na Barra": "calistenia__suspensao-passiva", "Extensão de Tríceps Unilateral (Cabo)": "triceps__triceps-frances-unilateral-no-cabo", "Extensão de Tríceps Unilateral (Halter)": "triceps__extensao-de-triceps-com-haltere-unilateral-sentado", "Elevação Frontal Da Bolacha": "ombros__levantamento-frontal-com-anilha", "Extensão de Tríceps (Máquina)": "triceps__extensao-de-triceps-na-maquina", "Rosca Concentrada (Halter)": "biceps__rosca-concentrada", "Agachamento Goblet": "pernas__agachamento-goblet-com-haltere", "Elevação Unilateral de Panturrilha em Pé (Halter)": "panturrilha__levantamento-de-panturrilha-com-apoio-de-uma-perna", "Abdominal (Com Peso)": "abdomen__abdominal-com-carga", "Crucifixo Baixo na Polia (Máquina)": "peito__cross-over-polia-baixa", "Levantamento Terra (Barra Hexagonal)": "pernas__levantamento-terra-com-barra-hexagonal", "Agachamento (Máquina)": "inferiores__agachamento-na-maquina", "Remada com Barra em Base Giratória": "costas__remada-t-com-landmine", "Simulador De Escadas": "cardio__maquina-simulador-escada", "Puxada Com O Braço Reto (Corda)": "costas__pulldown-com-corda", "Puxada Alta No Cabo": "costas__puxada-alta", "Boxe": "funcional__boxe-sombra", "Elevação Frontal (Cabo)": "ombros__levantamento-frontal-de-cabo-com-dois-bracos", "Polichinelos": "funcional__polichinelos", "Glúteo Coice (Máquina)": "gluteos__gluteo-coice-na-maquina", "Mergulho no banco": "triceps__triceps-no-banco", "Caminhada": "funcional__caminhar", "Flexão Pegada Diamante": "calistenia__flexao-diamante", "Levantamento Terra no Smith (Máquina)": "costas__levantamento-terra-no-smith", "Pullover (Máquina)": "costas__pullover-na-maquina-de-alavanca", "Agachamento (Barra)": "inferiores__agachamento-livre-com-barra", "Rosca de Punho (Halter)": "antebraco__flexao-de-punho-com-halteres"};
 const HEVY_NOVOS={"Levantamento De Joelhos Nas Barras Paralelas": {"n": "Elevação de joelhos nas paralelas", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Abdominal Canivete": {"n": "Abdominal canivete", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Abdominal (Corda)": {"n": "Abdominal na polia com corda", "g": "abdomen", "e": "cabo", "t": "peso_reps"}, "Abdominal Em Bicicleta": {"n": "Abdominal bicicleta", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Abdominal Declinado (Com Peso)": {"n": "Abdominal declinado com peso", "g": "abdomen", "e": "anilha", "t": "peso_reps"}, "Abdominal Declinado": {"n": "Abdominal declinado", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Elevação De Pernas Na Barra Fixa": {"n": "Elevação de pernas na barra fixa", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Elevação De Joelhos Na Barra Fixa": {"n": "Elevação de joelhos na barra fixa", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Roda Abdominal": {"n": "Roda abdominal", "g": "abdomen", "e": "outro", "t": "reps"}, "Abdominal Toque No Calcanhar": {"n": "Abdominal toque no calcanhar", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Rosca com Anilha": {"n": "Rosca com anilha", "g": "biceps", "e": "anilha", "t": "peso_reps"}};
+
+/* ---------- superséries ---------- */
+const SS = {
+  CORES:['#FF6B2C','#00A8E1','#3ECF6E','#B07CFF','#FF5C8A'],
+  cor(g){ return SS.CORES[(g-1)%SS.CORES.length]; },
+  liga(list, ix){
+    if(ix>=list.length-1) return false;
+    const a=list[ix], b=list[ix+1];
+    const g=a.ss||b.ss||(Math.max(0,...list.map(q=>q.ss||0))+1);
+    a.ss=g; b.ss=g; return true;
+  },
+  solta(list, ix){
+    const g=list[ix].ss; if(!g) return;
+    delete list[ix].ss;
+    const resto=list.filter(q=>q.ss===g);
+    if(resto.length===1) delete resto[0].ss;
+  },
+  rotulo(list, e){
+    const gs=[...new Set(list.filter(q=>q.ss).map(q=>q.ss))];
+    const i=gs.indexOf(e.ss);
+    return i<0?'':String.fromCharCode(65+i);
+  },
+  aplica(card, list, e){
+    if(!e.ss) return null;
+    const c=SS.cor(e.ss);
+    card.style.borderLeft='3px solid '+c;
+    return h('div',{class:'ss-tag',style:'background:'+c+'22;color:'+c},'SUPERSSÉRIE '+SS.rotulo(list,e));
+  }
+};
 
 /* ---------- mapa muscular ---------- */
 const REGIOES = {
@@ -1367,35 +1503,43 @@ function dataRelativa(ts){
 
 /* ---------- INÍCIO (feed) ---------- */
 TELAS.inicio = function(){
-  UI.topo(h('div',{class:'topo-tit'},'Início'));
+  UI.topo(h('div',{class:'topo-tit'},'Início'),
+    h('button',{class:'btn btn-mini',style:'width:40px',onclick:()=>AMIGOS.folha(),
+      html:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>'}));
   const m=$('#main'); m.innerHTML='';
   if(S.ativo){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
       'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
   }
-  const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio);
-  if(!ts.length){
-    m.appendChild(h('div',{class:'vazio'},'Seus treinos concluídos aparecem aqui, com volume, séries e recordes.'));
-    m.appendChild(h('button',{class:'btn btn-p',onclick:()=>UI.vai('treino',null,false)},'Ir para Treino'));
+  const box=h('div',{});
+  m.appendChild(box);
+  desenhaFeed(box);
+  FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio' && box.isConnected) desenhaFeed(box); });
+};
+function desenhaFeed(box){
+  box.innerHTML='';
+  const its=FEED.itens();
+  if(!its.length){
+    box.appendChild(h('div',{class:'vazio'},'Seus treinos concluídos aparecem aqui, com volume, séries e recordes. Siga amigos para ver os treinos deles também.'));
+    box.appendChild(h('button',{class:'btn btn-p',onclick:()=>UI.vai('treino',null,false)},'Ir para Treino'));
     return;
   }
-  ts.forEach(t=>m.appendChild(cartaoFeed(t)));
-};
-function cartaoFeed(t){
-  const nome=S.perfil?.nome||'Você';
+  its.forEach(i=>box.appendChild(cartaoFeed(i)));
+}
+function cartaoFeed(i){
+  const t=i.meu? i.t : i.r;
+  const nome=i.meu? (S.perfil?.nome||'Você') : (t.nome||'Atleta');
+  const user=i.meu? S.perfil?.user : t.user;
+  const exs=i.meu? (t.ex||[]).map(e=>({n:BIB.ex(e.exId).n, s:e.series.length, id:e.exId})) : (t.ex||[]);
   const card=h('div',{class:'card'});
-  const exs=(t.ex||[]);
-  const linhaEx=e=>{
-    const x=BIB.ex(e.exId);
-    return h('div',{class:'feed-ex'}, thumbEl(e.exId),
-      h('div',{class:'b700',style:'font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
-        e.series.length+' série'+(e.series.length===1?'':'s')+' × '+x.n));
-  };
+  const linhaEx=e=>h('div',{class:'feed-ex'}, e.id? thumbEl(e.id) : thumbNome(e.n),
+    h('div',{class:'b700',style:'font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
+      e.s+' série'+(e.s===1?'':'s')+' × '+e.n));
   const lista=h('div',{}, ...exs.slice(0,3).map(linhaEx));
   card.append(
     h('div',{class:'feed-cab'},
       h('div',{class:'avatar'},(nome[0]||'?').toUpperCase()),
-      h('div',{},h('div',{class:'b700',style:'font-size:14.5px'},nome),
+      h('div',{},h('div',{class:'b700',style:'font-size:14.5px'},nome, user? h('span',{class:'f12 mut2',style:'font-weight:600'},' · @'+user):null),
         h('div',{class:'f12 mut2'},dataRelativa(t.inicio)))),
     h('div',{class:'b800',style:'font-size:17px;margin:2px 0 10px'},t.titulo),
     h('div',{class:'stats3',style:'margin-bottom:8px'},
@@ -1408,7 +1552,29 @@ function cartaoFeed(t){
       'Ver os '+exs.length+' exercícios');
     card.appendChild(btn);
   }
-  card.addEventListener('click',()=>UI.vai('treinoDet',{id:t.id}));
+  // curtir
+  const dono=i.dono, tid=i.id;
+  const likes=()=>((FEED.curt[dono]||{})[tid])||{};
+  const euCurti=()=>!!(S.auth && likes()[S.auth.uid]);
+  const heart=h('button',{class:'heart',onclick:async ev=>{
+    ev.stopPropagation();
+    if(!S.perfil?.user){ UI.toast('Crie sua conta com e-mail para curtir'); return; }
+    const on=!euCurti();
+    try{
+      await NET.putD('/curtidas/'+dono+'/'+tid+'/'+S.auth.uid, on? true : null);
+      FEED.curt[dono]=FEED.curt[dono]||{}; FEED.curt[dono][tid]=FEED.curt[dono][tid]||{};
+      if(on) FEED.curt[dono][tid][S.auth.uid]=true; else delete FEED.curt[dono][tid][S.auth.uid];
+      pintaHeart();
+    }catch(e){ UI.toast('Sem conexão agora'); }
+  }});
+  const pintaHeart=()=>{
+    const n=Object.keys(likes()).length;
+    heart.className='heart'+(euCurti()?' on':'');
+    heart.innerHTML=svgCoracao(euCurti())+'<span>'+(n? n : 'Curtir')+'</span>';
+  };
+  pintaHeart();
+  card.appendChild(heart);
+  if(i.meu) card.addEventListener('click',()=>UI.vai('treinoDet',{id:tid}));
   return card;
 }
 
@@ -1460,6 +1626,7 @@ TELAS.rotinaVer = function({rid}){
     const x=BIB.ex(e.exId);
     const rot=TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps;
     const c=h('div',{class:'card'});
+    const sstag=SS.aplica(c, r.ex, e); if(sstag) c.append(sstag);
     c.append(h('div',{class:'linha',style:'margin-bottom:6px'}, thumbEl(e.exId),
       h('div',{class:'esp'},h('div',{class:'b700',style:'color:var(--brand2)',onclick:()=>UI.vai('exercicio',{id:e.exId})},x.n),
         h('div',{class:'f12 mut'},'Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')))),
@@ -1647,6 +1814,166 @@ TELAS.stats = function(){
   const dados=CORE.agregaSemanas(Object.fromEntries(ts.map(t=>[t.id,t])), 12, agora());
   requestAnimationFrame(()=>grafBarras(cv,dados.map((d,i)=>({v:d.qtd, rot:(i%2===0)?new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):''})),v=>v+'x'));
 };
+
+/* ---------- CONTA (e-mail) ---------- */
+const CONTA = {
+  wipeLocal(){
+    ['rotinas','pastas','treinos','prs','custom','medidas'].forEach(k=>{ S[k]={}; salva(k); });
+    S.fila=[]; salva('fila'); S.social={seguindo:{}}; salva('social');
+    S.perfil=null; salva('perfil');
+  },
+  folhaCriar(){
+    const em=h('input',{type:'email',placeholder:'seu@email.com',autocapitalize:'off',autocomplete:'email'});
+    const se=h('input',{type:'password',placeholder:'Mínimo 6 caracteres',autocomplete:'new-password'});
+    const us=h('input',{placeholder:'ex.: chris_mello',autocapitalize:'off'});
+    UI.folha('Criar conta',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Tudo que já está neste aparelho continua na conta. Com e-mail você entra de qualquer lugar e libera o feed com amigos.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'E-mail'), em, h('div',{style:'height:10px'}),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Senha'), se, h('div',{style:'height:10px'}),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Nome de usuário (para amigos te acharem)'), us, h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:async function(){
+        const email=em.value.trim(), senha=se.value, u=us.value.trim().toLowerCase().replace('@','');
+        if(!/^[a-z0-9_]{3,20}$/.test(u)){ UI.toast('Usuário: 3 a 20 letras minúsculas, números ou _'); return; }
+        if(!email.includes('@') || senha.length<6){ UI.toast('Confira e-mail e senha'); return; }
+        this.disabled=true; this.textContent='Criando…';
+        try{
+          const dono=await NET.get('/usernames/'+u);
+          if(dono && dono!==S.auth.uid) throw new Error('Esse nome de usuário já está em uso.');
+          await NET.criarConta(email, senha);
+          await NET.putD('/usernames/'+u, S.auth.uid);
+          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil?.nome||'Atleta', user:u, atualizado:agora()});
+          if(!S.perfil) S.perfil={criado:agora(), nome:'Atleta'};
+          S.perfil.email=email; S.perfil.user=u; S.perfil.atualizado=agora();
+          salva('perfil'); NET.agenda('app/perfil',S.perfil);
+          S.cfg.feedPub=true; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg);
+          UI.fechaFolha(); UI.refaz(); UI.toast('Conta criada ✓', true);
+        }catch(err){ UI.toast(err.message||'Erro ao criar conta'); this.disabled=false; this.textContent='Criar conta'; }
+      }},'Criar conta')]);
+  },
+  folhaEntrar(){
+    const em=h('input',{type:'email',placeholder:'seu@email.com',autocapitalize:'off',autocomplete:'email'});
+    const se=h('input',{type:'password',placeholder:'Senha',autocomplete:'current-password'});
+    UI.folha('Entrar',[
+      h('div',{class:'f13',style:'margin-bottom:12px;line-height:1.6;color:var(--warn)'},'Atenção: entrar em uma conta substitui os dados locais deste aparelho pelos dados da conta.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'E-mail'), em, h('div',{style:'height:10px'}),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Senha'), se, h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:async function(){
+        const email=em.value.trim(), senha=se.value;
+        if(!email.includes('@') || !senha){ UI.toast('Preencha e-mail e senha'); return; }
+        this.disabled=true; this.textContent='Entrando…';
+        try{
+          const auth=await NET.entrar(email, senha);
+          CONTA.wipeLocal();
+          S.auth=auth; salva('auth');
+          await NET.puxa();
+          if(!S.perfil) S.perfil={nome:'Atleta', criado:agora()};
+          S.perfil.email=email; S.perfil.atualizado=agora(); salva('perfil');
+          location.reload();
+        }catch(err){ UI.toast(err.message||'Erro ao entrar'); this.disabled=false; this.textContent='Entrar'; }
+      }},'Entrar'),
+      h('button',{class:'btn',style:'margin-top:8px',onclick:async ()=>{
+        const email=em.value.trim();
+        if(!email.includes('@')){ UI.toast('Digite o e-mail acima primeiro'); return; }
+        try{ await NET.resetSenha(email); UI.toast('Enviei o link de redefinição para '+email, true); }
+        catch(err){ UI.toast(err.message); }
+      }},'Esqueci a senha')]);
+  },
+  sair(){
+    UI.folha('Sair da conta?',[
+      h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},'Os dados continuam salvos na conta e voltam quando você entrar de novo. Este aparelho recomeça zerado.'),
+      h('button',{class:'btn btn-err',onclick:()=>{
+        Object.keys(localStorage).filter(k=>k.startsWith('tg_')).forEach(k=>localStorage.removeItem(k));
+        location.reload();
+      }},'Sair e limpar este aparelho')]);
+  }
+};
+
+/* ---------- AMIGOS / FEED SOCIAL ---------- */
+function resumoTreino(t){
+  return { id:t.id, nome:S.perfil?.nome||'Atleta', user:S.perfil?.user||'', titulo:t.titulo,
+    inicio:t.inicio, fim:t.fim, volume:t.volume||0, series:t.series||0, recordes:t.recordes||0,
+    ex:(t.ex||[]).map(e=>({n:BIB.ex(e.exId).n, s:e.series.length})), atualizado:agora() };
+}
+const AMIGOS = {
+  folha(){
+    if(!S.perfil?.user){
+      UI.folha('Amigos',[
+        h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},'Para seguir amigos e aparecer no feed deles, crie sua conta com e-mail e escolha um nome de usuário.'),
+        h('button',{class:'btn btn-p',onclick:()=>{ UI.fechaFolha(); CONTA.folhaCriar(); }},'Criar conta')]);
+      return;
+    }
+    const inp=h('input',{placeholder:'nome_de_usuario do amigo',autocapitalize:'off'});
+    const res=h('div',{});
+    const lista=h('div',{});
+    const row=(uid,p,seguindo)=>h('div',{class:'med-row'},
+      h('div',{class:'avatar',style:'width:36px;height:36px;font-size:15px'},(p.nome||p.user||'?')[0].toUpperCase()),
+      h('div',{class:'esp'},h('div',{class:'b700',style:'font-size:14.5px'},p.nome||('@'+p.user)),h('div',{class:'f12 mut'},'@'+p.user)),
+      h('button',{class:'btn btn-mini'+(seguindo?'':' btn-p'),style:'width:auto;padding:8px 14px',onclick:async function(){
+        this.disabled=true;
+        try{
+          if(seguindo) await AMIGOS.deixar(uid); else await AMIGOS.seguir(uid,p);
+          UI.fechaFolha(); AMIGOS.folha();
+        }catch(e){ UI.toast('Sem conexão agora'); this.disabled=false; }
+      }}, seguindo?'Deixar de seguir':'Seguir'));
+    const desenhaLista=()=>{
+      lista.innerHTML='';
+      const seg=Object.entries(S.social.seguindo||{});
+      if(!seg.length) lista.append(h('div',{class:'f13 mut',style:'padding:8px 0'},'Você ainda não segue ninguém.'));
+      seg.forEach(([uid,p])=>lista.append(row(uid,p,true)));
+    };
+    UI.folha('Amigos',[
+      h('div',{class:'f13 mut',style:'margin-bottom:8px'},'Seu usuário: ',h('span',{class:'b700',style:'color:var(--tx)'},'@'+S.perfil.user)),
+      h('div',{style:'display:flex;gap:8px'}, inp,
+        h('button',{class:'btn btn-p',style:'width:auto;padding:0 16px',onclick:async ()=>{
+          const u=inp.value.trim().toLowerCase().replace('@','');
+          if(!u) return;
+          res.innerHTML='<div class="f13 mut" style="padding:8px 0">Buscando…</div>';
+          const uid=await NET.get('/usernames/'+u);
+          if(!uid){ res.innerHTML='<div class="f13 mut" style="padding:8px 0">Não achei @'+u+'. Confira o nome exato.</div>'; return; }
+          if(uid===S.auth.uid){ res.innerHTML='<div class="f13 mut" style="padding:8px 0">Esse é você.</div>'; return; }
+          const p=await NET.get('/perfis/'+uid)||{};
+          res.innerHTML=''; res.append(row(uid,{user:u,nome:p.nome||''}, !!S.social.seguindo[uid]));
+        }},'Buscar')),
+      res,
+      h('div',{class:'secao',style:'margin:16px 0 4px'},'Seguindo'), lista]);
+    desenhaLista();
+  },
+  async seguir(uid,p){
+    await NET.putD('/seguindo/'+S.auth.uid+'/'+uid,{user:p.user,nome:p.nome||'',ts:agora()});
+    await NET.putD('/seguidores/'+uid+'/'+S.auth.uid,true);
+    S.social.seguindo[uid]={user:p.user,nome:p.nome||''}; salva('social');
+    UI.toast('Seguindo @'+p.user, true);
+  },
+  async deixar(uid){
+    await NET.putD('/seguindo/'+S.auth.uid+'/'+uid,null);
+    await NET.putD('/seguidores/'+uid+'/'+S.auth.uid,null);
+    delete S.social.seguindo[uid]; salva('social');
+  }
+};
+const FEED = {
+  amigos:{}, curt:{},
+  async carrega(){
+    if(!S.auth) return;
+    const donos=[S.auth.uid].concat(Object.keys(S.social.seguindo||{}));
+    await Promise.all(donos.map(async d=>{
+      FEED.curt[d]=await NET.get('/curtidas/'+d)||{};
+      if(d!==S.auth.uid) FEED.amigos[d]=Object.values(await NET.get('/feed/'+d+'?orderBy=%22inicio%22&limitToLast=40')||{});
+    }));
+  },
+  itens(){
+    const meus=Object.values(S.treinos).filter(t=>!t.apagado).map(t=>({meu:true,dono:S.auth?.uid,t,id:t.id,inicio:t.inicio}));
+    const dos=Object.entries(FEED.amigos).flatMap(([d,arr])=>(arr||[]).map(r=>({meu:false,dono:d,r,id:r.id,inicio:r.inicio})));
+    return meus.concat(dos).sort((a,b)=>b.inicio-a.inicio).slice(0,80);
+  }
+};
+function thumbNome(n){
+  const x=BIB.lista.find(q=>q._busca===BIB.norm(n));
+  if(x) return thumbEl(x.id);
+  return h('div',{class:'thumb-ini',style:'width:44px;height:44px;font-size:16px'},(n||'?')[0].toUpperCase());
+}
+function svgCoracao(cheio){
+  return '<svg viewBox="0 0 24 24" fill="'+(cheio?'currentColor':'none')+'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+}
 
 /* ---------- IMPORTADOR HEVY ---------- */
 const HEVYIMP = {

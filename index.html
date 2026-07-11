@@ -272,7 +272,7 @@ body.claro{
 
 <div id="fantasma" class="fantasma">
   <img src="icon-192.png" alt="" width="96" height="96" style="border-radius:24px">
-  <div class="fx-word" style="margin-top:14px">Forge<span>X</span></div>
+  <div style="display:flex;align-items:center;gap:5px;margin-top:14px"><span class="fx-word" style="font-style:italic;letter-spacing:-1px">Forge</span><img src="logo-x.png" alt="" style="height:27px;width:auto"></div>
 </div>
 
 <div id="ta-progresso"></div>
@@ -340,7 +340,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.5';
+const APP_VER='5.6';
 
 /*CORE-START*/
 const CORE = {
@@ -913,6 +913,15 @@ const UI = {
   },
   fechaFolha(){ $('#veu').classList.remove('on'); $('#folha').classList.remove('on'); document.body.style.overflow=''; }
 };
+function logoFX(alt, tam, comTag){
+  const box=h('div',{style:'display:flex;flex-direction:column;align-items:center'},
+    h('div',{style:'display:flex;align-items:center;gap:'+Math.max(4,Math.round(tam*0.14))+'px'},
+      h('span',{class:'fx-word',style:'font-size:'+tam+'px;font-style:italic;letter-spacing:-1px'},'Forge'),
+      h('img',{src:'logo-x.png',alt:'',style:'height:'+Math.round(tam*1.16)+'px;width:auto'})),
+    comTag? h('div',{class:'mut',style:'font-size:'+Math.max(10,Math.round(tam*0.30))+'px;letter-spacing:'+Math.max(2,Math.round(tam*0.12))+'px;text-transform:uppercase;margin-top:4px'},'Gym Workout Tracker'):null);
+  box.setAttribute('role','img'); box.setAttribute('aria-label', alt||'ForgeX');
+  return box;
+}
 function aplicaTema(t){
   document.body.classList.toggle('claro', t==='claro');
   const mt=document.querySelector('meta[name="theme-color"]');
@@ -3210,6 +3219,26 @@ function pubRotina(r){
       return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t,
         ser:(e.series||[]).length||3, reps:(e.series&&e.series[0]&&e.series[0].reps)||'10', descanso:e.descanso||90 }; }) };
 }
+async function hidrataSocial(){
+  if(!S.auth) return;
+  try{
+    const v = await NET.get('/seguindo/'+S.auth.uid) || {};
+    let mudou=false;
+    Object.keys(v).forEach(u=>{ if(!S.social.seguindo[u]){ S.social.seguindo[u]={}; mudou=true; } });
+    const incompleto = Object.values(S.social.seguindo).some(p=>!p || !p.user);
+    if(mudou || incompleto){
+      const ps = FEED.perfis || await NET.get('/perfis') || {};
+      FEED.perfis = FEED.perfis || ps;
+      Object.keys(S.social.seguindo).forEach(u=>{
+        const p=ps[u]||{}; const s=S.social.seguindo[u]||(S.social.seguindo[u]={});
+        if(p.user && s.user!==p.user){ s.user=p.user; mudou=true; }
+        if(p.nome!=null && s.nome!==p.nome){ s.nome=p.nome; mudou=true; }
+        if(s.foto!==(p.foto||null)){ s.foto=p.foto||null; mudou=true; }
+      });
+    }
+    if(mudou){ salva('social'); if(['inicio','perfil','perfilAmigo'].includes(UI.telaAtual)) UI.refaz(); }
+  }catch(e){}
+}
 const ROTPUB = {
   pode(){ return !!(S.auth && S.perfil?.user && S.cfg.rotPub!==false); },
   envia(r){ if(!ROTPUB.pode()||!r) return; NET.agenda('/rotinasPub/'+S.auth.uid+'/'+r.id, pubRotina(r)); },
@@ -3701,12 +3730,12 @@ const HEVYIMP = {
 
 /* ---------- primeiro acesso ---------- */
 TELAS.boasVindas = function(){
-  UI.topo(h('img',{src:'logo-forgex.png',alt:'ForgeX',style:'height:26px;width:auto'}));
+  UI.topo(logoFX('ForgeX', 21, false));
   $('#tabbar').style.display='none';
   const m=$('#main'); m.innerHTML='';
   const inp=h('input',{placeholder:'Como quer ser chamado?',style:'font-size:17px;padding:14px'});
   m.appendChild(h('div',{style:'padding-top:8vh;text-align:center'},
-    h('img',{src:'logo-forgex.png',alt:'ForgeX',style:'width:min(280px,80%);height:auto;margin-bottom:20px'}),
+    h('div',{style:'display:flex;justify-content:center;margin-bottom:20px'}, logoFX('ForgeX — Gym Workout Tracker', 42, true)),
     h('div',{class:'b800',style:'font-size:22px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
       'Registre séries, cargas e recordes em segundos.',
@@ -3743,7 +3772,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

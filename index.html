@@ -155,6 +155,37 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .menu-op.perigo{color:var(--err)}
 .vazio{ text-align:center;color:var(--tx3);padding:34px 20px;font-size:14.5px;line-height:1.55}
 .vazio .emo{font-size:38px;display:block;margin-bottom:8px}
+
+/* v2: feed */
+.feed-cab{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.avatar{width:42px;height:42px;border-radius:50%;background:var(--surf3);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--brand2);flex-shrink:0}
+.feed-ex{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--surf2)}
+.feed-ex .thumb{width:44px;height:44px}
+.vermais{color:var(--tx2);font-size:13.5px;font-weight:700;padding:10px 0 2px;width:100%;text-align:center}
+
+/* v2: mapa muscular */
+.musc .m{fill:#2A323D}
+.musc .on{fill:var(--brand)}
+
+/* v2: calendário */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-sem{font-size:11px;font-weight:800;color:var(--tx3);text-align:center;padding:6px 0;text-transform:uppercase}
+.cal-dia{aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;color:var(--tx2);position:relative}
+.cal-dia.fora{opacity:.28}
+.cal-dia.hoje{border:1px solid var(--brand);color:var(--tx)}
+.cal-dia.tem{background:var(--brand-dim);color:var(--brand2);font-weight:800}
+.cal-dia .pontos{display:flex;gap:2px;position:absolute;bottom:5px}
+.cal-dia .pt{width:4px;height:4px;border-radius:50%;background:var(--brand)}
+
+/* v2: medições / estatísticas */
+.med-row{display:flex;align-items:center;gap:10px;padding:13px 2px;border-bottom:1px solid var(--surf2)}
+.med-row:last-child{border-bottom:none}
+.hbar{display:flex;align-items:center;gap:10px;margin:7px 0}
+.hbar .rot{width:104px;font-size:13px;font-weight:700;color:var(--tx2);text-align:right;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbar .trilho{flex:1;height:14px;border-radius:7px;background:var(--surf2);overflow:hidden}
+.hbar .fill{height:100%;background:var(--brand);border-radius:7px}
+.hbar .val{width:34px;font-size:12.5px;font-weight:800;color:var(--tx2)}
+.periodo{display:flex;gap:8px;margin:0 0 6px}
 </style>
 </head>
 <body>
@@ -176,12 +207,12 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 </div>
 
 <nav class="tabbar" id="tabbar">
-  <button class="tab on" data-tab="treino">
+  <button class="tab" data-tab="inicio">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/></svg>
+    Início</button>
+  <button class="tab" data-tab="treino">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6.5 6.5v11M4 9v6M17.5 6.5v11M20 9v6M6.5 12h11"/></svg>
     Treino</button>
-  <button class="tab" data-tab="hist">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg>
-    Histórico</button>
   <button class="tab" data-tab="perfil">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.4-3.4 4.2-5 7.5-5s6.1 1.6 7.5 5"/></svg>
     Perfil</button>
@@ -234,6 +265,98 @@ const CORE = {
     return semanas.map(w=>({w, ...mapa[w]}));
   }
 };
+CORE.recomputaPRs = function(lista){
+  const prs={};
+  lista.slice().sort((a,b)=>a.inicio-b.inicio).forEach(t=>{
+    t.recordes=0;
+    (t.ex||[]).forEach(e=>(e.series||[]).forEach(s=>{
+      delete s.pr;
+      const bate=CORE.detectaPR(prs, e.exId, s);
+      if(bate.length){ s.pr=bate.map(b=>b[0]); CORE.aplicaPR(prs, e.exId, bate, t.id, t.inicio); t.recordes++; }
+    }));
+    t.volume=CORE.volumeTreino(t);
+    t.series=CORE.seriesFeitas(t);
+  });
+  return prs;
+};
+const IMP = {
+  parseCSV(texto){
+    const linhas=[]; let campo='', linha=[], dentro=false;
+    for(let i=0;i<texto.length;i++){
+      const c=texto[i];
+      if(dentro){
+        if(c==='"'){ if(texto[i+1]==='"'){ campo+='"'; i++; } else dentro=false; }
+        else campo+=c;
+      } else {
+        if(c==='"') dentro=true;
+        else if(c===','){ linha.push(campo); campo=''; }
+        else if(c==='\n'){ linha.push(campo); campo=''; if(linha.some(x=>x!=='')) linhas.push(linha); linha=[]; }
+        else if(c!=='\r') campo+=c;
+      }
+    }
+    if(campo!==''||linha.length){ linha.push(campo); if(linha.some(x=>x!=='')) linhas.push(linha); }
+    if(!linhas.length) return [];
+    const cab=linhas[0];
+    return linhas.slice(1).map(l=>{ const o={}; cab.forEach((k,ix)=>o[k]=l[ix]??''); return o; });
+  },
+  MESES:{jan:0,fev:1,feb:1,mar:2,abr:3,apr:3,mai:4,may:4,jun:5,jul:6,ago:7,aug:7,set:8,sep:8,out:9,oct:9,nov:10,dez:11,dec:11},
+  parseData(s){
+    const m=/^(\d{1,2})\s+([A-Za-z\u00e7\u00c7]{3,4})\s+(\d{4})(?:,\s*(\d{1,2}):(\d{2}))?/.exec((s||'').trim());
+    if(!m) return null;
+    const mes=IMP.MESES[m[2].slice(0,3).toLowerCase()];
+    if(mes==null) return null;
+    return new Date(+m[3], mes, +m[1], +(m[4]||0), +(m[5]||0)).getTime();
+  },
+  hash(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); },
+  TIPOS:{normal:'N', warmup:'W', dropset:'D', failure:'F'},
+  montaTreinos(rows, resolveEx){
+    const grupos=new Map();
+    rows.forEach(r=>{
+      const k=r.title+'\u0001'+r.start_time;
+      if(!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(r);
+    });
+    const treinos=[];
+    grupos.forEach((rs, k)=>{
+      const r0=rs[0];
+      const inicio=IMP.parseData(r0.start_time), fim=IMP.parseData(r0.end_time)||inicio;
+      if(!inicio) return;
+      const exMap=new Map();
+      rs.forEach(r=>{
+        const tt=(r.exercise_title||'').trim();
+        if(!exMap.has(tt)) exMap.set(tt, {titulo:tt, notas:(r.exercise_notes||'').trim(), series:[]});
+        const dur=Number(r.duration_seconds)||0;
+        const kg=r.weight_kg===''?'':Number(r.weight_kg);
+        const reps=dur>0? dur : (r.reps===''?'':Number(r.reps));
+        exMap.get(tt).series.push({ix:Number(r.set_index)||0, tipo:IMP.TIPOS[r.set_type]||'N', kg:kg===''?'':kg, reps:reps===''?'':reps, ok:true});
+      });
+      const ex=[];
+      exMap.forEach(e=>{
+        e.series.sort((a,b)=>a.ix-b.ix);
+        e.series.forEach(s=>delete s.ix);
+        ex.push({exId:resolveEx(e.titulo), notas:e.notas, descanso:90, series:e.series});
+      });
+      treinos.push({ id:'hv_'+IMP.hash(k), titulo:r0.title, inicio, fim, ex, origem:'hevy' });
+    });
+    treinos.sort((a,b)=>a.inicio-b.inicio);
+    return treinos;
+  },
+  montaMedidas(rows){
+    const CAMPOS={weight_kg:'peso',fat_percent:'gordura',neck_cm:'pescoco',shoulder_cm:'ombros',chest_cm:'peito',
+      left_bicep_cm:'bracoE',right_bicep_cm:'bracoD',left_forearm_cm:'antebracoE',right_forearm_cm:'antebracoD',
+      abdomen_cm:'abdomen',waist_cm:'cintura',hips_cm:'quadril',left_thigh_cm:'coxaE',right_thigh_cm:'coxaD',
+      left_calf_cm:'pantE',right_calf_cm:'pantD'};
+    const out=[];
+    rows.forEach(r=>{
+      const data=IMP.parseData(r.date); if(!data) return;
+      const m={id:'hv_'+IMP.hash(r.date), data, origem:'hevy'};
+      let tem=false;
+      Object.entries(CAMPOS).forEach(([col,campo])=>{ if(r[col]!==''&&r[col]!=null){ m[campo]=Number(r[col]); tem=true; } });
+      if(tem) out.push(m);
+    });
+    return out.sort((a,b)=>a.data-b.data);
+  }
+};
 /*CORE-END*/
 
 /* ---------- config Firebase ---------- */
@@ -257,6 +380,7 @@ const S = {
   treinos: LS.get('treinos', {}),           // id -> treino concluído
   prs: LS.get('prs', {}),                   // exId -> {kg:{v,tid,data},...}
   custom: LS.get('custom', {}),             // exercícios criados pelo usuário
+  medidas: LS.get('medidas', {}),           // registros corporais
   ativo: LS.get('ativo', null),             // treino em andamento
   auth: LS.get('auth', null),               // {uid, refreshToken, idToken, exp}
   fila: LS.get('fila', [])                  // [{path, val, ts}]
@@ -328,6 +452,7 @@ const NET = {
       m = fun(S.pastas, nuvem.pastas, 'pastas') || m;
       m = fun(S.treinos, nuvem.treinos, 'treinos') || m;
       m = fun(S.custom, nuvem.custom, 'custom') || m;
+      m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
         if(nuvem.app.cfg && (nuvem.app.cfg.atualizado||0)>(S.cfg.atualizado||0)){ S.cfg=nuvem.app.cfg; salva('cfg'); m=true; }
@@ -427,7 +552,7 @@ const UI = {
     TELAS[tela](args||{});
     window.scrollTo(0,0);
     $$('#tabbar .tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===tela));
-    $('#tabbar').style.display = ['treino','hist','perfil'].includes(tela)?'flex':'none';
+    $('#tabbar').style.display = ['inicio','treino','perfil'].includes(tela)?'flex':'none';
   },
   volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false); else UI.vai('treino', null, false); },
   refaz(){ if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{}); },
@@ -480,7 +605,7 @@ const DESC = {
   para(){ clearInterval(DESC.intervalo); $('#timerbar').classList.remove('on'); DESC.fim=0; },
   tic(){
     const resta=(DESC.fim-agora())/1000;
-    if(resta<=0){ DESC.para(); SOM.fimDescanso(); UI.toast('Descanso concluído. Bora! 💪'); return; }
+    if(resta<=0){ DESC.para(); SOM.fimDescanso(); UI.toast('Descanso concluído'); return; }
     $('#tb-tempo').textContent = CORE.fmtRelogio(resta);
     $('#tb-fill').style.width = Math.max(0, 100*(1-resta/DESC.total))+'%';
   }
@@ -496,7 +621,7 @@ function grafBarras(canvas, dados, formata){
   canvas.width=W*dpr; canvas.height=H*dpr;
   const c=canvas.getContext('2d'); c.scale(dpr,dpr); c.clearRect(0,0,W,H);
   const max=Math.max(1,...dados.map(d=>d.v));
-  const n=dados.length, gap=6, bw=Math.min(34,(W-40-gap*(n-1))/n);
+  const n=dados.length, gap=n>20?2:6, bw=Math.min(34,(W-40-gap*(n-1))/n);
   const x0=(W-(bw*n+gap*(n-1)))/2, base=H-24, alt=base-16;
   c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
   dados.forEach((d,i)=>{
@@ -547,7 +672,7 @@ const PICKER = {
         h('button',{class:'chip',id:'pk-f-g',onclick:PICKER.filtroGrupo},'Todos os músculos')),
       h('div',{id:'pk-lista',style:'margin-top:8px'}),
       h('div',{style:'height:8px'}),
-      h('button',{class:'btn',onclick:PICKER.criarCustom},'＋ Criar exercício personalizado')
+      h('button',{class:'btn',onclick:PICKER.criarCustom},'Criar exercício personalizado')
     ];
     UI.folha(PICKER.modo==='consulta'?'Exercícios':'Adicionar exercício', corpo);
     PICKER.lista();
@@ -589,7 +714,7 @@ const PICKER = {
       if(mostrados>=res.length) sent.remove(); };
     const sent=h('button',{class:'btn',style:'margin-top:8px',onclick:()=>mostra()},'Mostrar mais');
     alvo.appendChild(sent); mostra();
-    if(!res.length) alvo.appendChild(h('div',{class:'vazio'},h('span',{class:'emo'},'🔎'),'Nada encontrado. Tenta outro termo ou cria um exercício personalizado.'));
+    if(!res.length) alvo.appendChild(h('div',{class:'vazio'},'Nada encontrado. Tente outro termo ou crie um exercício personalizado.'));
   },
   linha(x){
     return h('div',{class:'item',onclick:()=>{
@@ -619,7 +744,7 @@ const PICKER = {
       h('div',{class:'f13 mut',style:'margin:12px 0 6px'},'Tipo de registro'), selT,
       h('div',{style:'height:14px'}),
       h('button',{class:'btn btn-p',onclick:()=>{
-        const n=(nome.value||'').trim(); if(!n){ UI.toast('Dá um nome pro exercício'); return; }
+        const n=(nome.value||'').trim(); if(!n){ UI.toast('Informe o nome do exercício'); return; }
         const id='custom__'+uid();
         S.custom[id]={id, n, g:selG.value, e:selE.value, t:selT.value, custom:true, atualizado:agora()};
         salva('custom'); NET.agenda('custom/'+id, S.custom[id]);
@@ -652,12 +777,12 @@ const TELAS = {};
 
 /* ---------- aba TREINO (rotinas) ---------- */
 TELAS.treino = function(){
-  UI.topo(h('div',{class:'topo-tit'},'Treino', h('small',{}, S.perfil? 'Fala, '+S.perfil.nome.split(' ')[0]+'! 👊':'')));
+  UI.topo(h('div',{class:'topo-tit'},'Treino'));
   const m=$('#main'); m.innerHTML='';
 
   if(S.ativo){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
-      '▶ Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
+      'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
   }
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:4px',onclick:()=>ATIVO.comeca(null)},'＋ Iniciar treino vazio'));
 
@@ -669,8 +794,8 @@ TELAS.treino = function(){
 
   const rotinas=Object.values(S.rotinas).filter(r=>!r.apagada);
   if(!rotinas.length){
-    m.appendChild(h('div',{class:'vazio'},h('span',{class:'emo'},'📋'),
-      'Nenhuma rotina ainda. Monta a primeira: escolhe os exercícios, define as séries e é só chegar na academia e apertar Iniciar.'));
+    m.appendChild(h('div',{class:'vazio'},
+      'Nenhuma rotina ainda. Crie a primeira, defina exercícios e séries, e comece a registrar.'));
   }
   const pastas=Object.values(S.pastas).filter(p=>!p.apagada).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
   const porPasta={}; rotinas.forEach(r=>{ (porPasta[r.pasta||'']=porPasta[r.pasta||'']||[]).push(r); });
@@ -679,10 +804,10 @@ TELAS.treino = function(){
   const desenhaRotina=r=>{
     const nomes=(r.ex||[]).map(e=>BIB.ex(e.exId).n);
     return h('div',{class:'card'},
-      h('div',{class:'linha'},
+      h('div',{class:'linha',onclick:()=>UI.vai('rotinaVer',{rid:r.id})},
         h('div',{class:'b800',style:'font-size:16.5px;flex:1'}, r.titulo),
-        h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>ROT.menu(r)},'⋯')),
-      h('div',{class:'f13 mut',style:'margin:6px 0 12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'},
+        h('button',{class:'btn btn-mini',style:'width:38px',onclick:e=>{e.stopPropagation();ROT.menu(r);}},'⋯')),
+      h('div',{class:'f13 mut',style:'margin:6px 0 12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden',onclick:()=>UI.vai('rotinaVer',{rid:r.id})},
         nomes.join(', ')||'Sem exercícios'),
       h('button',{class:'btn btn-p',onclick:()=>ATIVO.comeca(r.id)},'Iniciar rotina'));
   };
@@ -709,10 +834,10 @@ const ROT = {
   },
   menu(r){
     UI.folha(r.titulo, [
-      h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();ROT.editor(r.id);}},'✏️ Editar rotina'),
-      h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();ROT.duplica(r);}},'📄 Duplicar'),
-      h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();ROT.mover(r);}},'📁 Mover de pasta'),
-      h('button',{class:'menu-op perigo',onclick:()=>{UI.fechaFolha();ROT.apaga(r);}},'🗑 Excluir rotina')
+      h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();ROT.editor(r.id);}},'Editar rotina'),
+      h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();ROT.duplica(r);}},'Duplicar'),
+      h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();ROT.mover(r);}},'Mover de pasta'),
+      h('button',{class:'menu-op perigo',onclick:()=>{UI.fechaFolha();ROT.apaga(r);}},'Excluir rotina')
     ]);
   },
   duplica(r){
@@ -806,15 +931,15 @@ TELAS.rotinaEditor = function(){
   }
   function menuEx(e,ix){
     UI.folha(BIB.ex(e.exId).n,[
-      h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[r.ex[ix-1],r.ex[ix]]=[r.ex[ix],r.ex[ix-1]];UI.fechaFolha();UI.refaz();} }},'⬆️ Mover pra cima'),
-      h('button',{class:'menu-op',onclick:()=>{ if(ix<r.ex.length-1){[r.ex[ix+1],r.ex[ix]]=[r.ex[ix],r.ex[ix+1]];UI.fechaFolha();UI.refaz();} }},'⬇️ Mover pra baixo'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }); }},'🔁 Substituir exercício'),
-      h('button',{class:'menu-op perigo',onclick:()=>{ r.ex.splice(ix,1); UI.fechaFolha(); UI.refaz(); }},'🗑 Remover da rotina')
+      h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[r.ex[ix-1],r.ex[ix]]=[r.ex[ix],r.ex[ix-1]];UI.fechaFolha();UI.refaz();} }},'Mover para cima'),
+      h('button',{class:'menu-op',onclick:()=>{ if(ix<r.ex.length-1){[r.ex[ix+1],r.ex[ix]]=[r.ex[ix],r.ex[ix+1]];UI.fechaFolha();UI.refaz();} }},'Mover para baixo'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }); }},'Substituir exercício'),
+      h('button',{class:'menu-op perigo',onclick:()=>{ r.ex.splice(ix,1); UI.fechaFolha(); UI.refaz(); }},'Remover da rotina')
     ]);
   }
   function salvar(){
-    if(!(r.titulo||'').trim()){ UI.toast('Dá um nome pra rotina'); return; }
-    if(!r.ex.length){ UI.toast('Adiciona pelo menos um exercício'); return; }
+    if(!(r.titulo||'').trim()){ UI.toast('Informe o nome da rotina'); return; }
+    if(!r.ex.length){ UI.toast('Adicione pelo menos um exercício'); return; }
     r.atualizado=agora(); S.rotinas[r.id]=r; salva('rotinas'); NET.agenda('rotinas/'+r.id, r);
     UI.pilha=[]; UI.vai('treino',null,false); UI.toast('Rotina salva ✓');
   }
@@ -846,15 +971,15 @@ const ATIVO = {
   marca(e, s){
     const x=BIB.ex(e.exId);
     if(!s.ok){
-      if(x.t==='peso_reps' && (!s.kg||!s.reps)){ UI.toast('Preenche kg e reps antes de concluir'); return; }
-      if(x.t!=='peso_reps' && !s.reps){ UI.toast('Preenche o valor antes de concluir'); return; }
+      if(x.t==='peso_reps' && (!s.kg||!s.reps)){ UI.toast('Preencha kg e reps antes de concluir'); return; }
+      if(x.t!=='peso_reps' && !s.reps){ UI.toast('Preencha o valor antes de concluir'); return; }
       s.ok=true; SOM.check();
       const prs=CORE.detectaPR(S.prs, e.exId, {...s});
       if(prs.length){
         s.pr=prs.map(p=>p[0]);
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
         prs.forEach(([t])=>NET.agenda('prs/'+e.exId+'/'+t, S.prs[e.exId][t]));
-        SOM.pr(); UI.toast('🏅 Recorde pessoal! '+x.n, true);
+        SOM.pr(); UI.toast('Recorde pessoal · '+x.n+' 🏅', true);
       }
       if(e.descanso>0) DESC.inicia(e.descanso, x.n);
     } else { s.ok=false; delete s.pr; }
@@ -866,6 +991,7 @@ const ATIVO = {
     const tot=(S.ativo.ex||[]).reduce((a,e)=>a+e.series.filter(s=>s.tipo!=='W').length,0);
     const el=$('#ta-vol'); if(el){ el.textContent=CORE.fmtKg(vol)+' kg'; $('#ta-ser').textContent=ser+(tot?' / '+tot:''); }
     $('#ta-progresso').style.width = tot? Math.min(100, 100*ser/tot)+'%' : '0%';
+    const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 92)); }
   },
   descarta(){
     UI.folha('Descartar treino?',[
@@ -889,7 +1015,7 @@ const ATIVO = {
         S.treinos[salvo.id]=salvo; salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo);
         // sugere atualizar rotina com as cargas de hoje
         S.ativo=null; salva('ativo'); DESC.para();
-        UI.fechaFolha(); UI.pilha=[]; UI.vai('hist',null,false);
+        UI.fechaFolha(); UI.pilha=[]; UI.vai('inicio',null,false);
         UI.toast(salvo.recordes?('Treino salvo com '+salvo.recordes+' recorde'+(salvo.recordes>1?'s':'')+' 🏅'):'Treino salvo ✓', !!salvo.recordes);
       }},'Concluir e salvar')]);
   }
@@ -902,15 +1028,21 @@ TELAS.ativo = function(){
     h('button',{class:'btn btn-mini',style:'width:42px;padding:9px',onclick:()=>UI.vai('treino',null,false)},
       h('span',{html:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>'})),
     h('div',{class:'topo-tit',style:'font-size:19px',onclick:renomear}, t.titulo),
-    h('button',{class:'btn btn-mini',style:'width:40px',onclick:ATIVO.descarta},'🗑'),
+    h('button',{class:'btn btn-mini',style:'width:40px',onclick:()=>{
+      UI.folha(t.titulo,[
+        h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();renomear();}},'Renomear treino'),
+        h('button',{class:'menu-op perigo',onclick:()=>{UI.fechaFolha();ATIVO.descarta();}},'Descartar treino')]);
+    }},'⋯'),
     h('button',{class:'btn btn-mini btn-p',onclick:ATIVO.concluir},'Concluir'));
   const m=$('#main'); m.innerHTML='';
 
   m.appendChild(h('div',{class:'card',style:'position:sticky;top:calc(var(--sat) + 58px);z-index:30'},
-    h('div',{class:'stats3'},
-      h('div',{},h('div',{class:'k'},'Duração'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
-      h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol'},'0 kg')),
-      h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0')))));
+    h('div',{class:'linha'},
+      h('div',{class:'stats3',style:'flex:1'},
+        h('div',{},h('div',{class:'k'},'Duração'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
+        h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol'},'0 kg')),
+        h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0'))),
+      h('div',{id:'ta-musc'}))));
 
   t.ex.forEach((e,ix)=>m.appendChild(cartao(e,ix)));
   m.appendChild(h('button',{class:'btn',onclick:()=>PICKER.abre(id=>{
@@ -969,52 +1101,26 @@ TELAS.ativo = function(){
   }
   function menuEx(e,ix){
     UI.folha(BIB.ex(e.exId).n,[
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{s.ok=false;delete s.pr;}); salva('ativo'); UI.refaz(); }); }},'🔁 Substituir exercício'),
-      h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[t.ex[ix-1],t.ex[ix]]=[t.ex[ix],t.ex[ix-1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'⬆️ Mover pra cima'),
-      h('button',{class:'menu-op',onclick:()=>{ if(ix<t.ex.length-1){[t.ex[ix+1],t.ex[ix]]=[t.ex[ix],t.ex[ix+1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'⬇️ Mover pra baixo'),
-      h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'🗑 Remover do treino')
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{s.ok=false;delete s.pr;}); salva('ativo'); UI.refaz(); }); }},'Substituir exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[t.ex[ix-1],t.ex[ix]]=[t.ex[ix],t.ex[ix-1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'Mover para cima'),
+      h('button',{class:'menu-op',onclick:()=>{ if(ix<t.ex.length-1){[t.ex[ix+1],t.ex[ix]]=[t.ex[ix],t.ex[ix+1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'Mover para baixo'),
+      h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover do treino')
     ]);
   }
 };
 
-/* ---------- HISTÓRICO ---------- */
-TELAS.hist = function(){
-  UI.topo(h('div',{class:'topo-tit'},'Histórico'));
-  const m=$('#main'); m.innerHTML='';
-  const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio);
-  if(!ts.length){
-    m.appendChild(h('div',{class:'vazio'},h('span',{class:'emo'},'🗓'),'Seus treinos concluídos vão aparecer aqui, com volume, séries e recordes de cada dia.'));
-    return;
-  }
-  let mesAtual='';
-  ts.forEach(t=>{
-    const mes=new Date(t.inicio).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-    if(mes!==mesAtual){ mesAtual=mes; m.appendChild(h('div',{class:'secao'},mes[0].toUpperCase()+mes.slice(1))); }
-    const nomes=(t.ex||[]).slice(0,3).map(e=>e.series.length+' × '+BIB.ex(e.exId).n);
-    const resto=(t.ex||[]).length-3;
-    m.appendChild(h('div',{class:'card',onclick:()=>UI.vai('treinoDet',{id:t.id})},
-      h('div',{class:'linha'},
-        h('div',{class:'esp'},
-          h('div',{class:'b800',style:'font-size:16px'},t.titulo),
-          h('div',{class:'f13 mut',style:'margin-top:2px'},dataLonga(t.inicio))),
-        t.recordes? h('div',{class:'badge rec'},'🏅 '+t.recordes):null),
-      h('div',{class:'stats3',style:'margin-top:10px'},
-        h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtDur((t.fim-t.inicio)/1000))),
-        h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtKg(t.volume)+' kg')),
-        h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v',style:'font-size:15px'},t.series))),
-      h('div',{class:'f13 mut',style:'margin-top:10px;line-height:1.5'}, nomes.join(' · ')+(resto>0?' · +'+resto:''))));
-  });
-};
-
+/* ---------- DETALHE DO TREINO ---------- */
 TELAS.treinoDet = function({id}){
   const t=S.treinos[id]; if(!t){ UI.volta(); return; }
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},t.titulo,h('small',{},dataLonga(t.inicio))),
     h('button',{class:'btn btn-mini',style:'width:38px',onclick:menu},'⋯'));
   const m=$('#main'); m.innerHTML='';
-  m.appendChild(h('div',{class:'card'},h('div',{class:'stats3'},
-    h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
-    h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
-    h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅')))));
+  m.appendChild(h('div',{class:'card'},h('div',{class:'linha'},
+    h('div',{class:'stats3',style:'flex:1'},
+      h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
+      h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
+    corpoSVG(gruposDoTreino(t), 92))));
   (t.ex||[]).forEach(e=>{
     const x=BIB.ex(e.exId);
     const card=h('div',{class:'card'});
@@ -1041,8 +1147,8 @@ TELAS.treinoDet = function({id}){
           ex:t.ex.map(e=>({exId:e.exId, descanso:e.descanso??S.cfg.descanso, notas:e.notas||'',
             series:e.series.map(s=>({tipo:s.tipo,kg:s.kg,reps:s.reps,ok:false}))})) };
         salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
-      }},'🔁 Repetir este treino'),
-      h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); UI.fechaFolha(); UI.volta(); }},'🗑 Excluir do histórico')
+      }},'Repetir este treino'),
+      h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); UI.fechaFolha(); UI.volta(); }},'Excluir do histórico')
     ]);
   }
 };
@@ -1092,14 +1198,15 @@ TELAS.exercicio = function({id}){
     });
     m.appendChild(cardH);
   } else {
-    m.appendChild(h('div',{class:'vazio'},h('span',{class:'emo'},'📈'),'Sem registros ainda. Assim que você treinar esse exercício, a evolução aparece aqui.'));
+    m.appendChild(h('div',{class:'vazio'},'Sem registros ainda. Assim que você treinar esse exercício, a evolução aparece aqui.'));
   }
 };
 
 /* ---------- PERFIL ---------- */
 TELAS.perfil = function(){
   UI.topo(h('div',{class:'topo-tit'},'Perfil'),
-    h('button',{class:'btn btn-mini',style:'width:40px',onclick:()=>UI.vai('config')},'⚙️'));
+    h('button',{class:'btn btn-mini',style:'width:40px',onclick:()=>UI.vai('config'),
+      html:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'}));
   const m=$('#main'); m.innerHTML='';
   const ts=Object.values(S.treinos).filter(t=>!t.apagado);
   const semanaAtu=CORE.semanaKey(agora());
@@ -1111,32 +1218,40 @@ TELAS.perfil = function(){
       h('div',{class:'thumb-ini',style:'width:60px;height:60px;font-size:22px;border-radius:18px'},(S.perfil?.nome||'?')[0].toUpperCase()),
       h('div',{class:'esp'},
         h('div',{class:'b800 f20'},S.perfil?.nome||'Atleta'),
-        h('div',{class:'f13 mut'},ts.length+' treino'+(ts.length===1?'':'s')+' registrados'))),
+        h('div',{class:'f13 mut'},ts.length+' treinamento'+(ts.length===1?'':'s')))),
     h('div',{class:'stats3',style:'margin-top:14px'},
       h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v'},nestaSemana.length+'x')),
       h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},ts.reduce((a,t)=>a+(t.recordes||0),0)+' 🏅')))));
 
-  // gráfico semanal com alternância
+  // gráfico semanal com período e métrica
   const card=h('div',{class:'card'});
   const cv=h('canvas',{class:'graf'});
+  const per=h('div',{class:'periodo'});
   const tog=h('div',{class:'gtoggle'});
-  let metrica='dur';
+  let metrica='dur', semanas=13;
   const desenha=()=>{
-    const dados=CORE.agregaSemanas(Object.fromEntries(ts.map(t=>[t.id,t])), 10, agora());
+    const dados=CORE.agregaSemanas(Object.fromEntries(ts.map(t=>[t.id,t])), semanas, agora());
+    const passo=semanas>40?8:semanas>20?4:2;
     const conf={dur:{f:d=>d.dur/3600, fmt:v=>(Math.round(v*10)/10)+'h'}, vol:{f:d=>d.vol, fmt:v=>CORE.fmtKg(v)+'kg'}, ser:{f:d=>d.ser, fmt:v=>String(Math.round(v))}}[metrica];
-    grafBarras(cv, dados.map((d,i)=>({v:conf.f(d), rot:(i%2===0)?new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):''})), conf.fmt);
+    grafBarras(cv, dados.map((d,i)=>({v:conf.f(d), rot:(i%passo===0)?new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):''})), conf.fmt);
   };
+  [['3 meses',13],['6 meses',26],['Ano',52]].forEach(([rot,n])=>{
+    per.appendChild(h('button',{class:'chip'+(n===semanas?' on':''),onclick:function(){ semanas=n; per.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); this.classList.add('on'); desenha(); }},rot));
+  });
   [['dur','Duração'],['vol','Volume'],['ser','Séries']].forEach(([v,rot])=>{
     tog.appendChild(h('button',{class:'chip'+(v===metrica?' on':''),onclick:function(){ metrica=v; tog.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); this.classList.add('on'); desenha(); }},rot));
   });
-  card.append(h('div',{class:'secao',style:'margin:0 0 4px'},'Últimas 10 semanas'),tog,cv);
+  card.append(per,cv,tog);
   m.appendChild(card);
   requestAnimationFrame(desenha);
 
+  m.appendChild(h('div',{class:'secao'},'Painel'));
   m.appendChild(h('div',{class:'grade2'},
-    h('button',{class:'btn',onclick:()=>PICKER.abre(null,'consulta')},'📚 Exercícios'),
-    h('button',{class:'btn',onclick:()=>UI.vai('config')},'⚙️ Ajustes')));
+    h('button',{class:'btn',onclick:()=>UI.vai('stats')},'Estatísticas'),
+    h('button',{class:'btn',onclick:()=>PICKER.abre(null,'consulta')},'Exercícios'),
+    h('button',{class:'btn',onclick:()=>UI.vai('medidas')},'Medições'),
+    h('button',{class:'btn',onclick:()=>UI.vai('calendario')},'Calendário')));
 };
 
 /* ---------- CONFIG ---------- */
@@ -1158,7 +1273,14 @@ TELAS.config = function(){
 
   const sw=(rot,campo)=>h('button',{class:'menu-op',onclick:function(){ S.cfg[campo]=!S.cfg[campo]; salvaCfg(); this.querySelector('.chip').textContent=S.cfg[campo]?'Ligado':'Desligado'; this.querySelector('.chip').classList.toggle('on',S.cfg[campo]); }},
     rot, h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg[campo]?' on':'')},S.cfg[campo]?'Ligado':'Desligado'));
-  m.appendChild(h('div',{class:'card'}, sw('🔔 Som do timer','som'), sw('📳 Vibração','vibra')));
+  m.appendChild(h('div',{class:'card'}, sw('Som do timer','som'), sw('Vibração','vibra')));
+
+  m.appendChild(h('div',{class:'card'},
+    h('div',{class:'secao',style:'margin:0 0 8px'},'Importar do Hevy'),
+    h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:10px'},
+      'No Hevy: Perfil \u25b8 Configura\u00e7\u00f5es \u25b8 Exportar dados. Depois selecione os arquivos aqui. Nada \u00e9 duplicado se importar de novo.'),
+    h('button',{class:'btn',style:'margin-bottom:8px',onclick:()=>HEVYIMP.pede('treinos')},'Importar treinos (workout_data.csv)'),
+    h('button',{class:'btn',onclick:()=>HEVYIMP.pede('medidas')},'Importar medidas (measurement_data.csv)')));
 
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'secao',style:'margin:0 0 8px'},'Backup e conta'),
@@ -1166,10 +1288,10 @@ TELAS.config = function(){
       'Seus dados ficam salvos neste aparelho e sincronizados na nuvem de forma anônima e privada. Código da conta: ',
       h('span',{class:'b700',style:'color:var(--tx)'},(S.auth?.uid||'—').slice(0,10)+'…'),
       h('br'),'Sincronização: ', h('span',{class:'b700',style:'color:'+(UI.syncOk===false?'var(--err)':'var(--ok)')}, navigator.onLine?(S.fila.length?S.fila.length+' pendentes':'em dia ✓'):'offline (envia quando conectar)')),
-    h('button',{class:'btn',onclick:exporta},'⬇️ Exportar meus dados (JSON)')));
+    h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v1.0 · feito com 🧡 e muito ferro', h('br'),
+    'Treino Gym v2.0', h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
@@ -1177,6 +1299,420 @@ TELAS.config = function(){
     const blob=new Blob([JSON.stringify(dados,null,1)],{type:'application/json'});
     const a=h('a',{href:URL.createObjectURL(blob),download:'treino-gym-backup.json'});
     document.body.appendChild(a); a.click(); a.remove();
+  }
+};
+
+const HEVY_MAPA={"Cadeira Extensora (Máquina)": "pernas__cadeira-extensora", "Rosca Scott (Máquina)": "biceps__rosca-scott-com-alavanca", "Rosca Direta (Barra)": "biceps__rosca-direta-com-barra", "Puxada Alta na Polia (Máquina)": "costas__puxada-alta", "Tríceps na Polia com Corda": "triceps__triceps-pulley-corda", "Cadeira Adutora (Máquina)": "inferiores__cadeira-adutora", "Cadeira Abdutora (Máquina)": "inferiores__cadeira-abdutora", "Mesa Flexora (Máquina)": "pernas__mesa-flexora", "Agachamento Hack (Máquina)": "pernas__agachamento-na-maquina-hack", "Elevação Lateral (Máquina)": "ombros__elevacao-lateral-na-maquina", "Tríceps na Paralela": "triceps__mergulho-de-triceps", "Esteira": "cardio__esteira-ergometrica", "Crucifixo na Polia (Máquina)": "peito__crucifixo-no-cross-em-pe", "Supino Declinado (Máquina)": "peito__supino-declinada-na-maquina", "Crucifixo no Voador (Máquina)": "peito__voador-maquina", "Flexão de Punho Invertida (Barra)": "antebraco__rosca-de-punho-reversa-com-barra", "Leg Press 45º (Máquina)": "pernas__leg-press", "Máquina De Fundos Sentado": "triceps__arnold-dips-maschine", "Remada Sentada com Pegada em V (Cabo)": "costas__remada-beixa-no-pulley-triangulo", "Remada Inclinada Apoiada No Peito (Halter)": "costas__remada-aberta-no-banco-inclinado-com-halteres", "Levantamento Terra Sumô": "pernas__levantamento-terra-sumo", "Flexão": "calistenia__flexao", "Elevação de Panturrilha Sentado (Máquina)": "panturrilha__elevacao-de-panturrilha-sentado-com-alavanca", "Supino Inclinado (Halter)": "peito__supino-inclinado-com-halteres", "Encolhimento (Halter)": "trapezio__encolhimento-com-halteres", "Supino Inclinado (Barra)": "peito__supino-inclinado-com-barra", "Supino (Barra)": "peito__supino", "Elevação Lateral (Halter)": "ombros__elevacao-lateral-de-bracos-com-halteres", "Elevação de Panturrilha em Pé (Máquina)": "panturrilha__elevacao-de-panturrilha-em-maquina-em-pe", "Overhead Triceps Extension (Cable)": "triceps__extensao-de-triceps-no-cabo-alto", "Extensão de tríceps acima da cabeça (cabo)": "triceps__extensao-de-triceps-no-cabo-alto", "Prensa De Ombros (Sentada) (Máquina)": "ombros__desenvolvimento-de-ombros-na-maquina", "Remadas Dobradas (Barra)": "costas__remada-curvada-com-barra", "Rosca Direta (Máquina)": "biceps__maquina-de-rosca-direta", "Remadas Iso-Lateral (Máquina)": "costas__remada-frontal-com-alavanca", "Supino (Halter)": "peito__supino-reto-com-halteres", "Abdominal": "abdomen__abdominal-supra", "Desenvolvimento (Halter)": "ombros__desenvolvimento-com-halteres", "Abdominal Na Máquina": "abdomen__abdominal-maquina", "Puxada Alta - Pegada Triângulo": "costas__puxada-alta-com-triangulo", "Rolo Antebraço": "antebraco__rolinho-de-antebraco", "Extensão de Tríceps (Barra)": "triceps__extensao-de-triceps-com-deitado-com-barra", "Tríceps na Polia": "triceps__triceps-pulley-barra", "Supino Sentado (Máquina)": "peito__supino-na-maquina", "Supino Inclinado Na Máquina": "peito__supino-inclinado-na-maquina", "Leg Press Horizontal (Máquina)": "pernas__leg-press-horizontal", "Puxada Alta (Máquina)": "costas__puxada-maquina", "Rosca Scott (Barra)": "biceps__rosca-scott-com-barra-w", "Cadeira Flexora (Máquina)": "pernas__cadeira-flexora", "Pec Deck": "peito__voador-no-pec-deck", "Agachamento no Smith (Máquina)": "pernas__agachamento-no-smith", "Elevação Lateral Unilateral (Cabo)": "ombros__elevacao-lateral-unilateral-com-cabo", "Extensão de Tríceps Atrás (Cabo)": "triceps__triceps-coice-com-cabo", "Remadas Altas Iso-Lateral (Máquina)": "costas__puxada-alta-com-alavanca", "Rosca Martelo (Halter)": "biceps__rosca-martelo", "Rosca Inclinada (Halter)": "biceps__rosca-banco-inclinado", "Desenvolvimento de Ombros (Máquina de Placas)": "ombros__desenvolvimento-de-ombros-na-maquina", "Rosca Martelo Alternada": "biceps__rosca-alternada-pegada-neutra", "Rosca com Corda (Máquina)": "biceps__rosca-martelo-com-corda", "Remada Baixa Iso-Lateral": "costas__remada-articulada", "Rosca Direta na Polia": "biceps__rosca-no-cabo", "Barra Fixa": "costas__barra-fixa", "Prancha Abdominal": "abdomen__prancha", "Remo Sentado (Máquina)": "costas__remada-sentada-com-cabo", "Peso Morto Com Pernas Esticadas": "pernas__stiff-com-barra", "Aberturas Invertidas De Ombro Posterior (Na Máquina)": "trapezio__voador-na-maquina-para-deltoides-posteriores", "Remada na Barra T": "costas__remada-curvada-em-t", "Supino (Máquina)": "peito__supino-na-maquina", "Rosca Martelo com Corda na Polia": "biceps__rosca-martelo-com-corda", "Puxada Com Braços Esticados (Corda)": "costas__pulldown-com-corda", "Press De Peito Iso-Lateral (Máquina)": "peito__supino-com-alavanca", "Supino Inclinado no Smith (Máquina)": "peito__supino-inclinado-no-smith", "Encolhimento (Máquina)": "trapezio__encolhimento-maquina", "Crucifixo Sentado (Cabo)": "peito__crucifixo-no-cross-banco-reto", "Triceps Testa (Barra)": "triceps__triceps-testa-com-barra", "Bicicleta": "cardio__bike", "Rosca de Pulso Atrás das Costas (Barra)": "antebraco__rosca-de-punho-com-barra-atras-das-costas", "Aberturas De Peito Inclinadas (Halter)": "peito__crucifixo-com-halteres-inclinado", "Levantamento Terra (Halter)": "pernas__levantamento-terra-com-halteres", "Pendurado Na Barra": "calistenia__suspensao-passiva", "Extensão de Tríceps Unilateral (Cabo)": "triceps__triceps-frances-unilateral-no-cabo", "Extensão de Tríceps Unilateral (Halter)": "triceps__extensao-de-triceps-com-haltere-unilateral-sentado", "Elevação Frontal Da Bolacha": "ombros__levantamento-frontal-com-anilha", "Extensão de Tríceps (Máquina)": "triceps__extensao-de-triceps-na-maquina", "Rosca Concentrada (Halter)": "biceps__rosca-concentrada", "Agachamento Goblet": "pernas__agachamento-goblet-com-haltere", "Elevação Unilateral de Panturrilha em Pé (Halter)": "panturrilha__levantamento-de-panturrilha-com-apoio-de-uma-perna", "Abdominal (Com Peso)": "abdomen__abdominal-com-carga", "Crucifixo Baixo na Polia (Máquina)": "peito__cross-over-polia-baixa", "Levantamento Terra (Barra Hexagonal)": "pernas__levantamento-terra-com-barra-hexagonal", "Agachamento (Máquina)": "inferiores__agachamento-na-maquina", "Remada com Barra em Base Giratória": "costas__remada-t-com-landmine", "Simulador De Escadas": "cardio__maquina-simulador-escada", "Puxada Com O Braço Reto (Corda)": "costas__pulldown-com-corda", "Puxada Alta No Cabo": "costas__puxada-alta", "Boxe": "funcional__boxe-sombra", "Elevação Frontal (Cabo)": "ombros__levantamento-frontal-de-cabo-com-dois-bracos", "Polichinelos": "funcional__polichinelos", "Glúteo Coice (Máquina)": "gluteos__gluteo-coice-na-maquina", "Mergulho no banco": "triceps__triceps-no-banco", "Caminhada": "funcional__caminhar", "Flexão Pegada Diamante": "calistenia__flexao-diamante", "Levantamento Terra no Smith (Máquina)": "costas__levantamento-terra-no-smith", "Pullover (Máquina)": "costas__pullover-na-maquina-de-alavanca", "Agachamento (Barra)": "inferiores__agachamento-livre-com-barra", "Rosca de Punho (Halter)": "antebraco__flexao-de-punho-com-halteres"};
+const HEVY_NOVOS={"Levantamento De Joelhos Nas Barras Paralelas": {"n": "Elevação de joelhos nas paralelas", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Abdominal Canivete": {"n": "Abdominal canivete", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Abdominal (Corda)": {"n": "Abdominal na polia com corda", "g": "abdomen", "e": "cabo", "t": "peso_reps"}, "Abdominal Em Bicicleta": {"n": "Abdominal bicicleta", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Abdominal Declinado (Com Peso)": {"n": "Abdominal declinado com peso", "g": "abdomen", "e": "anilha", "t": "peso_reps"}, "Abdominal Declinado": {"n": "Abdominal declinado", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Elevação De Pernas Na Barra Fixa": {"n": "Elevação de pernas na barra fixa", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Elevação De Joelhos Na Barra Fixa": {"n": "Elevação de joelhos na barra fixa", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Roda Abdominal": {"n": "Roda abdominal", "g": "abdomen", "e": "outro", "t": "reps"}, "Abdominal Toque No Calcanhar": {"n": "Abdominal toque no calcanhar", "g": "abdomen", "e": "peso-corporal", "t": "reps"}, "Rosca com Anilha": {"n": "Rosca com anilha", "g": "biceps", "e": "anilha", "t": "peso_reps"}};
+
+/* ---------- mapa muscular ---------- */
+const REGIOES = {
+  ombros:['oF1','oF2','oB1','oB2'], peito:['pe1','pe2'], biceps:['bi1','bi2'],
+  antebraco:['aF1','aF2','aB1','aB2'], abdomen:['abd'], trapezio:['trp'], costas:['cs1','cs2'],
+  triceps:['tr1','tr2'], lombar:['lmb'], gluteos:['gl1','gl2'],
+  quadriceps:['qd1','qd2'], adutores:['qd1','qd2'], abdutores:['qd1','qd2'],
+  posteriores:['ps1','ps2'], panturrilha:['pt1','pt2','ptf1','ptf2']
+};
+function gruposDoTreino(t){
+  const m=new Map();
+  (t.ex||[]).forEach(e=>{
+    const feitas=e.series.filter(s=>s.ok&&s.tipo!=='W').length;
+    if(!feitas) return;
+    const x=BIB.ex(e.exId);
+    [x.g].concat(x.gs||[]).forEach(g=>m.set(g,(m.get(g)||0)+feitas));
+  });
+  return m;
+}
+function corpoSVG(pesos, larg){
+  const max=Math.max(1,...pesos.values());
+  const cls={}, op={};
+  pesos.forEach((v,g)=>(REGIOES[g]||[]).forEach(id=>{ cls[id]='m on'; op[id]=(0.4+0.6*v/max).toFixed(2); }));
+  const P=(id,forma)=>forma.replace('%C%', `class="${cls[id]||'m'}" ${cls[id]?`opacity="${op[id]}"`:''}`);
+  const svg=`<svg class="musc" width="${larg}" viewBox="0 0 190 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- frente -->
+  <circle cx="47" cy="12" r="7.5" class="m"/>
+  ${P('oF1','<circle cx="31.5" cy="28" r="6" %C%/>')}${P('oF2','<circle cx="62.5" cy="28" r="6" %C%/>')}
+  ${P('pe1','<rect x="34" y="26" width="12.5" height="14" rx="5" %C%/>')}${P('pe2','<rect x="47.5" y="26" width="12.5" height="14" rx="5" %C%/>')}
+  ${P('bi1','<rect x="24" y="34" width="8" height="18" rx="4" %C%/>')}${P('bi2','<rect x="62" y="34" width="8" height="18" rx="4" %C%/>')}
+  ${P('aF1','<rect x="22" y="53" width="7" height="17" rx="3.5" %C%/>')}${P('aF2','<rect x="65" y="53" width="7" height="17" rx="3.5" %C%/>')}
+  ${P('abd','<rect x="39" y="41" width="16" height="21" rx="5" %C%/>')}
+  ${P('qd1','<rect x="35" y="64" width="11" height="26" rx="5.5" %C%/>')}${P('qd2','<rect x="48" y="64" width="11" height="26" rx="5.5" %C%/>')}
+  ${P('ptf1','<rect x="36.5" y="93" width="8" height="19" rx="4" %C%/>')}${P('ptf2','<rect x="49.5" y="93" width="8" height="19" rx="4" %C%/>')}
+  <!-- costas -->
+  <circle cx="142" cy="12" r="7.5" class="m"/>
+  ${P('trp','<rect x="131" y="20" width="22" height="9" rx="4.5" %C%/>')}
+  ${P('oB1','<circle cx="126.5" cy="28" r="6" %C%/>')}${P('oB2','<circle cx="157.5" cy="28" r="6" %C%/>')}
+  ${P('cs1','<rect x="130" y="30" width="11.5" height="20" rx="5" %C%/>')}${P('cs2','<rect x="142.5" y="30" width="11.5" height="20" rx="5" %C%/>')}
+  ${P('tr1','<rect x="119" y="34" width="8" height="18" rx="4" %C%/>')}${P('tr2','<rect x="157" y="34" width="8" height="18" rx="4" %C%/>')}
+  ${P('aB1','<rect x="117" y="53" width="7" height="17" rx="3.5" %C%/>')}${P('aB2','<rect x="160" y="53" width="7" height="17" rx="3.5" %C%/>')}
+  ${P('lmb','<rect x="135.5" y="51" width="13" height="9" rx="4" %C%/>')}
+  ${P('gl1','<rect x="130.5" y="61" width="11" height="11" rx="5" %C%/>')}${P('gl2','<rect x="142.5" y="61" width="11" height="11" rx="5" %C%/>')}
+  ${P('ps1','<rect x="130.5" y="73" width="11" height="19" rx="5" %C%/>')}${P('ps2','<rect x="142.5" y="73" width="11" height="19" rx="5" %C%/>')}
+  ${P('pt1','<rect x="131.5" y="94" width="8.5" height="18" rx="4" %C%/>')}${P('pt2','<rect x="144" y="94" width="8.5" height="18" rx="4" %C%/>')}
+  </svg>`;
+  return h('div',{html:svg});
+}
+
+/* ---------- data relativa ---------- */
+function dataRelativa(ts){
+  const d=new Date(ts), hoje=new Date(); d.setHours(0,0,0,0);
+  const h0=new Date(); h0.setHours(0,0,0,0);
+  const dias=Math.round((h0-d)/864e5);
+  if(dias===0) return 'Hoje';
+  if(dias===1) return 'Ontem';
+  if(dias<7){ const s=new Date(ts).toLocaleDateString('pt-BR',{weekday:'long'}); return s[0].toUpperCase()+s.slice(1); }
+  const mes=new Date(ts).toLocaleDateString('pt-BR',{day:'numeric',month:'short'});
+  return mes + (new Date(ts).getFullYear()!==hoje.getFullYear() ? ' de '+new Date(ts).getFullYear() : '');
+}
+
+/* ---------- INÍCIO (feed) ---------- */
+TELAS.inicio = function(){
+  UI.topo(h('div',{class:'topo-tit'},'Início'));
+  const m=$('#main'); m.innerHTML='';
+  if(S.ativo){
+    m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
+      'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
+  }
+  const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio);
+  if(!ts.length){
+    m.appendChild(h('div',{class:'vazio'},'Seus treinos concluídos aparecem aqui, com volume, séries e recordes.'));
+    m.appendChild(h('button',{class:'btn btn-p',onclick:()=>UI.vai('treino',null,false)},'Ir para Treino'));
+    return;
+  }
+  ts.forEach(t=>m.appendChild(cartaoFeed(t)));
+};
+function cartaoFeed(t){
+  const nome=S.perfil?.nome||'Você';
+  const card=h('div',{class:'card'});
+  const exs=(t.ex||[]);
+  const linhaEx=e=>{
+    const x=BIB.ex(e.exId);
+    return h('div',{class:'feed-ex'}, thumbEl(e.exId),
+      h('div',{class:'b700',style:'font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
+        e.series.length+' série'+(e.series.length===1?'':'s')+' × '+x.n));
+  };
+  const lista=h('div',{}, ...exs.slice(0,3).map(linhaEx));
+  card.append(
+    h('div',{class:'feed-cab'},
+      h('div',{class:'avatar'},(nome[0]||'?').toUpperCase()),
+      h('div',{},h('div',{class:'b700',style:'font-size:14.5px'},nome),
+        h('div',{class:'f12 mut2'},dataRelativa(t.inicio)))),
+    h('div',{class:'b800',style:'font-size:17px;margin:2px 0 10px'},t.titulo),
+    h('div',{class:'stats3',style:'margin-bottom:8px'},
+      h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtDur((t.fim-t.inicio)/1000))),
+      h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtKg(t.volume)+' kg')),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:15px'},t.recordes? h('span',{class:'badge rec'},'🏅 '+t.recordes):'—'))),
+    lista);
+  if(exs.length>3){
+    const btn=h('button',{class:'vermais',onclick:e=>{ e.stopPropagation(); exs.slice(3).forEach(x=>lista.appendChild(linhaEx(x))); btn.remove(); }},
+      'Ver os '+exs.length+' exercícios');
+    card.appendChild(btn);
+  }
+  card.addEventListener('click',()=>UI.vai('treinoDet',{id:t.id}));
+  return card;
+}
+
+/* ---------- ROTINA (página de detalhe) ---------- */
+TELAS.rotinaVer = function({rid}){
+  const r=S.rotinas[rid];
+  if(!r || r.apagada){ UI.volta(); return; }
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Rotina'),
+    h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>ROT.menu(r)},'⋯'));
+  const m=$('#main'); m.innerHTML='';
+  m.appendChild(h('div',{style:'margin-bottom:12px'},
+    h('div',{class:'b800',style:'font-size:23px'},r.titulo),
+    h('div',{class:'f13 mut'},'Criada por '+(S.perfil?.nome||'você'))));
+  m.appendChild(h('button',{class:'btn btn-p',style:'margin-bottom:14px',onclick:()=>ATIVO.comeca(r.id)},'Iniciar rotina'));
+
+  const sess=Object.values(S.treinos).filter(t=>!t.apagado && t.rid===rid && t.inicio>agora()-92*864e5).sort((a,b)=>a.inicio-b.inicio);
+  const card=h('div',{class:'card'});
+  let metrica='vol';
+  const rotMet={vol:['Volume',t=>t.volume,v=>CORE.fmtKg(v)+' kg'],
+    rep:['Repetições',t=>(t.ex||[]).reduce((a,e)=>a+e.series.reduce((b,s)=>b+((s.ok&&s.tipo!=='W')?(Number(s.reps)||0):0),0),0),v=>String(Math.round(v))],
+    dur:['Duração',t=>(t.fim-t.inicio)/60000,v=>Math.round(v)+' min']};
+  const topoNum=h('div',{class:'linha',style:'margin-bottom:4px'});
+  const cv=h('canvas',{class:'graf'});
+  const tog=h('div',{class:'gtoggle'});
+  const desenha=()=>{
+    const [rot,f,fmt]=rotMet[metrica];
+    const pontos=sess.map(t=>({v:f(t), rot:new Date(t.inicio).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}));
+    topoNum.innerHTML='';
+    if(pontos.length){
+      const u=sess.at(-1);
+      topoNum.append(h('div',{},h('span',{class:'b800',style:'font-size:19px'},fmt(f(u))),
+        h('span',{class:'f13 mut',style:'margin-left:8px'},new Date(u.inicio).toLocaleDateString('pt-BR',{day:'numeric',month:'short'}))),
+        h('div',{class:'esp'}), h('div',{class:'f13 mut'},'Últimos 3 meses'));
+    }
+    if(pontos.length>=2){ cv.style.display='block'; requestAnimationFrame(()=>grafLinha(cv,pontos,rotMet[metrica][2])); }
+    else cv.style.display='none';
+  };
+  Object.entries(rotMet).forEach(([v,[rot]])=>{
+    tog.appendChild(h('button',{class:'chip'+(v===metrica?' on':''),onclick:function(){ metrica=v; tog.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); this.classList.add('on'); desenha(); }},rot));
+  });
+  card.append(topoNum, cv, tog);
+  if(!sess.length) card.append(h('div',{class:'f13 mut',style:'padding:6px 0'},'Conclua treinos desta rotina para acompanhar a evolução.'));
+  m.appendChild(card); desenha();
+
+  m.appendChild(h('div',{class:'linha',style:'margin:16px 0 8px'},
+    h('div',{class:'secao',style:'margin:0'},'Exercícios'), h('div',{class:'esp'}),
+    h('button',{class:'btn btn-mini',onclick:()=>ROT.editor(rid)},'Editar rotina')));
+  (r.ex||[]).forEach(e=>{
+    const x=BIB.ex(e.exId);
+    const rot=TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps;
+    const c=h('div',{class:'card'});
+    c.append(h('div',{class:'linha',style:'margin-bottom:6px'}, thumbEl(e.exId),
+      h('div',{class:'esp'},h('div',{class:'b700',style:'color:var(--brand2)',onclick:()=>UI.vai('exercicio',{id:e.exId})},x.n),
+        h('div',{class:'f12 mut'},'Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')))),
+      h('div',{class:'gtab cab'},h('div',{},'Série'),h('div'),h('div',{style:'text-align:center'},rot[0]),h('div',{style:'text-align:center'},rot[1]),h('div')));
+    e.series.forEach(s=>{
+      const num=e.series.filter(q=>q.tipo!=='W').indexOf(s)+1;
+      c.append(h('div',{class:'gtab srow'},
+        h('div',{class:'stipo '+s.tipo},s.tipo==='N'?String(num||1):s.tipo), h('div'),
+        h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? (s.kg!==''?CORE.fmtKg(s.kg):'—'):'—'),
+        h('div',{style:'text-align:center;font-weight:700'}, s.reps!==''?s.reps:'—'), h('div')));
+    });
+    m.appendChild(c);
+  });
+};
+
+/* ---------- MEDIÇÕES ---------- */
+const MED_CAMPOS={peso:['Peso corporal','kg'],gordura:['Gordura corporal','%'],pescoco:['Pescoço','cm'],
+  ombros:['Ombros','cm'],peito:['Peito','cm'],bracoE:['Bíceps esquerdo','cm'],bracoD:['Bíceps direito','cm'],
+  antebracoE:['Antebraço esquerdo','cm'],antebracoD:['Antebraço direito','cm'],abdomen:['Abdômen','cm'],
+  cintura:['Cintura','cm'],quadril:['Quadril','cm'],coxaE:['Coxa esquerda','cm'],coxaD:['Coxa direita','cm'],
+  pantE:['Panturrilha esquerda','cm'],pantD:['Panturrilha direita','cm']};
+function medLista(){ return Object.values(S.medidas).filter(x=>!x.apagada).sort((a,b)=>a.data-b.data); }
+TELAS.medidas = function(){
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Medições'),
+    h('button',{class:'btn btn-mini btn-p',onclick:MED.registrar},'Registrar'));
+  const m=$('#main'); m.innerHTML='';
+  const lst=medLista();
+  const pesos=lst.filter(x=>x.peso!=null);
+  if(pesos.length){
+    const u=pesos.at(-1), ant=pesos.at(-2);
+    const delta=ant? (u.peso-ant.peso) : null;
+    const card=h('div',{class:'card'});
+    card.append(h('div',{class:'linha'},
+      h('div',{},h('div',{class:'f13 mut'},'Peso corporal'),
+        h('div',{},h('span',{class:'b800',style:'font-size:24px'},u.peso.toLocaleString('pt-BR')+' kg'),
+          delta!=null? h('span',{class:'f13 b700',style:'margin-left:8px;color:'+(delta>0?'var(--warn)':delta<0?'var(--azul)':'var(--tx2)')},(delta>0?'+':'')+ (Math.round(delta*10)/10).toLocaleString('pt-BR')+' kg'):null)),
+      h('div',{class:'esp'}), h('div',{class:'f12 mut2'},new Date(u.data).toLocaleDateString('pt-BR'))));
+    if(pesos.length>=2){
+      const cv=h('canvas',{class:'graf'}); card.append(cv);
+      requestAnimationFrame(()=>grafLinha(cv,pesos.map(x=>({v:x.peso,rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})})),v=>(Math.round(v*10)/10)+'kg'));
+    }
+    m.appendChild(card);
+  } else {
+    m.appendChild(h('div',{class:'vazio'},'Registre peso, gordura e circunferências para acompanhar a evolução física junto com a de carga.'));
+  }
+  const card2=h('div',{class:'card'});
+  Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
+    const com=lst.filter(x=>x[campo]!=null);
+    const u=com.at(-1);
+    card2.append(h('button',{class:'med-row',style:'width:100%;text-align:left',onclick:()=>UI.vai('medidaDet',{campo})},
+      h('div',{class:'b700',style:'flex:1;font-size:14.5px'},rot),
+      h('div',{class:'f14 '+(u?'b800':'mut2')}, u? (u[campo].toLocaleString('pt-BR')+' '+un) : '—'),
+      h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
+  });
+  m.appendChild(card2);
+};
+TELAS.medidaDet = function({campo}){
+  const [rot,un]=MED_CAMPOS[campo];
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},rot),
+    h('button',{class:'btn btn-mini btn-p',onclick:MED.registrar},'Registrar'));
+  const m=$('#main'); m.innerHTML='';
+  const com=medLista().filter(x=>x[campo]!=null);
+  if(!com.length){ m.appendChild(h('div',{class:'vazio'},'Nenhum registro de '+rot.toLowerCase()+' ainda.')); return; }
+  if(com.length>=2){
+    const card=h('div',{class:'card'}); const cv=h('canvas',{class:'graf'}); card.append(cv); m.appendChild(card);
+    requestAnimationFrame(()=>grafLinha(cv,com.map(x=>({v:x[campo],rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})})),v=>(Math.round(v*10)/10)+un));
+  }
+  const card2=h('div',{class:'card'});
+  com.slice().reverse().forEach(x=>{
+    card2.append(h('div',{class:'med-row'},
+      h('div',{class:'f13 mut',style:'flex:1'},new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})),
+      h('div',{class:'b800'},x[campo].toLocaleString('pt-BR')+' '+un),
+      h('button',{class:'btn btn-mini',style:'width:34px;padding:6px',onclick:()=>{
+        UI.folha('Excluir registro de '+new Date(x.data).toLocaleDateString('pt-BR')+'?',[
+          h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'Todos os valores desse dia serão removidos.'),
+          h('button',{class:'btn btn-err',onclick:()=>{ x.apagada=true; x.atualizado=agora(); salva('medidas'); NET.agenda('medidas/'+x.id,x); UI.fechaFolha(); UI.refaz(); }},'Excluir')]);
+      }},'✕')));
+  });
+  m.appendChild(card2);
+};
+const MED = {
+  registrar(){
+    const hoje=new Date(); hoje.setMinutes(hoje.getMinutes()-hoje.getTimezoneOffset());
+    const dataInp=h('input',{type:'date', value:hoje.toISOString().slice(0,10)});
+    const campos={};
+    const grid=h('div',{class:'grade2'});
+    Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
+      const inp=h('input',{type:'number',inputmode:'decimal',placeholder:un});
+      campos[campo]=inp;
+      grid.append(h('div',{},h('div',{class:'f12 mut',style:'margin-bottom:4px'},rot),inp));
+    });
+    UI.folha('Registrar medidas',[
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Data'), dataInp,
+      h('div',{style:'height:12px'}), grid, h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:()=>{
+        const reg={id:uid(), data:new Date(dataInp.value+'T12:00:00').getTime(), atualizado:agora()};
+        let tem=false;
+        Object.entries(campos).forEach(([campo,inp])=>{ if(inp.value!==''){ reg[campo]=Number(inp.value); tem=true; } });
+        if(!tem){ UI.toast('Preencha pelo menos um campo'); return; }
+        S.medidas[reg.id]=reg; salva('medidas'); NET.agenda('medidas/'+reg.id,reg);
+        UI.fechaFolha(); UI.refaz(); UI.toast('Medidas registradas');
+      }},'Salvar')
+    ]);
+  }
+};
+
+/* ---------- CALENDÁRIO ---------- */
+const CAL={y:new Date().getFullYear(), m:new Date().getMonth()};
+TELAS.calendario = function(){
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Calendário'));
+  const m=$('#main'); m.innerHTML='';
+  const ts=Object.values(S.treinos).filter(t=>!t.apagado);
+  const porDia={};
+  ts.forEach(t=>{ const d=new Date(t.inicio); const k=d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); (porDia[k]=porDia[k]||[]).push(t); });
+  const nomeMes=new Date(CAL.y,CAL.m,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  m.appendChild(h('div',{class:'linha',style:'margin-bottom:10px'},
+    h('button',{class:'btn btn-mini',style:'width:42px',onclick:()=>{ CAL.m--; if(CAL.m<0){CAL.m=11;CAL.y--;} UI.refaz(); }},'‹'),
+    h('div',{class:'b800',style:'flex:1;text-align:center;font-size:16px'},nomeMes[0].toUpperCase()+nomeMes.slice(1)),
+    h('button',{class:'btn btn-mini',style:'width:42px',onclick:()=>{ CAL.m++; if(CAL.m>11){CAL.m=0;CAL.y++;} UI.refaz(); }},'›')));
+  const grid=h('div',{class:'cal-grid'});
+  ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].forEach(s=>grid.appendChild(h('div',{class:'cal-sem'},s)));
+  const prim=new Date(CAL.y,CAL.m,1);
+  const off=(prim.getDay()+6)%7;
+  const nDias=new Date(CAL.y,CAL.m+1,0).getDate();
+  const hj=new Date();
+  for(let i=0;i<off;i++) grid.appendChild(h('div',{class:'cal-dia fora'}));
+  for(let d=1;d<=nDias;d++){
+    const k=CAL.y+'-'+CAL.m+'-'+d;
+    const lista=porDia[k]||[];
+    const el=h('div',{class:'cal-dia'+(lista.length?' tem':'')+((hj.getDate()===d&&hj.getMonth()===CAL.m&&hj.getFullYear()===CAL.y)?' hoje':'')}, String(d));
+    if(lista.length){
+      el.appendChild(h('div',{class:'pontos'},...lista.slice(0,3).map(()=>h('div',{class:'pt'}))));
+      el.addEventListener('click',()=>{
+        if(lista.length===1) UI.vai('treinoDet',{id:lista[0].id});
+        else UI.folha(new Date(CAL.y,CAL.m,d).toLocaleDateString('pt-BR',{day:'numeric',month:'long'}),
+          lista.map(t=>h('button',{class:'menu-op',onclick:()=>{UI.fechaFolha();UI.vai('treinoDet',{id:t.id});}},t.titulo+' · '+CORE.fmtKg(t.volume)+' kg')));
+      });
+    }
+    grid.appendChild(el);
+  }
+  m.appendChild(h('div',{class:'card'},grid));
+  const noMes=ts.filter(t=>{ const d=new Date(t.inicio); return d.getFullYear()===CAL.y&&d.getMonth()===CAL.m; });
+  m.appendChild(h('div',{class:'card'},h('div',{class:'stats3'},
+    h('div',{},h('div',{class:'k'},'Treinos no mês'),h('div',{class:'v'},noMes.length)),
+    h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(noMes.reduce((a,t)=>a+(t.volume||0),0))+' kg')),
+    h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v'},CORE.fmtDur(noMes.reduce((a,t)=>a+(t.fim-t.inicio)/1000,0)))))));
+};
+
+/* ---------- ESTATÍSTICAS ---------- */
+TELAS.stats = function(){
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Estatísticas'));
+  const m=$('#main'); m.innerHTML='';
+  const ts=Object.values(S.treinos).filter(t=>!t.apagado);
+  const tempoTotal=ts.reduce((a,t)=>a+(t.fim-t.inicio)/1000,0);
+  m.appendChild(h('div',{class:'card'},
+    h('div',{class:'stats3',style:'margin-bottom:12px'},
+      h('div',{},h('div',{class:'k'},'Treinamentos'),h('div',{class:'v'},ts.length)),
+      h('div',{},h('div',{class:'k'},'Tempo total'),h('div',{class:'v'},Math.round(tempoTotal/3600)+' h')),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},ts.reduce((a,t)=>a+(t.recordes||0),0)))),
+    h('div',{class:'stats3'},
+      h('div',{},h('div',{class:'k'},'Volume total'),h('div',{class:'v'},CORE.fmtKg(ts.reduce((a,t)=>a+(t.volume||0),0))+' kg')),
+      h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v'},ts.reduce((a,t)=>a+(t.series||0),0))),
+      h('div',{},h('div',{class:'k'},'Exercícios'),h('div',{class:'v'},new Set(ts.flatMap(t=>(t.ex||[]).map(e=>e.exId))).size)))));
+
+  const corte=agora()-28*864e5;
+  const porGrupo={};
+  ts.filter(t=>t.inicio>=corte).forEach(t=>(t.ex||[]).forEach(e=>{
+    const feitas=e.series.filter(s=>s.ok&&s.tipo!=='W').length; if(!feitas) return;
+    const g=BIB.ex(e.exId).g;
+    porGrupo[g]=(porGrupo[g]||0)+feitas;
+  }));
+  const ordenado=Object.entries(porGrupo).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const card=h('div',{class:'card'},h('div',{class:'secao',style:'margin:0 0 10px'},'Séries por grupo · últimas 4 semanas'));
+  if(ordenado.length){
+    const max=ordenado[0][1];
+    ordenado.forEach(([g,n])=>card.append(h('div',{class:'hbar'},
+      h('div',{class:'rot'},GRUPOS[g]||g),
+      h('div',{class:'trilho'},h('div',{class:'fill',style:'width:'+Math.round(100*n/max)+'%'})),
+      h('div',{class:'val'},n))));
+  } else card.append(h('div',{class:'f13 mut'},'Sem séries nas últimas 4 semanas.'));
+  m.appendChild(card);
+
+  const card2=h('div',{class:'card'},h('div',{class:'secao',style:'margin:0 0 8px'},'Frequência · 12 semanas'));
+  const cv=h('canvas',{class:'graf'}); card2.append(cv); m.appendChild(card2);
+  const dados=CORE.agregaSemanas(Object.fromEntries(ts.map(t=>[t.id,t])), 12, agora());
+  requestAnimationFrame(()=>grafBarras(cv,dados.map((d,i)=>({v:d.qtd, rot:(i%2===0)?new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):''})),v=>v+'x'));
+};
+
+/* ---------- IMPORTADOR HEVY ---------- */
+const HEVYIMP = {
+  pede(tipo){
+    const inp=h('input',{type:'file', accept:'.csv,text/csv', style:'display:none'});
+    inp.addEventListener('change',()=>{
+      const f=inp.files[0]; if(!f) return;
+      const r=new FileReader();
+      r.onload=()=>{ try{ tipo==='treinos'? HEVYIMP.previewTreinos(r.result) : HEVYIMP.previewMedidas(r.result); }
+        catch(e){ UI.toast('Não consegui ler esse arquivo'); } };
+      r.readAsText(f,'utf-8');
+    });
+    document.body.appendChild(inp); inp.click(); setTimeout(()=>inp.remove(),60000);
+  },
+  resolve(titulo, criados){
+    const tt=(titulo||'').trim();
+    if(HEVY_MAPA[tt]) return HEVY_MAPA[tt];
+    const jaCustom=Object.values(S.custom).find(c=>c.hevy===tt);
+    if(jaCustom) return jaCustom.id;
+    const nv=HEVY_NOVOS[tt]||{n:tt,g:'corpo-inteiro',e:'outro',t:'peso_reps'};
+    const id='custom__hv-'+BIB.norm(nv.n).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    if(!S.custom[id]) criados.push(nv.n);
+    S.custom[id]=Object.assign({id, custom:true, hevy:tt, atualizado:agora()}, nv);
+    return id;
+  },
+  previewTreinos(texto){
+    const rows=IMP.parseCSV(texto);
+    if(!rows.length || !('exercise_title' in rows[0])){ UI.toast('Esse não parece ser o workout_data.csv do Hevy'); return; }
+    const criados=[];
+    const treinos=IMP.montaTreinos(rows, t=>HEVYIMP.resolve(t, criados));
+    const novosT=treinos.filter(t=>!S.treinos[t.id]);
+    UI.folha('Importar do Hevy',[
+      h('div',{class:'f14',style:'line-height:1.8;padding:2px 2px 12px'},
+        h('div',{},h('span',{class:'b800'},String(treinos.length)),' treinos no arquivo'),
+        h('div',{},h('span',{class:'b800',style:'color:var(--ok)'},String(novosT.length)),' novos serão importados'),
+        treinos.length-novosT.length>0? h('div',{class:'mut'},(treinos.length-novosT.length)+' já existiam (ignorados)'):null,
+        criados.length? h('div',{},h('span',{class:'b800'},String(criados.length)),' exercícios novos serão criados: ',h('span',{class:'f13 mut'},criados.join(', '))):null,
+        h('div',{class:'f13 mut',style:'margin-top:8px'},'Os recordes pessoais serão recalculados considerando todo o histórico.')),
+      h('button',{class:'btn btn-p',onclick:()=>{
+        novosT.forEach(t=>{ t.atualizado=t.fim; S.treinos[t.id]=t; });
+        const prs=CORE.recomputaPRs(Object.values(S.treinos).filter(t=>!t.apagado));
+        S.prs=prs;
+        salva('custom'); salva('treinos'); salva('prs');
+        BIB.lista=BIB.lista.filter(x=>!x.custom).concat(Object.values(S.custom)); BIB.indexa();
+        Object.values(S.custom).forEach(c=>NET.agenda('custom/'+c.id,c));
+        novosT.forEach(t=>NET.agenda('treinos/'+t.id,t));
+        NET.agenda('prs',S.prs);
+        UI.fechaFolha(); UI.pilha=[]; UI.vai('inicio',null,false);
+        UI.toast(novosT.length+' treinos importados');
+      }}, novosT.length? 'Importar '+novosT.length+' treinos':'Nada novo para importar')
+    ]);
+  },
+  previewMedidas(texto){
+    const rows=IMP.parseCSV(texto);
+    if(!rows.length || !('date' in rows[0])){ UI.toast('Esse não parece ser o measurement_data.csv do Hevy'); return; }
+    const meds=IMP.montaMedidas(rows);
+    const novas=meds.filter(x=>!S.medidas[x.id]);
+    UI.folha('Importar medidas',[
+      h('div',{class:'f14',style:'line-height:1.8;padding:2px 2px 12px'},
+        h('div',{},h('span',{class:'b800'},String(meds.length)),' registros no arquivo · ',
+          h('span',{class:'b800',style:'color:var(--ok)'},String(novas.length)),' novos')),
+      h('button',{class:'btn btn-p',onclick:()=>{
+        novas.forEach(x=>{ x.atualizado=agora(); S.medidas[x.id]=x; NET.agenda('medidas/'+x.id,x); });
+        salva('medidas'); UI.fechaFolha(); UI.refaz(); UI.toast(novas.length+' registros importados');
+      }}, novas.length? 'Importar '+novas.length+' registros':'Nada novo para importar')
+    ]);
   }
 };
 
@@ -1188,17 +1724,17 @@ TELAS.boasVindas = function(){
   const inp=h('input',{placeholder:'Como quer ser chamado?',style:'font-size:17px;padding:14px'});
   m.appendChild(h('div',{style:'padding-top:8vh;text-align:center'},
     h('img',{src:'icon-192.png',style:'width:88px;height:88px;border-radius:22px;margin-bottom:18px'}),
-    h('div',{class:'b800',style:'font-size:26px;margin-bottom:8px'},'Bora treinar de verdade'),
+    h('div',{class:'b800',style:'font-size:26px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
-      'Registre séries e cargas na hora, acompanhe recordes e evolução. Funciona até sem sinal na academia. Sem cadastro, sem e-mail, sem enrolação.'),
+      'Séries, cargas, recordes e evolução, registrados na hora. Funciona sem sinal na academia. Sem cadastro e sem e-mail.'),
     inp, h('div',{style:'height:12px'}),
     h('button',{class:'btn btn-p',onclick:async function(){
-      const n=(inp.value||'').trim(); if(!n){ UI.toast('Escreve teu nome aí 😉'); return; }
+      const n=(inp.value||'').trim(); if(!n){ UI.toast('Informe um nome'); return; }
       this.textContent='Preparando…';
       S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
       try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
       UI.vai('treino',null,false);
-    }},'Começar 💪')));
+    }},'Começar')));
 };
 
 /* ---------- inicialização ---------- */
@@ -1207,7 +1743,7 @@ TELAS.boasVindas = function(){
   $('#fantasma').remove();
   if(!S.perfil || !S.perfil.nome){ UI.vai('boasVindas',null,false); }
   else if(S.ativo){ UI.vai('ativo',null,false); }
-  else UI.vai('treino',null,false);
+  else UI.vai('inicio',null,false);
   // rede em segundo plano
   (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }

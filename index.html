@@ -265,7 +265,11 @@ img.avatar{object-fit:cover}
 
 /* ---- detector de erros visível (diagnóstico) ---- */
 (function(){
+  // Barra visível desativada para o público. Ative com localStorage.setItem('tg_debug','1') para diagnóstico.
+  var DEBUG = false; try{ DEBUG = localStorage.getItem('tg_debug')==='1'; }catch(e){}
   function mostra(msg){
+    try{ console.warn('[TreinoGym]', msg); }catch(e){}
+    if(!DEBUG) return;
     try{
       var b=document.getElementById('errbar');
       if(!b){ b=document.createElement('div'); b.id='errbar';
@@ -288,7 +292,7 @@ img.avatar{object-fit:cover}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='4.9';
+const APP_VER='5.0';
 
 /*CORE-START*/
 const CORE = {

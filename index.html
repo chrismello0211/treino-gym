@@ -75,8 +75,10 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
   font-weight:800;font-size:17px;background:var(--surf3);border:2px solid var(--line);color:var(--brand2)}
 .item{display:flex;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--surf2)}
 .item:last-child{border-bottom:none}
-.stats3{display:flex;gap:0;margin:4px 0 2px}
-.stats3>div{flex:1}
+.stats3{display:flex;gap:6px;margin:4px 0 2px}
+.stats3>*{flex:1;min-width:0;background:none;border:none;text-align:left;padding:0}
+.stats3>*:first-child{flex:1.3}
+.stats3 .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stats3 .k{font-size:12.5px;color:var(--tx2);font-weight:600}
 .stats3 .v{font-size:17px;font-weight:800;margin-top:2px}
 .badge{display:inline-flex;align-items:center;gap:4px;font-weight:800}
@@ -277,7 +279,7 @@ img.avatar{object-fit:cover}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='4.6';
+const APP_VER='4.7';
 
 /*CORE-START*/
 const CORE = {
@@ -598,6 +600,73 @@ window.addEventListener('offline', ()=>{ NET.online=false; });
 setInterval(()=>NET.despacha(), 25000);
 
 /* ---------- biblioteca de exercícios ---------- */
+/* ---------- vocabulário de academia: tags e variantes de busca ---------- */
+const BIB_TAGS = [
+ [/\bsupino\b/,'bench press'], [/\binclinad/,'incline'], [/\bdeclinad/,'decline'],
+ [/\bagachamento\b/,'squat'], [/\bhack\b/,'hack squat'], [/\bbulgaro\b/,'bulgarian split squat'],
+ [/\bafundo\b|\bavanc/,'lunge passada'], [/\bgoblet\b/,'goblet'],
+ [/\blevantamento terra\b/,'deadlift terra'], [/\bsumo\b/,'sumo deadlift'],
+ [/\bstiff\b|\bromeno\b/,'peso morto romeno rdl stiff'],
+ [/\bremada\b/,'row'], [/\bremada alta\b/,'upright row'],
+ [/\bremada\b.*\bhalter/,'serrote'], [/\bcurvad/,'bent over'],
+ [/\bpuxada\b/,'pulldown puxador'], [/\bpuxada alta\b/,'lat pulldown'],
+ [/\bbarra fixa\b/,'pull up pullup chin up'],
+ [/\bpull ?over\b/,'pullover'],
+ [/\bface ?pull\b/,'puxada alta na polia com corda para o rosto facepull'],
+ [/\brosca\b/,'curl'], [/\brosca direta\b/,'biceps barra'],
+ [/\brosca martelo\b/,'hammer neutra'], [/\bscott\b/,'preacher banco scott'],
+ [/\bconcentrad/,'concentration'], [/\breversa\b|\binvertid/,'reverse'],
+ [/\bdesenvolvimento\b/,'shoulder press militar military'],
+ [/\barnold\b/,'arnold press'],
+ [/\belevacao lateral\b/,'lateral raise abducao'],
+ [/\belevacao frontal\b|\blevantamento frontal\b/,'front raise'],
+ [/\bcrucifixo\b/,'fly flye'], [/\bvoador\b/,'peck deck pec deck fly crucifixo maquina'],
+ [/\bcross ?over\b/,'crossover cruzamento de cabos'],
+ [/\btesta\b/,'skull crusher frances'], [/\bfrances\b/,'overhead extension'],
+ [/\bpulley\b|\bpolia\b|\bcabo\b/,'cabo polia pulley cable'],
+ [/\bmergulho\b|\bparalela\b/,'dips paralelas'],
+ [/\bcoice\b/,'kickback'], [/\bencolhimento\b/,'shrug'],
+ [/\bleg press\b/,'prensa de pernas'],
+ [/\bcadeira extensora\b/,'leg extension'],
+ [/\bmesa flexora\b|\bcadeira flexora\b/,'leg curl posterior'],
+ [/\belevacao pelvica\b|\bponte de gluteo|\bponte\b/,'hip thrust glute bridge'],
+ [/\bpanturrilha\b/,'calf raise gemeos'],
+ [/\babdominal\b/,'crunch abs'], [/\bprancha\b/,'plank isometria'],
+ [/\belevacao de pernas\b|\belevacao de joelhos\b/,'leg raise knee raise infra'],
+ [/\brussa\b/,'russian twist'], [/\brolo\b|\broda\b/,'ab wheel rollout'],
+ [/\bhiperextensao\b|\bbanco romano\b|\blombar\b/,'hyperextension lombar banco romano'],
+ [/\bflexao\b/,'push up pushup apoio flexao de braco'],
+ [/\bhalter/,'dumbbell'], [/\bbarra\b/,'barbell'], [/\bsmith\b/,'barra guiada'],
+ [/\banilha\b/,'plate'], [/\bkettlebell\b/,'kettlebell girya'],
+ [/\besteira\b/,'treadmill corrida'], [/\bbike\b|\bbicicleta\b/,'ciclismo spinning ergometrica'],
+ [/\beliptico\b/,'elliptical'], [/\bremo\b/,'rowing ergometro'],
+ [/\bescada\b/,'stair climber'], [/\bpolichinelo/,'jumping jack'],
+ [/\bburpee\b/,'burpee'], [/\bcorda naval\b/,'battle rope'],
+ [/\babdutor/,'abduction'], [/\badutor/,'adduction'],
+ [/\bgluteo\b/,'glute'], [/\bpunho\b|\bantebraco\b/,'wrist forearm'],
+ [/\bunilateral\b|\buma mao\b|\bum braco\b/,'single arm unilateral']
+];
+function tagsExtras(nNorm){
+  let extra='';
+  BIB_TAGS.forEach(([re,tags])=>{ if(re.test(nNorm)) extra+=' '+tags; });
+  return extra;
+}
+const CONSULTA_VAR = [
+ ['facepull','face pull'], ['peckdeck','peck deck'], ['pecdeck','peck deck'],
+ ['pullup','pull up'], ['pushup','push up'], ['pulldown','puxada'],
+ ['tricep ','triceps '], ['crossover','cross over'], ['terra','levantamento terra'],
+ ['rdl','stiff'], ['serrote','remada halter'], ['militar','desenvolvimento'],
+ ['abs','abdominal'], ['posterior de ombro','deltoide posterior']
+];
+function variantesConsulta(nq){
+  const out=new Set([nq]);
+  CONSULTA_VAR.forEach(([a,b])=>{
+    if(nq.includes(a)) out.add(nq.split(a).join(b));
+    if(nq.includes(b)) out.add(nq.split(b).join(a));
+  });
+  return [...out].slice(0,6);
+}
+
 const BIB = {
   lista: [], porId: {}, pronta:false,
   async carrega(){
@@ -611,7 +680,12 @@ const BIB = {
     BIB.indexa();
   },
   indexa(){
-    BIB.porId = {}; BIB.lista.forEach(x=>{ x._busca = BIB.norm(x.n); BIB.porId[x.id]=x; });
+    BIB.porId = {};
+    BIB.lista.forEach(x=>{
+      const nn = BIB.norm(x.n);
+      x._busca = nn + ' ' + (x.g||'') + ' ' + BIB.norm(GRUPOS[x.g]||'') + ' ' + String(x.e||'').replace(/-/g,' ') + tagsExtras(nn);
+      BIB.porId[x.id]=x;
+    });
     BIB.pronta = true;
   },
   norm(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); },
@@ -619,12 +693,12 @@ const BIB = {
   gif(id){ const x=BIB.porId[id]; return (x && !x.custom) ? 'g/'+id+'.webp' : null; },
   busca(q, filtros){
     const nq = BIB.norm(q||'');
-    const termos = nq.split(/\s+/).filter(Boolean);
+    const variantes = variantesConsulta(nq).map(v=>v.split(/\s+/).filter(Boolean));
     return BIB.lista.filter(x=>{
       if(filtros.g && x.g!==filtros.g && !(x.gs||[]).includes(filtros.g)) return false;
       if(filtros.e && x.e!==filtros.e) return false;
-      if(!termos.length) return true;
-      return termos.every(t=>x._busca.includes(t));
+      if(!nq) return true;
+      return variantes.some(termos=>termos.length && termos.every(t=>x._busca.includes(t)));
     });
   }
 };
@@ -1138,7 +1212,7 @@ const ATIVO = {
     const tot=(S.ativo.ex||[]).reduce((a,e)=>a+e.series.filter(s=>s.tipo!=='W').length,0);
     const el=$('#ta-vol'); if(el){ el.textContent=CORE.fmtKg(vol)+' kg'; $('#ta-ser').textContent=ser+(tot?' / '+tot:''); }
     $('#ta-progresso').style.width = tot? Math.min(100, 100*ser/tot)+'%' : '0%';
-    const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 92)); }
+    const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 74)); }
   },
   editaTempo(){
     const t=S.ativo; if(!t) return;
@@ -1241,7 +1315,7 @@ TELAS.ativo = function(){
         h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k'},'Duração ✎'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol'},'0 kg')),
         h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0'))),
-      h('div',{id:'ta-musc'}))));
+      h('div',{id:'ta-musc',style:'flex-shrink:0'}))));
 
   t.ex.forEach((e,ix)=>m.appendChild(cartao(e,ix)));
   m.appendChild(h('button',{class:'btn',onclick:()=>PICKER.abre(id=>{
@@ -1852,6 +1926,25 @@ TELAS.inicio = function(){
     h('button',{class:'btn btn-mini',style:'width:40px',onclick:()=>AMIGOS.folha(),
       html:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>'}));
   const m=$('#main'); m.innerHTML='';
+  const hj=new Date();
+  if(hj.getDate()<=5){
+    const py=hj.getMonth()===0? hj.getFullYear()-1 : hj.getFullYear();
+    const pm=hj.getMonth()===0? 11 : hj.getMonth()-1;
+    const chave=py+'-'+pm;
+    const teve=Object.values(S.treinos).some(t=>{ if(t.apagado) return false; const d=new Date(t.inicio); return d.getFullYear()===py&&d.getMonth()===pm; });
+    if(teve && S.cfg.relVisto!==chave){
+      const nomeMes=new Date(py,pm,1).toLocaleDateString('pt-BR',{month:'long'});
+      const marcaVisto=()=>{ S.cfg.relVisto=chave; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg); };
+      const ban=h('div',{class:'card',style:'border-color:var(--brand)'},
+        h('div',{class:'linha'},
+          h('div',{class:'esp'},
+            h('div',{class:'b800',style:'font-size:15.5px'},'Seu relatório de '+nomeMes+' está pronto'),
+            h('div',{class:'f13 mut',style:'margin-top:2px'},'Treinos, volume, recordes e divisão muscular do mês.')),
+          h('button',{class:'sug-x',style:'position:static;padding:6px',onclick:ev=>{ ev.stopPropagation(); marcaVisto(); ban.remove(); }},'✕')),
+        h('button',{class:'btn btn-p',style:'margin-top:10px',onclick:()=>{ REL.y=py; REL.m=pm; marcaVisto(); UI.vai('relatorioMensal'); }},'Ver relatório'));
+      m.appendChild(ban);
+    }
+  }
   if(S.ativo){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
       'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
@@ -2365,7 +2458,7 @@ TELAS.topExercicios = function(){
         thumbEl(id),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
-          h('div',{class:'f12 mut'},c.t+' treino'+(c.t>1?'s':'')+' · '+c.s+' séries'))));
+          h('div',{class:'f12 mut'},c.t+' '+(c.t>1?'vezes':'vez')+' · '+c.s+' séries'))));
     });
     lista.append(card);
   };
@@ -2428,10 +2521,35 @@ TELAS.relatorioMensal = function(){
         thumbEl(id),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
-          h('div',{class:'f12 mut'},c.t+' treino'+(c.t>1?'s':'')+' · '+c.s+' séries'))));
+          h('div',{class:'f12 mut'},c.t+' '+(c.t>1?'vezes':'vez')+' · '+c.s+' séries'))));
     });
     m.appendChild(card);
   }
+  const recsMes=[];
+  ts.forEach(t=>(t.ex||[]).forEach(e=>e.series.forEach(s=>{
+    if(s.pr && s.pr.length) recsMes.push({exId:e.exId, tipos:s.pr, kg:s.kg, reps:s.reps, quando:t.inicio});
+  })));
+  if(recsMes.length){
+    const card=h('div',{class:'card'},h('div',{class:'secao',style:'margin:0 0 6px'},'Recordes do mês · '+recsMes.length));
+    recsMes.sort((a,b)=>b.quando-a.quando).slice(0,8).forEach(r=>{
+      const x=BIB.ex(r.exId);
+      card.append(h('button',{class:'med-row',style:'width:100%;text-align:left',onclick:()=>UI.vai('exercicio',{id:r.exId})},
+        thumbEl(r.exId),
+        h('div',{class:'esp',style:'min-width:0'},
+          h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
+          h('div',{class:'f12 mut'},'🏅 '+r.tipos.map(p=>PR_ROT[p]||p).join(' · ')+((r.kg!==''&&r.kg!=null)? (' · '+CORE.fmtKg(r.kg)+' kg × '+r.reps):(' · '+r.reps+' reps'))))));
+    });
+    m.appendChild(card);
+  }
+  m.appendChild(h('div',{class:'card',style:'text-align:center'},
+    h('div',{class:'b800',style:'font-size:16px;margin-bottom:4px'},'Parabéns pelo mês, '+((S.perfil?.nome||'atleta').split(' ')[0])+'.'),
+    h('div',{class:'f13 mut',style:'margin-bottom:12px'},'Consistência constrói resultado. Compartilhe e puxe a galera junto.'),
+    h('button',{class:'btn btn-p',onclick:()=>{
+      const txt='Meu mês no Treino Gym ('+nome+'): '+A.t+' treinos, '+Math.round(A.dur/3600)+'h, '+CORE.fmtKg(A.vol)+' kg movidos, '+A.rec+' recordes.';
+      const url='https://chrismello0211.github.io/treino-gym/';
+      if(navigator.share) navigator.share({title:'Treino Gym', text:txt, url}).catch(()=>{});
+      else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
+    }},'Compartilhar meu mês')));
 };
 
 /* ---------- EXPLORAR: pacotes de rotinas ---------- */

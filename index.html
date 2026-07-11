@@ -271,9 +271,7 @@ body.claro{
 <body>
 
 <div id="fantasma" class="fantasma">
-  <svg width="88" height="88" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-    <path d="M58 8 L28 52 H46 L40 92 L74 44 H54 Z" fill="#FF5A00"/>
-  </svg>
+  <img src="icon-192.png" alt="" width="96" height="96" style="border-radius:24px">
   <div class="fx-word" style="margin-top:14px">Forge<span>X</span></div>
 </div>
 
@@ -342,7 +340,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.4';
+const APP_VER='5.5';
 
 /*CORE-START*/
 const CORE = {
@@ -2368,7 +2366,7 @@ function cartaoFeed(i){
         h('div',{class:'f12 mut2'}, (user? '@'+user+' · ':'')+dataRelativa(t.inicio))),
       h('div',{class:'esp'}),
       i.meu? h('button',{class:'feed-mais',onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
-    h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo, h('span',{style:'margin-left:7px'},'💪')),
+    h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
     h('div',{class:'fstats'},
       statCard('tempo','Tempo', CORE.fmtDur((t.fim-t.inicio)/1000)),
       statCard('volume','Volume', CORE.fmtKg(t.volume)+' kg'),
@@ -2842,20 +2840,12 @@ TELAS.medidas = function(){
   } else {
     m.appendChild(h('div',{class:'vazio'},'Registre peso, gordura e circunferências para acompanhar a evolução física junto com a de carga.'));
   }
-  const card2=h('div',{class:'card'});
-  Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
-    const com=lst.filter(x=>x[campo]!=null);
-    const u=com.at(-1);
-    card2.append(h('button',{class:'med-row',style:'width:100%;text-align:left',onclick:()=>UI.vai('medidaDet',{campo})},
-      h('div',{class:'b700',style:'flex:1;font-size:14.5px'},rot),
-      h('div',{class:'f14 '+(u?'b800':'mut2')}, u? (u[campo].toLocaleString('pt-BR')+' '+un) : '—'),
-      h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
-  });
-  m.appendChild(card2);
   // fotos de progresso (antes e depois) — privadas
-  const fpgCard=h('div',{class:'card'},
+  const fpgCard=h('div',{class:'card',style:'border-color:var(--brand-dim)'},
     h('div',{class:'linha',style:'margin-bottom:6px'},
-      h('div',{class:'secao',style:'margin:0'},'Fotos de progresso'), h('div',{class:'esp'}),
+      h('div',{class:'secao',style:'margin:0'},'Fotos de progresso'),
+      h('span',{style:'font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--brand2);background:var(--brand-dim);padding:3px 8px;border-radius:20px;margin-left:8px'},'ANTES E DEPOIS'),
+      h('div',{class:'esp'}),
       h('button',{class:'btn btn-mini btn-p',onclick:()=>{
         const inp=h('input',{type:'file',accept:'image/*',style:'display:none'});
         inp.onchange=async()=>{
@@ -2900,6 +2890,17 @@ TELAS.medidas = function(){
   else {
     grade.append(h('div',{class:'f13 mut2',style:'grid-column:1/-1'},'Carregando…'));
     NET.get('fotosProg').then(v=>{ MED._fotos=v||{}; if(UI.telaAtual==='medidas') desenhaFotos(); }).catch(()=>{ if(UI.telaAtual==='medidas'){ MED._fotos={}; desenhaFotos(); } });
+
+  const card2=h('div',{class:'card'});
+  Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
+    const com=lst.filter(x=>x[campo]!=null);
+    const u=com.at(-1);
+    card2.append(h('button',{class:'med-row',style:'width:100%;text-align:left',onclick:()=>UI.vai('medidaDet',{campo})},
+      h('div',{class:'b700',style:'flex:1;font-size:14.5px'},rot),
+      h('div',{class:'f14 '+(u?'b800':'mut2')}, u? (u[campo].toLocaleString('pt-BR')+' '+un) : '—'),
+      h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
+  });
+  m.appendChild(card2);
   }
 };
 TELAS.medidaDet = function({campo}){
@@ -3700,14 +3701,12 @@ const HEVYIMP = {
 
 /* ---------- primeiro acesso ---------- */
 TELAS.boasVindas = function(){
-  UI.topo(h('div',{class:'topo-tit'},'ForgeX'));
+  UI.topo(h('img',{src:'logo-forgex.png',alt:'ForgeX',style:'height:26px;width:auto'}));
   $('#tabbar').style.display='none';
   const m=$('#main'); m.innerHTML='';
   const inp=h('input',{placeholder:'Como quer ser chamado?',style:'font-size:17px;padding:14px'});
   m.appendChild(h('div',{style:'padding-top:8vh;text-align:center'},
-    h('div',{class:'fx-hero-ray',style:'margin-bottom:16px',html:'<svg width="96" height="96" viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M58 8 L28 52 H46 L40 92 L74 44 H54 Z" fill="#FF5A00"/></svg>'}),
-    h('div',{class:'fx-word',style:'font-size:32px;margin-bottom:6px'},'Forge',h('span',{},'X')),
-    h('div',{class:'mut',style:'font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px'},'Gym Workout Tracker'),
+    h('img',{src:'logo-forgex.png',alt:'ForgeX',style:'width:min(280px,80%);height:auto;margin-bottom:20px'}),
     h('div',{class:'b800',style:'font-size:22px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
       'Registre séries, cargas e recordes em segundos.',

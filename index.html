@@ -160,9 +160,27 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .vazio .emo{font-size:38px;display:block;margin-bottom:8px}
 
 /* v2: feed */
-.feed-cab{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.feed-cab{display:flex;gap:11px;align-items:center;margin-bottom:12px}
+.feed-mais{background:none;border:none;color:var(--tx3);font-size:20px;font-weight:800;line-height:1;padding:0 4px;flex-shrink:0}
+.feed-tit{display:flex;align-items:center;font-weight:800;font-size:18px;letter-spacing:-.2px;margin:0 0 13px;position:relative;padding-left:12px}
+.feed-bar{position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:3px;background:var(--brand)}
+.fstats{display:flex;gap:8px;margin-bottom:4px}
+.fstat{flex:1;min-width:0;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:11px 10px}
+.fstat-ico{display:flex;width:20px;height:20px;color:var(--tx3);margin-bottom:7px}
+.fstat-ico svg{width:20px;height:20px}
+.fstat.rec .fstat-ico{color:var(--brand2)}
+.fstat-v{font-weight:800;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fstat-k{font-size:11.5px;color:var(--tx3);font-weight:600;margin-top:1px}
+.feed-exs{margin-top:14px}
+.feed-resto{color:var(--tx2);font-size:13px;font-weight:700;text-align:center;padding:12px 0 2px;border-top:1px dashed var(--line);margin-top:2px}
+.feed-abrir{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:12px;padding:13px;border-radius:14px;border:1px solid var(--brand);background:none;color:var(--brand2);font-weight:800;font-size:14.5px}
+.feed-abrir:active{background:var(--brand-dim)}
+.feed-seta{display:flex;width:17px;height:17px}
+.feed-seta svg{width:17px;height:17px}
+.feed-acoes{display:flex;gap:26px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .avatar{width:42px;height:42px;border-radius:50%;background:var(--surf3);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--brand2);flex-shrink:0}
-.feed-ex{display:flex;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--surf2)}
+.feed-ex{display:flex;gap:12px;align-items:center;padding:9px 0}
+.feed-ex+.feed-ex{border-top:1px solid var(--line)}
 .feed-ex .thumb{width:44px;height:44px}
 .vermais{color:var(--tx2);font-size:13.5px;font-weight:700;padding:10px 0 2px;width:100%;text-align:center}
 
@@ -196,9 +214,9 @@ body.claro .musc .m{fill:#D9DEE5}
 .stipo{position:relative}
 .stipo .rpe{position:absolute;top:-5px;right:-7px;font-size:9px;font-weight:800;color:var(--brand2);background:var(--surf);padding:0 2px;border-radius:4px}
 .rpe-tag{font-size:11px;font-weight:800;color:var(--brand2);margin-left:6px}
-.heart{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--tx3);font-size:13.5px;font-weight:800;padding:8px 2px 0}
+.heart{display:flex;align-items:center;gap:7px;background:none;border:none;color:var(--tx3);font-size:14px;font-weight:800;padding:0}
+.heart svg{width:21px;height:21px}
 .heart.on{color:var(--brand2)}
-.heart svg{width:19px;height:19px}
 .zeb{background:rgba(255,255,255,.035);border-radius:8px}
 .sug-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .sug-card{min-width:132px;max-width:132px;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:14px 10px 12px;position:relative;flex-shrink:0}
@@ -314,7 +332,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.2';
+const APP_VER='5.3';
 
 /*CORE-START*/
 const CORE = {
@@ -2317,27 +2335,41 @@ function cartaoFeed(i){
   const card=h('div',{class:'card'});
   const fotoCab=i.meu? S.perfil?.foto : (((FEED.perfis||{})[i.dono])||{}).foto;
   const linhaEx=e=>h('div',{class:'feed-ex'}, e.id? thumbEl(e.id) : thumbNome(e.n),
-    h('div',{class:'b700',style:'font-size:14.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
-      e.s+' série'+(e.s===1?'':'s')+' × '+e.n));
-  const lista=h('div',{}, ...exs.slice(0,3).map(linhaEx));
+    h('div',{style:'min-width:0'},
+      h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, e.n),
+      h('div',{class:'f12 mut2'}, e.s+' série'+(e.s===1?'':'s'))));
+  const mostra=exs.slice(0,3);
+  const lista=h('div',{class:'feed-exs'}, ...mostra.map(linhaEx));
+  const abрir=()=>{ if(i.meu) UI.vai('treinoDet',{id:tid}); else if((i.r||{}).v>=2) UI.vai('treinoAmigo',{dono, tid}); };
+  const icoStat=(d)=>({
+    tempo:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    volume:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
+    rec:'<circle cx="12" cy="8" r="5"/><path d="M8.5 12.5L7 21l5-2 5 2-1.5-8.5"/>'
+  }[d]);
+  const statCard=(chave,rot,val,destaque)=>h('div',{class:'fstat'+(destaque?' rec':'')},
+    h('span',{class:'fstat-ico',html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+icoStat(chave)+'</svg>'}),
+    h('div',{class:'fstat-v'},val),
+    h('div',{class:'fstat-k'},rot));
   card.append(
     h('div',{class:'feed-cab',onclick:ev=>{ if(i.meu) return; ev.stopPropagation(); UI.vai('perfilAmigo',{uid:i.dono}); }},
-      avatarEl(fotoCab, nome, 42),
-      h('div',{},h('div',{class:'b700',style:'font-size:14.5px'},nome, user? h('span',{class:'f12 mut2',style:'font-weight:600'},' · @'+user):null),
-        h('div',{class:'f12 mut2'},dataRelativa(t.inicio)))),
-    h('div',{class:'b800',style:'font-size:17px;margin:2px 0 10px'},t.titulo),
-    h('div',{class:'stats3',style:'margin-bottom:8px'},
-      h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtDur((t.fim-t.inicio)/1000))),
-      h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtKg(t.volume)+' kg')),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:15px'},t.recordes? h('span',{class:'badge rec'},'🏅 '+t.recordes):'—'))));
+      avatarEl(fotoCab, nome, 44),
+      h('div',{style:'min-width:0'},
+        h('div',{class:'b700',style:'font-size:15px'},nome),
+        h('div',{class:'f12 mut2'}, (user? '@'+user+' · ':'')+dataRelativa(t.inicio))),
+      h('div',{class:'esp'}),
+      i.meu? h('button',{class:'feed-mais',onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
+    h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo, h('span',{style:'margin-left:7px'},'💪')),
+    h('div',{class:'fstats'},
+      statCard('tempo','Tempo', CORE.fmtDur((t.fim-t.inicio)/1000)),
+      statCard('volume','Volume', CORE.fmtKg(t.volume)+' kg'),
+      statCard('rec','Recordes', String(t.recordes||0), !!t.recordes)));
   const fotoSlot = i.meu? (i.t.temFoto? FOTOS.lazy(i.dono, i.id):null) : ((i.r&&i.r.f)? FOTOS.lazy(i.dono, i.id):null);
   if(fotoSlot) card.append(fotoSlot);
   card.append(lista);
-  if(exs.length>3){
-    const btn=h('button',{class:'vermais',onclick:e=>{ e.stopPropagation(); exs.slice(3).forEach(x=>lista.appendChild(linhaEx(x))); btn.remove(); }},
-      'Ver os '+exs.length+' exercícios');
-    card.appendChild(btn);
-  }
+  if(exs.length>3) lista.append(h('div',{class:'feed-resto'},'+ '+(exs.length-3)+' exercícios'));
+  card.append(h('button',{class:'feed-abrir',onclick:ev=>{ ev.stopPropagation(); abрir(); }},
+    'Ver treino completo',
+    h('span',{class:'feed-seta',html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'})));
   // curtir
   const dono=i.dono, tid=i.id;
   const likes=()=>((FEED.curt[dono]||{})[tid])||{};
@@ -2376,7 +2408,7 @@ function cartaoFeed(i){
     if(navigator.share) navigator.share({title:'Treino Gym', text:txt, url}).catch(()=>{});
     else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
   }, html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>'});
-  card.appendChild(h('div',{style:'display:flex;gap:20px;align-items:center'}, heart, comBtn, shareBtn));
+  card.appendChild(h('div',{class:'feed-acoes'}, heart, comBtn, shareBtn));
   card.appendChild(quem);
   if(i.meu) card.addEventListener('click',()=>UI.vai('treinoDet',{id:tid}));
   else if((i.r||{}).v>=2) card.addEventListener('click',()=>UI.vai('treinoAmigo',{dono, tid}));

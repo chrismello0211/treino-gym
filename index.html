@@ -195,6 +195,11 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .heart{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--tx3);font-size:13.5px;font-weight:800;padding:8px 2px 0}
 .heart.on{color:var(--brand2)}
 .heart svg{width:19px;height:19px}
+.zeb{background:rgba(255,255,255,.035);border-radius:8px}
+.sug-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.sug-card{min-width:132px;max-width:132px;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:14px 10px 12px;position:relative;flex-shrink:0}
+.sug-card .btn{width:100%}
+.sug-x{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--tx3);font-size:13px;padding:4px}
 </style>
 </head>
 <body>
@@ -449,6 +454,7 @@ const NET = {
     }catch(e){ return null; }
   },
   async criarConta(email, senha){
+    if(!S.auth){ try{ await NET.signup(); }catch(e){ throw new Error('Sem conexão'); } }
     const tk=await NET.token(); if(!tk) throw new Error('Sem conexão');
     const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key='+FB.key,{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -883,6 +889,7 @@ TELAS.treino = function(){
   m.appendChild(h('div',{class:'linha',style:'margin:18px 0 10px'},
     h('div',{class:'secao',style:'margin:0'},'Rotinas'),
     h('div',{class:'esp'}),
+    h('button',{class:'btn btn-mini',onclick:()=>UI.vai('explorar')},'Explorar'),
     h('button',{class:'btn btn-mini',onclick:ROT.novaPasta},'＋ Pasta'),
     h('button',{class:'btn btn-mini btn-p',onclick:()=>ROT.editor(null)},'＋ Nova rotina')));
 
@@ -1261,7 +1268,7 @@ TELAS.treinoDet = function({id}){
         e.notas? h('div',{class:'f13 mut'},e.notas):null)));
     e.series.forEach((s,si)=>{
       const num=e.series.filter(q=>q.tipo!=='W').indexOf(s)+1;
-      card.append(h('div',{class:'gtab srow'},
+      card.append(h('div',{class:'gtab srow'+(si%2?' zeb':'')},
         h('div',{class:'stipo '+s.tipo},s.tipo==='N'?String(num||1):s.tipo),
         h('div'),
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? CORE.fmtKg(s.kg)+' kg':'—'),
@@ -1469,7 +1476,7 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v3.3', h('br'),
+    'Treino Gym v4.0', h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
@@ -1590,12 +1597,49 @@ TELAS.inicio = function(){
 function desenhaFeed(box){
   box.innerHTML='';
   const its=FEED.itens();
+  const sug=sugeridosCard();
   if(!its.length){
     box.appendChild(h('div',{class:'vazio'},'Seus treinos concluídos aparecem aqui, com volume, séries e recordes. Siga amigos para ver os treinos deles também.'));
     box.appendChild(h('button',{class:'btn btn-p',onclick:()=>UI.vai('treino',null,false)},'Ir para Treino'));
+    if(sug) box.appendChild(sug);
     return;
   }
-  its.forEach(i=>box.appendChild(cartaoFeed(i)));
+  its.forEach((i,ix)=>{ box.appendChild(cartaoFeed(i)); if(ix===1 && sug) box.appendChild(sug); });
+  if(its.length<2 && sug) box.appendChild(sug);
+}
+function sugeridosCard(){
+  if(!FEED.perfis || !S.auth) return null;
+  if(!S.social.dispensados){ S.social.dispensados={}; }
+  const cand=Object.entries(FEED.perfis).filter(([u,p])=>
+    u!==S.auth.uid && p && p.user && !S.social.seguindo[u] && !S.social.dispensados[u]).slice(0,10);
+  if(!cand.length) return null;
+  const scroll=h('div',{class:'sug-scroll'});
+  const wrap=h('div',{class:'card'},
+    h('div',{class:'linha',style:'margin-bottom:10px'},
+      h('div',{class:'secao',style:'margin:0'},'Atletas sugeridos'), h('div',{class:'esp'}),
+      h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 12px',onclick:()=>{
+        const url='https://chrismello0211.github.io/treino-gym/';
+        if(navigator.share) navigator.share({title:'Treino Gym', text:'Bora treinar junto no Treino Gym', url}).catch(()=>{});
+        else { try{ navigator.clipboard.writeText(url); UI.toast('Link copiado'); }catch(e){} }
+      }},'Convidar amigos')),
+    scroll);
+  cand.forEach(([u,p])=>{
+    const c=h('div',{class:'sug-card'});
+    c.append(
+      h('button',{class:'sug-x',onclick:()=>{ S.social.dispensados[u]=1; salva('social'); c.remove(); if(!scroll.children.length) wrap.remove(); }},'✕'),
+      h('div',{class:'avatar',style:'width:52px;height:52px;font-size:20px;margin:0 auto 8px'},(p.nome||p.user)[0].toUpperCase()),
+      h('div',{class:'b700',style:'font-size:13.5px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},p.nome||('@'+p.user)),
+      h('div',{class:'f12 mut2',style:'text-align:center;margin-bottom:8px'},'@'+p.user),
+      h('button',{class:'btn btn-mini btn-p',onclick:async function(){
+        if(!S.perfil?.user){ UI.toast('Crie sua conta para seguir'); return; }
+        this.disabled=true;
+        try{ await AMIGOS.seguir(u,{user:p.user,nome:p.nome||''}); c.remove(); if(!scroll.children.length) wrap.remove();
+          FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio') UI.refaz(); });
+        }catch(e){ UI.toast('Sem conexão agora'); this.disabled=false; }
+      }},'Seguir'));
+    scroll.appendChild(c);
+  });
+  return wrap;
 }
 function cartaoFeed(i){
   const t=i.meu? i.t : i.r;
@@ -1647,9 +1691,92 @@ function cartaoFeed(i){
     quem.textContent = nomes.length? 'Curtido por '+nomes.slice(0,2).join(', ')+(nomes.length>2? ' e mais '+(nomes.length-2):'') : '';
   };
   pintaHeart();
-  card.appendChild(heart); card.appendChild(quem);
+  const comBtn=h('button',{class:'heart',onclick:ev=>{ ev.stopPropagation(); COMENT.folha(dono, tid, t.titulo, pintaCom); }});
+  const pintaCom=()=>{ const n=COMENT.conta(dono,tid);
+    comBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.4 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l2-5.8a8.38 8.38 0 0 1-.9-3.7 8.5 8.5 0 0 1 8.5-8.5 8.38 8.38 0 0 1 8.4 8.5z"/></svg><span>'+(n||'Comentar')+'</span>'; };
+  pintaCom();
+  const shareBtn=h('button',{class:'heart',onclick:ev=>{ ev.stopPropagation();
+    const txt=t.titulo+' · '+CORE.fmtDur((t.fim-t.inicio)/1000)+' · '+CORE.fmtKg(t.volume)+' kg no Treino Gym';
+    const url='https://chrismello0211.github.io/treino-gym/';
+    if(navigator.share) navigator.share({title:'Treino Gym', text:txt, url}).catch(()=>{});
+    else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
+  }, html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>'});
+  card.appendChild(h('div',{style:'display:flex;gap:20px;align-items:center'}, heart, comBtn, shareBtn));
+  card.appendChild(quem);
   if(i.meu) card.addEventListener('click',()=>UI.vai('treinoDet',{id:tid}));
+  else if((i.r||{}).v>=2) card.addEventListener('click',()=>UI.vai('treinoAmigo',{dono, tid}));
   return card;
+}
+
+/* ---------- TREINO DO AMIGO ---------- */
+TELAS.treinoAmigo = function({dono, tid}){
+  const cache=(FEED.amigos[dono]||[]).find(x=>x.id===tid);
+  if(cache){ desenhaAmigo(cache, dono, tid); return; }
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Treino'));
+  $('#main').innerHTML='';
+  $('#main').appendChild(h('div',{class:'vazio'},'Carregando…'));
+  NET.get('/feed/'+dono+'/'+tid).then(v=>{
+    if(UI.telaAtual!=='treinoAmigo') return;
+    if(v) desenhaAmigo(v, dono, tid); else UI.volta();
+  });
+};
+function desenhaAmigo(r, dono, tid){
+  UI.topo(UI.btVoltar(),
+    h('div',{class:'topo-tit',style:'font-size:19px'}, r.titulo, h('small',{},dataLonga(r.inicio))));
+  const m=$('#main'); m.innerHTML='';
+  m.appendChild(h('div',{class:'card'},h('div',{class:'feed-cab',style:'margin:0'},
+    h('div',{class:'avatar'},(r.nome||r.user||'?')[0].toUpperCase()),
+    h('div',{},h('div',{class:'b700',style:'font-size:14.5px'},r.nome||'Atleta',
+      r.user? h('span',{class:'f12 mut2',style:'font-weight:600'},' · @'+r.user):null),
+      h('div',{class:'f12 mut2'},dataRelativa(r.inicio))))));
+  const gmap=new Map();
+  (r.ex||[]).forEach(e=>{
+    const n=(e.sr||[]).filter(s=>s.t!=='W').length || e.s || 0;
+    if(e.g && n) gmap.set(e.g,(gmap.get(e.g)||0)+n);
+  });
+  m.appendChild(h('div',{class:'card'},h('div',{class:'linha'},
+    h('div',{class:'stats3',style:'flex:1'},
+      h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v'},CORE.fmtDur((r.fim-r.inicio)/1000))),
+      h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(r.volume)+' kg')),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(r.recordes||0)+' 🏅'))),
+    gmap.size? corpoSVG(gmap, 92):null)));
+  if(gmap.size){
+    const tot=[...gmap.values()].reduce((a,b)=>a+b,0);
+    const cardDiv=h('div',{class:'card'},h('div',{class:'secao',style:'margin:0 0 10px'},'Divisão muscular'));
+    [...gmap.entries()].sort((a,b)=>b[1]-a[1]).forEach(([g,n])=>{
+      const pc=Math.round(100*n/tot);
+      cardDiv.append(h('div',{class:'hbar'},
+        h('div',{class:'rot'},GRUPOS[g]||g),
+        h('div',{class:'trilho'},h('div',{class:'fill',style:'width:'+pc+'%'})),
+        h('div',{class:'val'},pc+'%')));
+    });
+    m.appendChild(cardDiv);
+  }
+  (r.ex||[]).forEach(e=>{
+    const card=h('div',{class:'card'});
+    card.append(h('div',{class:'linha',style:'margin-bottom:8px'}, thumbNome(e.n),
+      h('div',{class:'esp b700'},e.n)));
+    if(e.sr && e.sr.length){
+      card.append(h('div',{class:'gtab cab'},h('div',{},'Série'),h('div'),
+        h('div',{style:'text-align:center'},'KG'),h('div',{style:'text-align:center'},'REPS'),h('div')));
+      let num=0;
+      e.sr.forEach((s,si)=>{
+        if(s.t!=='W') num++;
+        card.append(h('div',{class:'gtab srow'+(si%2?' zeb':'')},
+          h('div',{class:'stipo '+(s.t||'N')},(s.t==='N'||!s.t)?String(num):s.t),
+          h('div'),
+          h('div',{style:'text-align:center;font-weight:700'}, s.k!==''&&s.k!=null? CORE.fmtKg(s.k):'—'),
+          h('div',{style:'text-align:center;font-weight:700'}, s.r!=null? String(s.r):'—',
+            s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
+          h('div',{style:'text-align:center'}, s.p?'🏅':'')));
+        if(s.p && s.p.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
+          '🏅 '+s.p.map(x=>PR_ROT[x]||x).join(' · ')));
+      });
+    } else {
+      card.append(h('div',{class:'f13 mut'},(e.s||0)+' série'+((e.s||0)===1?'':'s')));
+    }
+    m.appendChild(card);
+  });
 }
 
 /* ---------- ROTINA (página de detalhe) ---------- */
@@ -1911,6 +2038,91 @@ TELAS.stats = function(){
   requestAnimationFrame(()=>grafBarras(cv,dados.map((d,i)=>({v:d.qtd, rot:(i%2===0)?new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):''})),v=>v+'x'));
 };
 
+/* ---------- EXPLORAR: pacotes de rotinas ---------- */
+const EXPLORAR_PACKS=[
+ {id:'ppl', nome:'PPL clássico', desc:'Push, Pull e Legs. Roda 3 ou 6 vezes por semana.', rotinas:[
+  {titulo:'Push · Peito, ombro e tríceps', ex:[
+    ['peito__supino',4,8],['peito__supino-inclinado-com-halteres',3,10],
+    ['ombros__desenvolvimento-de-ombros-na-maquina',3,10],['ombros__elevacao-lateral-de-bracos-com-halteres',3,12],
+    ['triceps__triceps-pulley-corda',3,12],['triceps__extensao-de-triceps-no-cabo-alto',3,12]]},
+  {titulo:'Pull · Costas e bíceps', ex:[
+    ['costas__puxada-alta',4,10],['costas__remada-curvada-com-barra',3,8],
+    ['costas__remada-sentada-com-cabo',3,10],['trapezio__voador-na-maquina-para-deltoides-posteriores',3,12],
+    ['biceps__rosca-direta-com-barra',3,10],['biceps__rosca-martelo',3,12]]},
+  {titulo:'Legs · Pernas completas', ex:[
+    ['pernas__agachamento-na-maquina-hack',4,8],['pernas__leg-press',3,10],
+    ['pernas__cadeira-extensora',3,12],['pernas__mesa-flexora',3,12],
+    ['panturrilha__elevacao-de-panturrilha-em-maquina-em-pe',4,15],['abdomen__abdominal-maquina',3,15]]}]},
+ {id:'upper-lower', nome:'Upper / Lower', desc:'Superior e inferior alternados, 4 dias por semana.', rotinas:[
+  {titulo:'Upper · Superior', ex:[
+    ['peito__supino-inclinado-com-barra',4,8],['costas__puxada-alta',4,10],
+    ['ombros__desenvolvimento-com-halteres',3,10],['costas__remada-sentada-com-cabo',3,10],
+    ['biceps__rosca-direta-com-barra',3,10],['triceps__triceps-pulley-barra',3,12]]},
+  {titulo:'Lower · Inferior', ex:[
+    ['pernas__agachamento-no-smith',4,8],['pernas__stiff-com-barra',3,10],
+    ['pernas__leg-press',3,10],['pernas__cadeira-flexora',3,12],
+    ['inferiores__cadeira-adutora',3,12],['panturrilha__elevacao-de-panturrilha-sentado-com-alavanca',4,15]]}]},
+ {id:'abc', nome:'ABC clássico', desc:'Divisão em três: peito/tríceps, costas/bíceps, pernas/ombros.', rotinas:[
+  {titulo:'A · Peito e tríceps', ex:[
+    ['peito__supino',4,8],['peito__supino-inclinado-com-halteres',3,10],['peito__voador-no-pec-deck',3,12],
+    ['triceps__triceps-pulley-corda',3,12],['triceps__triceps-testa-com-barra',3,10],['triceps__mergulho-de-triceps',3,10]]},
+  {titulo:'B · Costas e bíceps', ex:[
+    ['costas__puxada-alta',4,10],['costas__remada-curvada-em-t',3,8],['costas__pulldown-com-corda',3,12],
+    ['biceps__rosca-direta-com-barra',3,10],['biceps__rosca-scott-com-alavanca',3,10],['biceps__rosca-alternada-pegada-neutra',3,12]]},
+  {titulo:'C · Pernas e ombros', ex:[
+    ['pernas__agachamento-na-maquina-hack',4,8],['pernas__cadeira-extensora',3,12],['pernas__mesa-flexora',3,12],
+    ['panturrilha__elevacao-de-panturrilha-em-maquina-em-pe',4,15],
+    ['ombros__desenvolvimento-de-ombros-na-maquina',3,10],['ombros__elevacao-lateral-de-bracos-com-halteres',3,12]]}]},
+ {id:'fullbody', nome:'Full Body iniciante', desc:'Corpo inteiro em cada sessão, 2 ou 3 vezes por semana.', rotinas:[
+  {titulo:'Full Body A', ex:[
+    ['pernas__leg-press',3,10],['peito__supino-na-maquina',3,10],['costas__puxada-maquina',3,10],
+    ['ombros__desenvolvimento-de-ombros-na-maquina',3,12],['abdomen__prancha',3,40]]},
+  {titulo:'Full Body B', ex:[
+    ['pernas__cadeira-extensora',3,12],['pernas__mesa-flexora',3,12],['peito__voador-maquina',3,12],
+    ['costas__remada-sentada-com-cabo',3,10],['abdomen__abdominal-supra',3,15]]}]}
+];
+function montaRotinaPack(mod, pastaId){
+  return { id:uid(), titulo:mod.titulo, pasta:pastaId||'', criado:agora(), atualizado:agora(),
+    ex:mod.ex.map(([exId,ser,reps])=>({ exId, descanso:S.cfg.descanso||90, notas:'',
+      series:Array.from({length:ser},()=>({tipo:'N', kg:'', reps:String(reps)})) })) };
+}
+TELAS.explorar = function(){
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Explorar'));
+  const m=$('#main'); m.innerHTML='';
+  m.appendChild(h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},
+    'Programas prontos para começar. Adicione o pacote inteiro (vira uma pasta) ou uma rotina avulsa, e ajuste cargas e séries do seu jeito.'));
+  EXPLORAR_PACKS.forEach(p=>{
+    const card=h('div',{class:'card'});
+    card.append(
+      h('div',{class:'linha'},
+        h('div',{class:'esp'},
+          h('div',{class:'b800',style:'font-size:16.5px'},p.nome),
+          h('div',{class:'f13 mut',style:'margin-top:2px'},p.desc)),
+        h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:8px 12px',onclick:()=>{
+          const pasta={id:uid(), nome:p.nome, ordem:Object.keys(S.pastas).length+1, criado:agora(), atualizado:agora()};
+          S.pastas[pasta.id]=pasta; NET.agenda('pastas/'+pasta.id, pasta);
+          p.rotinas.forEach(mod=>{ const r=montaRotinaPack(mod, pasta.id); S.rotinas[r.id]=r; NET.agenda('rotinas/'+r.id, r); });
+          salva('pastas'); salva('rotinas');
+          UI.toast(p.rotinas.length+' rotinas adicionadas em "'+p.nome+'"', true);
+          UI.pilha=[]; UI.vai('treino',null,false);
+        }},'Adicionar pacote')));
+    p.rotinas.forEach(mod=>{
+      const nomes=mod.ex.map(([id])=>BIB.ex(id).n).join(', ');
+      card.append(h('div',{style:'border-top:1px solid var(--surf2);padding:12px 0 4px;margin-top:12px'},
+        h('div',{class:'linha'},
+          h('div',{class:'esp'},
+            h('div',{class:'b700',style:'font-size:14.5px'},mod.titulo),
+            h('div',{class:'f12 mut',style:'margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5'},nomes)),
+          h('button',{class:'btn btn-mini',style:'width:auto;padding:8px 12px',onclick:function(){
+            const r=montaRotinaPack(mod, '');
+            S.rotinas[r.id]=r; salva('rotinas'); NET.agenda('rotinas/'+r.id, r);
+            this.textContent='Adicionada ✓'; this.disabled=true;
+          }},'Adicionar'))));
+    });
+    m.appendChild(card);
+  });
+};
+
 /* ---------- CONTA (e-mail) ---------- */
 const CONTA = {
   wipeLocal(){
@@ -1942,7 +2154,9 @@ const CONTA = {
           S.perfil.email=email; S.perfil.user=u; S.perfil.atualizado=agora();
           salva('perfil'); NET.agenda('app/perfil',S.perfil);
           S.cfg.feedPub=true; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg);
-          UI.fechaFolha(); UI.refaz(); UI.toast('Conta criada ✓', true);
+          UI.fechaFolha();
+          if(UI.telaAtual==='boasVindas'){ UI.pilha=[]; UI.vai('inicio',null,false); } else UI.refaz();
+          UI.toast('Conta criada ✓', true);
         }catch(err){ UI.toast(err.message||'Erro ao criar conta'); this.disabled=false; this.textContent='Criar conta'; }
       }},'Criar conta')]);
   },
@@ -1986,9 +2200,11 @@ const CONTA = {
 
 /* ---------- AMIGOS / FEED SOCIAL ---------- */
 function resumoTreino(t){
-  return { id:t.id, nome:S.perfil?.nome||'Atleta', user:S.perfil?.user||'', titulo:t.titulo,
+  return { id:t.id, v:2, nome:S.perfil?.nome||'Atleta', user:S.perfil?.user||'', titulo:t.titulo,
     inicio:t.inicio, fim:t.fim, volume:t.volume||0, series:t.series||0, recordes:t.recordes||0,
-    ex:(t.ex||[]).map(e=>({n:BIB.ex(e.exId).n, s:e.series.length})), atualizado:agora() };
+    ex:(t.ex||[]).map(e=>({ n:BIB.ex(e.exId).n, g:BIB.ex(e.exId).g, s:e.series.length,
+      sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
+    atualizado:agora() };
 }
 const AMIGOS = {
   folha(){
@@ -2046,15 +2262,65 @@ const AMIGOS = {
     delete S.social.seguindo[uid]; salva('social');
   }
 };
+const COMENT = {
+  conta(dono,tid){ return Object.keys(((FEED.com||{})[dono]||{})[tid]||{}).length; },
+  folha(dono, tid, titulo, aoMudar){
+    const lista=h('div',{style:'max-height:44vh;overflow-y:auto'});
+    const podeCom=!!S.perfil?.user;
+    const inp=h('input',{placeholder: podeCom? 'Escreva um comentário…':'Crie sua conta para comentar', disabled:!podeCom});
+    const desenha=obj=>{
+      lista.innerHTML='';
+      const arr=Object.entries(obj||{}).map(([cid,c])=>Object.assign({cid},c)).sort((a,b)=>(a.ts||0)-(b.ts||0));
+      if(!arr.length){ lista.append(h('div',{class:'f13 mut',style:'padding:10px 0'},'Seja o primeiro a comentar.')); return; }
+      arr.forEach(c=>{
+        const podeApagar = c.uid===S.auth?.uid || dono===S.auth?.uid;
+        lista.append(h('div',{class:'med-row',style:'align-items:flex-start'},
+          h('div',{class:'avatar',style:'width:32px;height:32px;font-size:13px;flex-shrink:0'},(c.nome||c.user||'?')[0].toUpperCase()),
+          h('div',{class:'esp',style:'min-width:0'},
+            h('div',{class:'f13 b700'},(c.user? '@'+c.user : (c.nome||'Atleta')),
+              h('span',{class:'f11 mut2',style:'font-weight:600'},'  ·  '+dataRelativa(c.ts||agora()))),
+            h('div',{class:'f14',style:'line-height:1.45;word-break:break-word'},c.txt||'')),
+          podeApagar? h('button',{class:'btn btn-mini',style:'width:30px;padding:4px;flex-shrink:0',onclick:async ()=>{
+            try{
+              await NET.putD('/comentarios/'+dono+'/'+tid+'/'+c.cid, null);
+              if(FEED.com[dono] && FEED.com[dono][tid]) delete FEED.com[dono][tid][c.cid];
+              desenha((FEED.com[dono]||{})[tid]); if(aoMudar) aoMudar();
+            }catch(e){ UI.toast('Sem conexão agora'); }
+          }},'✕'):null));
+      });
+    };
+    UI.folha('Comentários',[
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},titulo),
+      lista, h('div',{style:'height:10px'}),
+      h('div',{style:'display:flex;gap:8px'}, inp,
+        h('button',{class:'btn btn-p',style:'width:auto;padding:0 16px',disabled:!podeCom,onclick:async ()=>{
+          const txt=(inp.value||'').trim(); if(!txt) return;
+          const cid=uid();
+          const c={uid:S.auth.uid, user:S.perfil.user, nome:S.perfil.nome||'', txt:txt.slice(0,500), ts:agora()};
+          try{
+            await NET.putD('/comentarios/'+dono+'/'+tid+'/'+cid, c);
+            FEED.com[dono]=FEED.com[dono]||{}; FEED.com[dono][tid]=FEED.com[dono][tid]||{}; FEED.com[dono][tid][cid]=c;
+            inp.value=''; desenha(FEED.com[dono][tid]); if(aoMudar) aoMudar();
+          }catch(e){ UI.toast('Sem conexão agora'); }
+        }},'Enviar'))]);
+    NET.get('/comentarios/'+dono+'/'+tid).then(v=>{
+      FEED.com[dono]=FEED.com[dono]||{}; FEED.com[dono][tid]=v||{};
+      desenha(v||{}); if(aoMudar) aoMudar();
+    });
+    desenha(((FEED.com||{})[dono]||{})[tid]);
+  }
+};
 const FEED = {
-  amigos:{}, curt:{},
+  amigos:{}, curt:{}, com:{}, perfis:null,
   async carrega(){
     if(!S.auth) return;
     const donos=[S.auth.uid].concat(Object.keys(S.social.seguindo||{}));
+    const pPerfis = NET.get('/perfis').then(v=>{ FEED.perfis=v||{}; });
     await Promise.all(donos.map(async d=>{
       FEED.curt[d]=await NET.get('/curtidas/'+d)||{};
+      FEED.com[d]=await NET.get('/comentarios/'+d)||{};
       if(d!==S.auth.uid) FEED.amigos[d]=Object.values(await NET.get('/feed/'+d+'?orderBy=%22inicio%22&limitToLast=40')||{});
-    }));
+    }).concat([pPerfis]));
   },
   itens(){
     const meus=Object.values(S.treinos).filter(t=>!t.apagado).map(t=>({meu:true,dono:S.auth?.uid,t,id:t.id,inicio:t.inicio}));
@@ -2150,15 +2416,25 @@ TELAS.boasVindas = function(){
     h('img',{src:'icon-192.png',style:'width:88px;height:88px;border-radius:22px;margin-bottom:18px'}),
     h('div',{class:'b800',style:'font-size:26px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
-      'Séries, cargas, recordes e evolução, registrados na hora. Funciona sem sinal na academia. Sem cadastro e sem e-mail.'),
+      'Séries, cargas, recordes e evolução, registrados na hora. Funciona sem sinal na academia. Com conta, você sincroniza em qualquer aparelho e participa do feed.'),
     inp, h('div',{style:'height:12px'}),
-    h('button',{class:'btn btn-p',onclick:async function(){
+    h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:async function(){
       const n=(inp.value||'').trim(); if(!n){ UI.toast('Informe um nome'); return; }
       this.textContent='Preparando…';
       S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
       try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
-      UI.vai('treino',null,false);
-    }},'Começar')));
+      this.textContent='Criar conta com e-mail';
+      CONTA.folhaCriar();
+    }},'Criar conta com e-mail'),
+    h('button',{class:'btn',style:'margin-bottom:14px',onclick:async function(){
+      const n=(inp.value||'').trim(); if(!n){ UI.toast('Informe um nome'); return; }
+      this.textContent='Preparando…';
+      S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
+      try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
+      UI.vai('inicio',null,false);
+    }},'Começar sem conta'),
+    h('button',{class:'btn btn-mini',style:'background:none;border:none;color:var(--azul)',onclick:()=>CONTA.folhaEntrar()},
+      'Já tem conta? Entrar')));
 };
 
 /* ---------- inicialização ---------- */

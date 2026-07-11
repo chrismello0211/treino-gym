@@ -592,6 +592,7 @@ const EQUIPS = {barra:'Barra', halter:'Halteres', maquina:'Máquina', cabo:'Cabo
   elastico:'Elástico', 'peso-corporal':'Peso corporal', banco:'Banco', bola:'Bola', anilha:'Anilha',
   caixa:'Caixa', suspensao:'Suspensão/TRX', corda:'Corda', 'corda-de-pular':'Corda de pular', outro:'Outro'};
 const TIPO_ROTULO = {peso_reps:['KG','REPS'], reps:['—','REPS'], tempo:['—','SEG']};
+const PR_ROT = {kg:'Peso', vol:'Volume', rm:'1RM', reps:'Reps'};
 
 /* ---------- utilidades de UI ---------- */
 const $ = s=>document.querySelector(s);
@@ -741,9 +742,9 @@ function grafLinha(canvas, pontos, formata){
 
 /* ---------- picker de exercícios ---------- */
 const PICKER = {
-  aberto:false, filtros:{g:null,e:null}, q:'', onEscolha:null, modo:'escolher',
-  abre(onEscolha, modo){
-    PICKER.onEscolha=onEscolha||null; PICKER.modo=modo||'escolher';
+  aberto:false, filtros:{g:null,e:null}, q:'', onEscolha:null, modo:'escolher', sug:null,
+  abre(onEscolha, modo, sugestaoDe){
+    PICKER.onEscolha=onEscolha||null; PICKER.modo=modo||'escolher'; PICKER.sug=sugestaoDe||null;
     PICKER.q=''; PICKER.filtros={g:null,e:null};
     const corpo = [
       h('input',{id:'pk-q', placeholder:'Procurar exercício…', oninput:e=>{ PICKER.q=e.target.value; PICKER.lista(); }}),
@@ -768,11 +769,16 @@ const PICKER = {
   },
   menuFiltro(ops, campo, botao, padrao){
     const cont=h('div');
-    ops.forEach(([v,rot])=>cont.appendChild(h('button',{class:'menu-op',onclick:()=>{
-      PICKER.filtros[campo]=v; botao.textContent=v?rot:padrao; botao.classList.toggle('on',!!v);
-      FOLHA2.fecha(); PICKER.lista();
-    }}, rot)));
-    FOLHA2.abre(campo==='e'?'Equipamento':'Músculo', [cont]);
+    ops.forEach(([v,rot])=>{
+      const filhos=[];
+      if(campo==='g') filhos.push(h('span',{style:'flex-shrink:0;margin-right:2px'}, corpoSVG(v? new Map([[v,1]]) : new Map(), 54)));
+      filhos.push(rot);
+      cont.appendChild(h('button',{class:'menu-op',style:campo==='g'?'gap:12px':'',onclick:()=>{
+        PICKER.filtros[campo]=v; botao.textContent=v?rot:padrao; botao.classList.toggle('on',!!v);
+        FOLHA2.fecha(); PICKER.lista();
+      }}, ...filhos));
+    });
+    FOLHA2.abre(campo==='e'?'Equipamento':'Grupo muscular', [cont]);
   },
   lista(){
     const alvo=$('#pk-lista'); if(!alvo) return;
@@ -780,12 +786,20 @@ const PICKER = {
     const res = BIB.busca(PICKER.q, PICKER.filtros);
     // recentes primeiro quando sem busca
     if(!PICKER.q && !PICKER.filtros.g && !PICKER.filtros.e){
+      if(PICKER.sug && BIB.porId[PICKER.sug]){
+        const g=BIB.porId[PICKER.sug].g;
+        const sug=BIB.lista.filter(x=>x.g===g && x.id!==PICKER.sug).slice(0,6);
+        if(sug.length){
+          alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'},'Sugeridos · '+(GRUPOS[g]||g)));
+          sug.forEach(x=>alvo.appendChild(PICKER.linha(x)));
+        }
+      }
       const rec = PICKER.recentes().filter(id=>BIB.porId[id]);
       if(rec.length){
-        alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'},'Recentes'));
+        alvo.appendChild(h('div',{class:'secao',style:PICKER.sug?'':'margin-top:4px'},'Recentes'));
         rec.slice(0,6).forEach(id=>alvo.appendChild(PICKER.linha(BIB.porId[id])));
-        alvo.appendChild(h('div',{class:'secao'},'Todos ('+res.length+')'));
       }
+      if(PICKER.sug||rec.length) alvo.appendChild(h('div',{class:'secao'},'Todos ('+res.length+')'));
     } else {
       alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'}, res.length+' resultado'+(res.length===1?'':'s')));
     }
@@ -1016,7 +1030,7 @@ TELAS.rotinaEditor = function(){
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(r.ex,ix); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
       h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[r.ex[ix-1],r.ex[ix]]=[r.ex[ix],r.ex[ix-1]];UI.fechaFolha();UI.refaz();} }},'Mover para cima'),
       h('button',{class:'menu-op',onclick:()=>{ if(ix<r.ex.length-1){[r.ex[ix+1],r.ex[ix]]=[r.ex[ix],r.ex[ix+1]];UI.fechaFolha();UI.refaz();} }},'Mover para baixo'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }); }},'Substituir exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
       h('button',{class:'menu-op perigo',onclick:()=>{ r.ex.splice(ix,1); UI.fechaFolha(); UI.refaz(); }},'Remover da rotina')
     ]);
   }
@@ -1203,7 +1217,7 @@ TELAS.ativo = function(){
     UI.folha(BIB.ex(e.exId).n,[
       ix<t.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{s.ok=false;delete s.pr;}); salva('ativo'); UI.refaz(); }); }},'Substituir exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{s.ok=false;delete s.pr;}); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
       h('button',{class:'menu-op',onclick:()=>{ if(ix>0){[t.ex[ix-1],t.ex[ix]]=[t.ex[ix],t.ex[ix-1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'Mover para cima'),
       h('button',{class:'menu-op',onclick:()=>{ if(ix<t.ex.length-1){[t.ex[ix+1],t.ex[ix]]=[t.ex[ix],t.ex[ix+1]];salva('ativo');UI.fechaFolha();UI.refaz();} }},'Mover para baixo'),
       h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover do treino')
@@ -1223,6 +1237,20 @@ TELAS.treinoDet = function({id}){
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
     corpoSVG(gruposDoTreino(t), 92))));
+  const divg=gruposDoTreino(t);
+  if(divg.size){
+    const tot=[...divg.values()].reduce((a,b)=>a+b,0);
+    const ord=[...divg.entries()].sort((a,b)=>b[1]-a[1]);
+    const cardDiv=h('div',{class:'card'},h('div',{class:'secao',style:'margin:0 0 10px'},'Divisão muscular'));
+    ord.forEach(([g,n])=>{
+      const pc=Math.round(100*n/tot);
+      cardDiv.append(h('div',{class:'hbar'},
+        h('div',{class:'rot'},GRUPOS[g]||g),
+        h('div',{class:'trilho'},h('div',{class:'fill',style:'width:'+pc+'%'})),
+        h('div',{class:'val'},pc+'%')));
+    });
+    m.appendChild(cardDiv);
+  }
   (t.ex||[]).forEach(e=>{
     const x=BIB.ex(e.exId);
     const card=h('div',{class:'card'});
@@ -1239,6 +1267,8 @@ TELAS.treinoDet = function({id}){
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? CORE.fmtKg(s.kg)+' kg':'—'),
         h('div',{style:'text-align:center;font-weight:700'}, s.reps+(x.t==='tempo'?' s':''), s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
         h('div',{style:'text-align:center'}, s.pr?'🏅':'')));
+      if(s.pr && s.pr.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
+        '🏅 '+s.pr.map(p=>PR_ROT[p]||p).join(' · ')));
     });
     m.appendChild(card);
   });
@@ -1439,7 +1469,7 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v3.2', h('br'),
+    'Treino Gym v3.3', h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
@@ -1608,13 +1638,16 @@ function cartaoFeed(i){
       pintaHeart();
     }catch(e){ UI.toast('Sem conexão agora'); }
   }});
+  const quem=h('div',{class:'f12 mut2',style:'padding-top:2px'});
   const pintaHeart=()=>{
-    const n=Object.keys(likes()).length;
+    const ids=Object.keys(likes());
     heart.className='heart'+(euCurti()?' on':'');
-    heart.innerHTML=svgCoracao(euCurti())+'<span>'+(n? n : 'Curtir')+'</span>';
+    heart.innerHTML=svgCoracao(euCurti())+'<span>'+(ids.length? ids.length : 'Curtir')+'</span>';
+    const nomes=ids.map(u=> u===S.auth?.uid ? 'você' : (S.social.seguindo[u]?.user? '@'+S.social.seguindo[u].user : null)).filter(Boolean);
+    quem.textContent = nomes.length? 'Curtido por '+nomes.slice(0,2).join(', ')+(nomes.length>2? ' e mais '+(nomes.length-2):'') : '';
   };
   pintaHeart();
-  card.appendChild(heart);
+  card.appendChild(heart); card.appendChild(quem);
   if(i.meu) card.addEventListener('click',()=>UI.vai('treinoDet',{id:tid}));
   return card;
 }
@@ -1821,6 +1854,28 @@ TELAS.stats = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Estatísticas'));
   const m=$('#main'); m.innerHTML='';
   const ts=Object.values(S.treinos).filter(t=>!t.apagado);
+
+  // última semana: um marcador por dia + mapa de calor dos grupos
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  const dias=[]; for(let i=6;i>=0;i--){ const d=new Date(hoje.getTime()-i*864e5); dias.push(d); }
+  const semanaCard=h('div',{class:'card'},h('div',{class:'secao',style:'margin:0 0 10px'},'Última semana'));
+  const dotsRow=h('div',{style:'display:flex;justify-content:space-between;gap:6px'});
+  const g7=new Map();
+  dias.forEach(d=>{
+    const fim=d.getTime()+864e5;
+    const doDia=ts.filter(t=>t.inicio>=d.getTime() && t.inicio<fim);
+    doDia.forEach(t=>gruposDoTreino(t).forEach((v,g)=>g7.set(g,(g7.get(g)||0)+v)));
+    const n=doDia.length;
+    const ini=d.toLocaleDateString('pt-BR',{weekday:'short'})[0].toUpperCase();
+    dotsRow.append(h('div',{style:'text-align:center;flex:1'},
+      h('div',{style:'width:34px;height:34px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;'+
+        (n? 'background:var(--brand);color:#fff':'background:var(--surf2);color:var(--tx3)')}, n? String(n):'·'),
+      h('div',{class:'f11 mut2',style:'margin-top:4px'},ini)));
+  });
+  semanaCard.append(dotsRow);
+  if(g7.size) semanaCard.append(h('div',{style:'display:flex;justify-content:center;margin-top:14px'}, corpoSVG(g7, 168)));
+  m.appendChild(semanaCard);
+
   const tempoTotal=ts.reduce((a,t)=>a+(t.fim-t.inicio)/1000,0);
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'stats3',style:'margin-bottom:12px'},

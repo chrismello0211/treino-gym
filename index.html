@@ -447,7 +447,11 @@ const NET = {
     if(!r.ok){ const c=d.error?.message||''; throw new Error(
       c.includes('EMAIL_EXISTS')?'Esse e-mail já tem conta. Use Entrar.':
       c.includes('WEAK_PASSWORD')?'Senha fraca: mínimo 6 caracteres.':
-      c.includes('INVALID_EMAIL')?'E-mail inválido.':'Não deu para criar a conta agora.'); }
+      c.includes('INVALID_EMAIL')?'E-mail inválido.':
+      c.includes('OPERATION_NOT_ALLOWED')?'Ative o provedor E-mail/senha no Firebase: Authentication ▸ Sign-in method ▸ Email/Password ▸ Enable ▸ Salvar.':
+      c.includes('ADMIN_ONLY_OPERATION')?'A criação de contas está desativada no Firebase: Authentication ▸ Settings ▸ ative o cadastro de usuários.':
+      (c.includes('TOKEN_EXPIRED')||c.includes('INVALID_ID_TOKEN')||c.includes('CREDENTIAL_TOO_OLD'))?'Sessão expirada. Feche e reabra o app e tente de novo.':
+      ('Firebase: '+(c||'erro desconhecido'))); }
     S.auth={uid:d.localId, refreshToken:d.refreshToken||S.auth.refreshToken, idToken:d.idToken, exp:Date.now()+((+d.expiresIn||3600)-300)*1000};
     salva('auth');
   },
@@ -458,7 +462,9 @@ const NET = {
     const d=await r.json();
     if(!r.ok){ const c=d.error?.message||''; throw new Error(
       c.includes('INVALID_LOGIN')||c.includes('INVALID_PASSWORD')||c.includes('EMAIL_NOT_FOUND')?'E-mail ou senha incorretos.':
-      c.includes('TOO_MANY')?'Muitas tentativas. Aguarde um pouco.':'Não deu para entrar agora.'); }
+      c.includes('TOO_MANY')?'Muitas tentativas. Aguarde um pouco.':
+      c.includes('OPERATION_NOT_ALLOWED')?'Ative o provedor E-mail/senha no Firebase: Authentication ▸ Sign-in method.':
+      ('Firebase: '+(c||'erro desconhecido'))); }
     return {uid:d.localId, refreshToken:d.refreshToken, idToken:d.idToken, exp:Date.now()+((+d.expiresIn||3600)-300)*1000, email};
   },
   async resetSenha(email){

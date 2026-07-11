@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Treino Gym</title>
+<title>ForgeX — Gym Workout Tracker</title>
 <meta name="description" content="Registre seus treinos de academia: rotinas, séries, cargas, recordes e evolução. Rápido, offline e sem enrolação.">
-<meta name="theme-color" content="#0B0D10">
+<meta name="theme-color" content="#0D0D0F">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Treino Gym">
+<meta name="apple-mobile-web-app-title" content="ForgeX">
 <style>
 :root{
-  --bg:#0B0D10; --surf:#14171C; --surf2:#1B2027; --surf3:#232A33; --line:#242B34;
-  --tx:#E8ECF1; --tx2:#8B95A3; --tx3:#5B6572;
-  --brand:#FF6B2C; --brand2:#FF8B4C; --brand-dim:#3A2114;
+  --bg:#0D0D0F; --surf:#161619; --surf2:#1F1F24; --surf3:#2A2A31; --line:#2C2C33;
+  --tx:#ECECEE; --tx2:#9A9AA3; --tx3:#66666E;
+  --brand:#FF5A00; --brand2:#FF7A2E; --brand-dim:#3A1E08;
   --ok:#2ECC71; --okbg:#12351F; --warn:#F5B70A; --warnbg:#3A2E08; --err:#F05545;
   --azul:#4CC3FF; --roxo:#A78BFA;
   --r:16px; --r2:12px;
@@ -252,7 +252,7 @@ img.avatar{object-fit:cover}
 body.claro{
   --bg:#F4F5F7; --surf:#FFFFFF; --surf2:#F0F2F4; --surf3:#E8EBEF; --line:#E3E6EA;
   --tx:#101828; --tx2:#475467; --tx3:#98A2B3;
-  --brand:#F25C1A; --brand2:#D9500F; --brand-dim:#FFE7DA;
+  --brand:#E85000; --brand2:#C24400; --brand-dim:#FFE4D2;
   --ok:#188A4C; --okbg:#E3F5EB; --warn:#A97D00; --warnbg:#FFF3D1; --err:#D92D20;
   --azul:#0B7BC0;
 }
@@ -261,11 +261,21 @@ body.claro{
   body.claro #tabbar{background:rgba(255,255,255,.72)!important}
   body.claro #folha{background:rgba(255,255,255,.9)!important}
 }
+.fx-word{font-weight:900;font-size:23px;letter-spacing:.5px;color:var(--tx)}
+.fx-word span{color:var(--brand)}
+.fx-logo{display:flex;align-items:center;gap:9px;justify-content:center}
+.fx-logo svg{width:30px;height:30px;flex-shrink:0}
+.fx-hero-ray{filter:drop-shadow(0 0 18px rgba(255,90,0,.55))}
 </style>
 </head>
 <body>
 
-<div id="fantasma" class="fantasma"><img src="icon-192.png" alt=""><div class="mut f14">Carregando…</div></div>
+<div id="fantasma" class="fantasma">
+  <svg width="88" height="88" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+    <path d="M58 8 L28 52 H46 L40 92 L74 44 H54 Z" fill="#FF5A00"/>
+  </svg>
+  <div class="fx-word" style="margin-top:14px">Forge<span>X</span></div>
+</div>
 
 <div id="ta-progresso"></div>
 <header id="topo"><div class="topo-in" id="topo-in"></div></header>
@@ -332,7 +342,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.3';
+const APP_VER='5.4';
 
 /*CORE-START*/
 const CORE = {
@@ -908,7 +918,7 @@ const UI = {
 function aplicaTema(t){
   document.body.classList.toggle('claro', t==='claro');
   const mt=document.querySelector('meta[name="theme-color"]');
-  if(mt) mt.setAttribute('content', t==='claro' ? '#F4F5F7' : '#0B0D10');
+  if(mt) mt.setAttribute('content', t==='claro' ? '#F4F5F7' : '#0D0D0F');
 }
 try{ aplicaTema(S.cfg && S.cfg.tema); }catch(e){}
 $('#veu').addEventListener('click', UI.fechaFolha);
@@ -988,7 +998,7 @@ function grafBarras(canvas, dados, formata){
   c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
   dados.forEach((d,i)=>{
     const x=x0+i*(bw+gap), bh=Math.max(2, alt*d.v/max);
-    c.fillStyle = d.v>0 ? '#FF6B2C' : T.vazio;
+    c.fillStyle = d.v>0 ? '#FF5A00' : T.vazio;
     c.beginPath(); c.roundRect(x, base-bh, bw, bh, 5); c.fill();
     c.fillStyle=T.rot; c.textAlign='center';
     if(d.rot) c.fillText(d.rot, x+bw/2, H-8);
@@ -1007,9 +1017,9 @@ function grafLinha(canvas, pontos, formata){
   const Y=v=>base-(base-topo)*(v-min)/span;
   c.strokeStyle=T.vazio; c.lineWidth=1;
   [0,.5,1].forEach(f=>{ const y=topo+(base-topo)*f; c.beginPath(); c.moveTo(pad,y); c.lineTo(W-pad,y); c.stroke(); });
-  c.strokeStyle='#FF6B2C'; c.lineWidth=2.4; c.lineJoin='round'; c.beginPath();
+  c.strokeStyle='#FF5A00'; c.lineWidth=2.4; c.lineJoin='round'; c.beginPath();
   pontos.forEach((p,i)=>{ const x=X(i),y=Y(p.v); i?c.lineTo(x,y):c.moveTo(x,y); }); c.stroke();
-  c.fillStyle='#FF8B4C';
+  c.fillStyle='#FF7A2E';
   pontos.forEach((p,i)=>{ c.beginPath(); c.arc(X(i),Y(p.v),3.4,0,7); c.fill(); });
   c.fillStyle=T.txt; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif'; c.textAlign='left';
   c.fillText(formata?formata(max):String(max), 4, 12);
@@ -1959,13 +1969,13 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v'+APP_VER, h('br'),
+    'ForgeX v'+APP_VER, h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
     const dados={perfil:S.perfil,cfg:S.cfg,rotinas:S.rotinas,pastas:S.pastas,treinos:S.treinos,prs:S.prs,custom:S.custom,exportadoEm:new Date().toISOString()};
     const blob=new Blob([JSON.stringify(dados,null,1)],{type:'application/json'});
-    const a=h('a',{href:URL.createObjectURL(blob),download:'treino-gym-backup.json'});
+    const a=h('a',{href:URL.createObjectURL(blob),download:'forgex-backup.json'});
     document.body.appendChild(a); a.click(); a.remove();
   }
 };
@@ -2305,7 +2315,7 @@ function sugeridosCard(){
       h('div',{class:'secao',style:'margin:0'},'Atletas sugeridos'), h('div',{class:'esp'}),
       h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 12px',onclick:()=>{
         const url='https://chrismello0211.github.io/treino-gym/';
-        if(navigator.share) navigator.share({title:'Treino Gym', text:'Bora treinar junto no Treino Gym', url}).catch(()=>{});
+        if(navigator.share) navigator.share({title:'ForgeX', text:'Bora treinar junto no ForgeX', url}).catch(()=>{});
         else { try{ navigator.clipboard.writeText(url); UI.toast('Link copiado'); }catch(e){} }
       }},'Convidar amigos')),
     scroll);
@@ -2403,9 +2413,9 @@ function cartaoFeed(i){
     comBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.4 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l2-5.8a8.38 8.38 0 0 1-.9-3.7 8.5 8.5 0 0 1 8.5-8.5 8.38 8.38 0 0 1 8.4 8.5z"/></svg><span>'+(n||'Comentar')+'</span>'; };
   pintaCom();
   const shareBtn=h('button',{class:'heart',onclick:ev=>{ ev.stopPropagation();
-    const txt=t.titulo+' · '+CORE.fmtDur((t.fim-t.inicio)/1000)+' · '+CORE.fmtKg(t.volume)+' kg no Treino Gym';
+    const txt=t.titulo+' · '+CORE.fmtDur((t.fim-t.inicio)/1000)+' · '+CORE.fmtKg(t.volume)+' kg no ForgeX';
     const url='https://chrismello0211.github.io/treino-gym/';
-    if(navigator.share) navigator.share({title:'Treino Gym', text:txt, url}).catch(()=>{});
+    if(navigator.share) navigator.share({title:'ForgeX', text:txt, url}).catch(()=>{});
     else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
   }, html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>'});
   card.appendChild(h('div',{class:'feed-acoes'}, heart, comBtn, shareBtn));
@@ -2548,7 +2558,7 @@ function radarSVG(eixos, A, B){
   [1,.66,.33].forEach(f=>{ s+='<polygon points="'+eixos.map((_,i)=>pt(i,f).join(',')).join(' ')+'" fill="none" stroke="'+gr1+'"/>'; });
   eixos.forEach((_,i)=>{ const p2=pt(i,1); s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+p2[0]+'" y2="'+p2[1]+'" stroke="'+gr2+'"/>'; });
   s+='<polygon points="'+poly(B)+'" fill="rgba(76,195,255,.16)" stroke="#4CC3FF" stroke-width="2"/>';
-  s+='<polygon points="'+poly(A)+'" fill="rgba(255,107,44,.20)" stroke="#FF6B2C" stroke-width="2"/>';
+  s+='<polygon points="'+poly(A)+'" fill="rgba(255,90,0,.20)" stroke="#FF5A00" stroke-width="2"/>';
   eixos.forEach((rot,i)=>{ const p2=pt(i,1.26);
     s+='<text x="'+p2[0]+'" y="'+p2[1]+'" font-size="10" font-weight="700" fill="#98A2B3" text-anchor="middle" dominant-baseline="middle">'+esc(rot)+'</text>'; });
   s+='</svg>';
@@ -3185,9 +3195,9 @@ TELAS.relatorioMensal = function(){
     h('div',{class:'b800',style:'font-size:16px;margin-bottom:4px'},'Parabéns pelo mês, '+((S.perfil?.nome||'atleta').split(' ')[0])+'.'),
     h('div',{class:'f13 mut',style:'margin-bottom:12px'},'Consistência constrói resultado. Compartilhe e puxe a galera junto.'),
     h('button',{class:'btn btn-p',onclick:()=>{
-      const txt='Meu mês no Treino Gym ('+nome+'): '+A.t+' treinos, '+Math.round(A.dur/3600)+'h, '+CORE.fmtKg(A.vol)+' kg movidos, '+A.rec+' recordes.';
+      const txt='Meu mês no ForgeX ('+nome+'): '+A.t+' treinos, '+Math.round(A.dur/3600)+'h, '+CORE.fmtKg(A.vol)+' kg movidos, '+A.rec+' recordes.';
       const url='https://chrismello0211.github.io/treino-gym/';
-      if(navigator.share) navigator.share({title:'Treino Gym', text:txt, url}).catch(()=>{});
+      if(navigator.share) navigator.share({title:'ForgeX', text:txt, url}).catch(()=>{});
       else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
     }},'Compartilhar meu mês')));
 };
@@ -3690,13 +3700,15 @@ const HEVYIMP = {
 
 /* ---------- primeiro acesso ---------- */
 TELAS.boasVindas = function(){
-  UI.topo(h('div',{class:'topo-tit'},'Treino Gym'));
+  UI.topo(h('div',{class:'topo-tit'},'ForgeX'));
   $('#tabbar').style.display='none';
   const m=$('#main'); m.innerHTML='';
   const inp=h('input',{placeholder:'Como quer ser chamado?',style:'font-size:17px;padding:14px'});
   m.appendChild(h('div',{style:'padding-top:8vh;text-align:center'},
-    h('img',{src:'icon-192.png',style:'width:88px;height:88px;border-radius:22px;margin-bottom:18px'}),
-    h('div',{class:'b800',style:'font-size:26px;margin-bottom:8px'},'Controle total do treino'),
+    h('div',{class:'fx-hero-ray',style:'margin-bottom:16px',html:'<svg width="96" height="96" viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M58 8 L28 52 H46 L40 92 L74 44 H54 Z" fill="#FF5A00"/></svg>'}),
+    h('div',{class:'fx-word',style:'font-size:32px;margin-bottom:6px'},'Forge',h('span',{},'X')),
+    h('div',{class:'mut',style:'font-size:13px;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px'},'Gym Workout Tracker'),
+    h('div',{class:'b800',style:'font-size:22px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
       'Registre séries, cargas e recordes em segundos.',
       h('div',{class:'f14',style:'margin-top:12px;line-height:2.1;text-align:left;display:inline-block'},

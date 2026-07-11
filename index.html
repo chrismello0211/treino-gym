@@ -545,6 +545,7 @@ const NET = {
       m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
+        if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
         if(nuvem.app.cfg && (nuvem.app.cfg.atualizado||0)>(S.cfg.atualizado||0)){ S.cfg=nuvem.app.cfg; salva('cfg'); m=true; }
       }
       if(nuvem.prs){
@@ -1080,7 +1081,7 @@ const ATIVO = {
     }
     return null;
   },
-  marca(e, s){
+  marca(e, s, row){
     const x=BIB.ex(e.exId);
     if(!s.ok){
       if(x.t==='peso_reps' && (!s.kg||!s.reps)){ UI.toast('Preencha kg e reps antes de concluir'); return; }
@@ -1097,7 +1098,11 @@ const ATIVO = {
       if(e.descanso>0 && CORE.descansaApos(S.ativo.ex, ixE)) DESC.inicia(e.descanso, x.n);
       else if(e.ss && !CORE.descansaApos(S.ativo.ex, ixE)) UI.toast('Superssérie: próximo exercício');
     } else { s.ok=false; delete s.pr; }
-    salva('ativo'); ATIVO.pinta();
+    salva('ativo');
+    if(row){ row.classList.toggle('feita', !!(s.ok||s.pr));
+      const chk=row.querySelector('.scheck'); if(chk) chk.textContent=s.ok?'✓':(s.pr?'🏅':'○');
+      row.querySelectorAll('input').forEach(inp=>inp.disabled=!!s.ok); }
+    ATIVO.pinta();
   },
   pinta(){ // atualiza stats + progresso sem redesenhar tudo
     if(!S.ativo) return;
@@ -1215,6 +1220,11 @@ TELAS.ativo = function(){
         const ult=e.series.at(-1)||{}; e.series.push({tipo:'N',kg:ult.kg||'',reps:ult.reps||'',ok:false}); salva('ativo'); UI.refaz(); }},'＋ Adicionar série'));
     return card;
   }
+  function atualizaLinha(row, e, s){
+    row.classList.toggle('feita', !!(s.ok||s.pr));
+    const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.ok?'✓':(s.pr?'🏅':'○');
+    row.querySelectorAll('input').forEach(inp=>inp.disabled=!!s.ok);
+  }
   function linha(e,s,si,x){
     const numerada=e.series.filter(q=>q.tipo!=='W').indexOf(s)+1;
     const ant=ATIVO.serieAnterior(e.exId, si);
@@ -1227,7 +1237,7 @@ TELAS.ativo = function(){
         ? h('input',{type:'number',inputmode:'decimal',value:s.kg,placeholder:ant?String(ant.kg):'kg',oninput:ev=>{s.kg=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : h('div',{class:'anterior'},'—'),
       h('input',{type:'number',inputmode:'numeric',value:s.reps,placeholder:ant?String(ant.reps):(x.t==='tempo'?'seg':'reps'),oninput:ev=>{s.reps=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok}),
-      h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s)}, s.ok?'✓':(s.pr?'🏅':'○')));
+      h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s,row)}, s.ok?'✓':(s.pr?'🏅':'○')));
     if(s.pr) row.classList.add('feita');
     return row;
   }
@@ -1477,6 +1487,9 @@ TELAS.config = function(){
       h('div',{class:'f13 mut',style:'line-height:1.7;margin-bottom:10px'},'Conectado como ',
         h('span',{class:'b700',style:'color:var(--tx)'},S.perfil.email),
         S.perfil.user? h('span',{}, ' · @'+S.perfil.user):null),
+      S.perfil.user
+        ? h('button',{class:'menu-op',onclick:()=>USERNAME.folha()},'Nome de usuário', h('span',{class:'esp'}), h('span',{class:'f13 mut2'},'@'+S.perfil.user))
+        : h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>USERNAME.folha(()=>UI.refaz())},'Definir nome de usuário (para o feed)'),
       h('button',{class:'menu-op',onclick:function(){ S.cfg.feedPub=!S.cfg.feedPub; salvaCfg(); this.querySelector('.chip').textContent=S.cfg.feedPub?'Ligado':'Desligado'; this.querySelector('.chip').classList.toggle('on',!!S.cfg.feedPub); }},
         'Publicar treinos no feed', h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg.feedPub?' on':'')},S.cfg.feedPub?'Ligado':'Desligado')),
       h('button',{class:'btn',style:'margin:8px 0',onclick:()=>{
@@ -1520,7 +1533,7 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v4.2', h('br'),
+    'Treino Gym v4.3', h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
@@ -1799,7 +1812,7 @@ function sugeridosCard(){
       h('div',{class:'b700',style:'font-size:13.5px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},p.nome||('@'+p.user)),
       h('div',{class:'f12 mut2',style:'text-align:center;margin-bottom:8px'},'@'+p.user),
       h('button',{class:'btn btn-mini btn-p',onclick:async function(){
-        if(!S.perfil?.user){ UI.toast('Crie sua conta para seguir'); return; }
+        if(!S.perfil?.user){ if(S.auth && S.perfil?.email){ UI.fechaFolha(); USERNAME.folha(); } else UI.toast('Crie sua conta para seguir'); return; }
         this.disabled=true;
         try{ await AMIGOS.seguir(u,{user:p.user,nome:p.nome||''}); c.remove(); if(!scroll.children.length) wrap.remove();
           FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio') UI.refaz(); });
@@ -1843,7 +1856,11 @@ function cartaoFeed(i){
   const euCurti=()=>!!(S.auth && likes()[S.auth.uid]);
   const heart=h('button',{class:'heart',onclick:async ev=>{
     ev.stopPropagation();
-    if(!S.perfil?.user){ UI.toast('Crie sua conta com e-mail para curtir'); return; }
+    if(!S.perfil?.user){
+      if(S.auth && S.perfil?.email) USERNAME.folha(()=>{ if(UI.telaAtual==='inicio') UI.refaz(); });
+      else UI.toast('Crie sua conta com e-mail para curtir');
+      return;
+    }
     const on=!euCurti();
     try{
       await NET.putD('/curtidas/'+dono+'/'+tid+'/'+S.auth.uid, on? agora() : null);
@@ -2500,6 +2517,34 @@ function resumoTreino(t){
   if(t.temFoto) r0.f=1;
   return r0;
 }
+const USERNAME = {
+  folha(aposDefinir){
+    const atual=S.perfil?.user||'';
+    const us=h('input',{value:atual, placeholder:'ex.: chris_mello', autocapitalize:'off'});
+    UI.folha(atual?'Alterar nome de usuário':'Escolher nome de usuário',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'É assim que seus amigos te encontram e o que aparece quando você curte ou comenta. De 3 a 20 caracteres: letras minúsculas, números ou _.'),
+      us, h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:async function(){
+        const u=(us.value||'').trim().toLowerCase().replace('@','');
+        if(!/^[a-z0-9_]{3,20}$/.test(u)){ UI.toast('Usuário: 3 a 20 letras minúsculas, números ou _'); return; }
+        if(u===atual){ UI.fechaFolha(); if(aposDefinir) aposDefinir(); return; }
+        if(!S.auth){ UI.toast('Sem conexão agora'); return; }
+        this.disabled=true; this.textContent='Salvando…';
+        try{
+          const dono=await NET.get('/usernames/'+u);
+          if(dono && dono!==S.auth.uid){ UI.toast('Esse nome de usuário já está em uso.'); this.disabled=false; this.textContent='Salvar'; return; }
+          if(atual && atual!==u){ try{ await NET.putD('/usernames/'+atual, null); }catch(e){} }
+          await NET.putD('/usernames/'+u, S.auth.uid);
+          if(!S.perfil) S.perfil={criado:agora()};
+          S.perfil.user=u; S.perfil.atualizado=agora(); salva('perfil');
+          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:u, foto:S.perfil.foto||null, atualizado:agora()});
+          NET.agenda('app/perfil', S.perfil);
+          UI.fechaFolha(); UI.refaz(); UI.toast('Nome de usuário definido: @'+u, true);
+          if(aposDefinir) aposDefinir();
+        }catch(err){ UI.toast('Sem conexão agora'); this.disabled=false; this.textContent='Salvar'; }
+      }},'Salvar')]);
+  }
+};
 const AMIGOS = {
   folha(){
     if(!S.perfil?.user){
@@ -2560,8 +2605,9 @@ const COMENT = {
   conta(dono,tid){ return Object.keys(((FEED.com||{})[dono]||{})[tid]||{}).length; },
   folha(dono, tid, titulo, aoMudar){
     const lista=h('div',{style:'max-height:44vh;overflow-y:auto'});
+    const temConta=!!(S.auth && S.perfil?.email);
     const podeCom=!!S.perfil?.user;
-    const inp=h('input',{placeholder: podeCom? 'Escreva um comentário…':'Crie sua conta para comentar', disabled:!podeCom});
+    const inp=h('input',{placeholder: podeCom? 'Escreva um comentário…': (temConta?'Defina seu nome de usuário para comentar':'Crie sua conta para comentar'), disabled:!podeCom});
     const desenha=obj=>{
       lista.innerHTML='';
       const arr=Object.entries(obj||{}).map(([cid,c])=>Object.assign({cid},c)).sort((a,b)=>(a.ts||0)-(b.ts||0));
@@ -2586,6 +2632,10 @@ const COMENT = {
     UI.folha('Comentários',[
       h('div',{class:'f13 mut',style:'margin-bottom:6px'},titulo),
       lista, h('div',{style:'height:10px'}),
+      (!podeCom? h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>{ UI.fechaFolha();
+        if(temConta) USERNAME.folha(()=>COMENT.folha(dono,tid,titulo,aoMudar));
+        else CONTA.folhaCriar();
+      }}, temConta?'Definir nome de usuário':'Criar conta'):null),
       h('div',{style:'display:flex;gap:8px'}, inp,
         h('button',{class:'btn btn-p',style:'width:auto;padding:0 16px',disabled:!podeCom,onclick:async ()=>{
           const txt=(inp.value||'').trim(); if(!txt) return;

@@ -288,7 +288,7 @@ img.avatar{object-fit:cover}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='4.8';
+const APP_VER='4.9';
 
 /*CORE-START*/
 const CORE = {
@@ -799,9 +799,10 @@ const UI = {
   toast(msg, rec){ const t=$('#toast'); t.textContent=msg; t.classList.toggle('rec', !!rec); t.classList.add('on');
     clearTimeout(UI.toastT); UI.toastT=setTimeout(()=>t.classList.remove('on'), rec?3200:2100); },
   pingSync(ok){ /* discreto: só loga; indicador fica no Perfil */ UI.syncOk = ok; },
-  folha(titulo, corpoEls, rodape){
+  folha(titulo, corpoEls, acao){
     $('#folha-cab').innerHTML=''; $('#folha-corpo').innerHTML='';
     $('#folha-cab').append(h('div',{class:'b800',style:'font-size:17px'}, titulo), h('div',{class:'esp'}),
+      acao||null,
       h('button',{class:'btn btn-mini', onclick:UI.fechaFolha}, 'Fechar'));
     corpoEls.flat().forEach(e=>{ if(e==null||e===false) return; $('#folha-corpo').appendChild(e instanceof Node? e : document.createTextNode(String(e))); });
     $('#veu').classList.add('on'); $('#folha').classList.add('on');
@@ -907,11 +908,10 @@ const PICKER = {
       h('div',{class:'linha',style:'margin-top:10px;gap:8px'},
         h('button',{class:'chip',id:'pk-f-e',onclick:PICKER.filtroEquip},'Todo equipamento'),
         h('button',{class:'chip',id:'pk-f-g',onclick:PICKER.filtroGrupo},'Todos os músculos')),
-      h('div',{id:'pk-lista',style:'margin-top:8px'}),
-      h('div',{style:'height:8px'}),
-      h('button',{class:'btn',onclick:PICKER.criarCustom},'Criar exercício personalizado')
+      h('div',{id:'pk-lista',style:'margin-top:8px'})
     ];
-    UI.folha(PICKER.modo==='consulta'?'Exercícios':'Adicionar exercício', corpo);
+    UI.folha(PICKER.modo==='consulta'?'Exercícios':'Adicionar exercício', corpo,
+      h('button',{class:'btn btn-mini btn-p',style:'margin-right:8px',onclick:()=>PICKER.criarCustom()},'＋ Criar'));
     PICKER.lista();
     setTimeout(()=>{ try{$('#pk-q').focus();}catch(e){} }, 250);
   },
@@ -964,7 +964,11 @@ const PICKER = {
       if(mostrados>=res.length) sent.remove(); };
     const sent=h('button',{class:'btn',style:'margin-top:8px',onclick:()=>mostra()},'Mostrar mais');
     alvo.appendChild(sent); mostra();
-    if(!res.length) alvo.appendChild(h('div',{class:'vazio'},'Nada encontrado. Tente outro termo ou crie um exercício personalizado.'));
+    if(!res.length){
+      alvo.appendChild(h('div',{class:'vazio'},'Nada encontrado na biblioteca.'));
+      alvo.appendChild(h('button',{class:'btn btn-p',onclick:()=>PICKER.criarCustom(PICKER.q)},
+        (PICKER.q&&PICKER.q.trim())? 'Criar "'+PICKER.q.trim()+'"' : 'Criar exercício personalizado'));
+    }
   },
   linha(x){
     return h('div',{class:'item',onclick:()=>{
@@ -982,8 +986,9 @@ const PICKER = {
     for(const t of ts){ for(const e of (t.ex||[])){ if(!ids.includes(e.exId)) ids.push(e.exId); } if(ids.length>=10) break; }
     return ids;
   },
-  criarCustom(){
+  criarCustom(prefill){
     const nome=h('input',{placeholder:'Nome do exercício'});
+    if(typeof prefill==='string' && prefill.trim()) nome.value=prefill.trim();
     const selG=h('select',{}, ...Object.entries(GRUPOS).map(([v,r])=>h('option',{value:v},r)));
     const selE=h('select',{}, ...Object.entries(EQUIPS).map(([v,r])=>h('option',{value:v},r)));
     const selT=h('select',{}, h('option',{value:'peso_reps'},'Peso × repetições'), h('option',{value:'reps'},'Só repetições'), h('option',{value:'tempo'},'Tempo (segundos)'));

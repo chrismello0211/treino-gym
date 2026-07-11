@@ -277,7 +277,7 @@ img.avatar{object-fit:cover}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='4.5';
+const APP_VER='4.6';
 
 /*CORE-START*/
 const CORE = {
@@ -649,7 +649,7 @@ function h(tag, attrs, ...filhos){
     else if(k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if(v!==false && v!=null) el.setAttribute(k, v===true?'':v);
   });
-  filhos.flat().forEach(f=>{ if(f==null||f===false) return; el.appendChild(typeof f==='string'?document.createTextNode(f):f); });
+  filhos.flat().forEach(f=>{ if(f==null||f===false) return; el.appendChild(f instanceof Node? f : document.createTextNode(String(f))); });
   return el;
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -681,7 +681,7 @@ const UI = {
   },
   volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false); else UI.vai('treino', null, false); },
   refaz(){ if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{}); },
-  topo(...els){ const t=$('#topo-in'); t.innerHTML=''; els.flat().forEach(e=>t.appendChild(e)); },
+  topo(...els){ const t=$('#topo-in'); t.innerHTML=''; els.flat().forEach(e=>{ if(e==null||e===false) return; t.appendChild(e instanceof Node? e : document.createTextNode(String(e))); }); },
   btVoltar(){ return h('button',{class:'btn btn-mini',style:'width:42px;padding:9px', onclick:()=>UI.volta()},
     h('span',{html:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>'})); },
   toast(msg, rec){ const t=$('#toast'); t.textContent=msg; t.classList.toggle('rec', !!rec); t.classList.add('on');
@@ -691,7 +691,7 @@ const UI = {
     $('#folha-cab').innerHTML=''; $('#folha-corpo').innerHTML='';
     $('#folha-cab').append(h('div',{class:'b800',style:'font-size:17px'}, titulo), h('div',{class:'esp'}),
       h('button',{class:'btn btn-mini', onclick:UI.fechaFolha}, 'Fechar'));
-    corpoEls.flat().forEach(e=>$('#folha-corpo').appendChild(e));
+    corpoEls.flat().forEach(e=>{ if(e==null||e===false) return; $('#folha-corpo').appendChild(e instanceof Node? e : document.createTextNode(String(e))); });
     $('#veu').classList.add('on'); $('#folha').classList.add('on');
     document.body.style.overflow='hidden';
   },
@@ -1238,7 +1238,7 @@ TELAS.ativo = function(){
   m.appendChild(h('div',{class:'card',style:'position:sticky;top:calc(var(--sat) + 58px);z-index:30'},
     h('div',{class:'linha'},
       h('div',{class:'stats3',style:'flex:1'},
-        h('button',{style:'background:none;border:none;text-align:left;padding:0',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k'},'Duração ✎'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
+        h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k'},'Duração ✎'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0s')),
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol'},'0 kg')),
         h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0'))),
       h('div',{id:'ta-musc'}))));
@@ -1360,7 +1360,7 @@ TELAS.treinoDet = function({id}){
   const m=$('#main'); m.innerHTML='';
   m.appendChild(h('div',{class:'card'},h('div',{class:'linha'},
     h('div',{class:'stats3',style:'flex:1'},
-      h('button',{style:'background:none;border:none;text-align:left;padding:0',onclick:()=>editaTempoTreino(t)},h('div',{class:'k'},'Tempo ✎'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
+      h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>editaTempoTreino(t)},h('div',{class:'k'},'Tempo ✎'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
     corpoSVG(gruposDoTreino(t), 92))));
@@ -1928,9 +1928,10 @@ function cartaoFeed(i){
     h('div',{class:'stats3',style:'margin-bottom:8px'},
       h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtDur((t.fim-t.inicio)/1000))),
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',style:'font-size:15px'},CORE.fmtKg(t.volume)+' kg')),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:15px'},t.recordes? h('span',{class:'badge rec'},'🏅 '+t.recordes):'—'))),
-    (i.meu? (i.t.temFoto? FOTOS.lazy(i.dono, i.id):null) : ((i.r&&i.r.f)? FOTOS.lazy(i.dono, i.id):null)),
-    lista);
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:15px'},t.recordes? h('span',{class:'badge rec'},'🏅 '+t.recordes):'—'))));
+  const fotoSlot = i.meu? (i.t.temFoto? FOTOS.lazy(i.dono, i.id):null) : ((i.r&&i.r.f)? FOTOS.lazy(i.dono, i.id):null);
+  if(fotoSlot) card.append(fotoSlot);
+  card.append(lista);
   if(exs.length>3){
     const btn=h('button',{class:'vermais',onclick:e=>{ e.stopPropagation(); exs.slice(3).forEach(x=>lista.appendChild(linhaEx(x))); btn.remove(); }},
       'Ver os '+exs.length+' exercícios');

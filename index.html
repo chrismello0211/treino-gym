@@ -279,17 +279,27 @@ CORE.descansaApos = function(exList, ix){
   if(!ss) return true;
   return !exList.slice(ix+1).some(q=>q.ss===ss);
 };
-CORE.recomputaPRs = function(lista){
+CORE.recomputaPRs = function(lista, resets){
+  resets = resets || {};
   const prs={};
   lista.slice().sort((a,b)=>a.inicio-b.inicio).forEach(t=>{
     t.recordes=0;
-    (t.ex||[]).forEach(e=>(e.series||[]).forEach(s=>{
-      delete s.pr;
-      const bate=CORE.detectaPR(prs, e.exId, s);
-      if(bate.length){ s.pr=bate.map(b=>b[0]); CORE.aplicaPR(prs, e.exId, bate, t.id, t.inicio); t.recordes++; }
-    }));
+    (t.ex||[]).forEach(e=>{
+      const rE=resets[e.exId];
+      if(rE && t.inicio>=rE && (!prs[e.exId] || !prs[e.exId]._pos)) prs[e.exId]={resetEm:rE,_pos:true};
+      (e.series||[]).forEach(s=>{
+        delete s.pr;
+        const bate=CORE.detectaPR(prs, e.exId, s);
+        if(bate.length){ s.pr=bate.map(b=>b[0]); CORE.aplicaPR(prs, e.exId, bate, t.id, t.inicio); t.recordes++; }
+      });
+    });
     t.volume=CORE.volumeTreino(t);
     t.series=CORE.seriesFeitas(t);
+  });
+  Object.entries(resets).forEach(([ex,rE])=>{
+    const p=prs[ex];
+    if(!p || !p._pos) prs[ex]={resetEm:rE};
+    else { delete p._pos; p.resetEm=rE; }
   });
   return prs;
 };
@@ -525,8 +535,13 @@ const NET = {
       if(nuvem.prs){
         Object.entries(nuvem.prs).forEach(([ex,p])=>{
           const l=S.prs[ex]||{};
-          ['kg','vol','rm','reps'].forEach(t=>{ if(p[t] && (!l[t] || p[t].v>l[t].v)) l[t]=p[t]; });
-          S.prs[ex]=l;
+          const rE=Math.max(l.resetEm||0, p.resetEm||0);
+          const n={}; if(rE) n.resetEm=rE;
+          ['kg','vol','rm','reps'].forEach(t=>{
+            const cand=[l[t],p[t]].filter(r=>r && (!rE || (r.data||0)>=rE));
+            if(cand.length) n[t]=cand.sort((a,b)=>b.v-a.v)[0];
+          });
+          S.prs[ex]=n;
         });
         salva('prs'); 
       }
@@ -1244,7 +1259,21 @@ TELAS.treinoDet = function({id}){
 /* ---------- DETALHE DO EXERCÍCIO ---------- */
 TELAS.exercicio = function({id}){
   const x=BIB.ex(id);
-  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:18px'},x.n));
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:18px'},x.n),
+    h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>{
+      UI.folha(x.n,[
+        h('button',{class:'menu-op perigo',onclick:()=>{
+          UI.fechaFolha();
+          UI.folha('Zerar recordes deste exercício?',[
+            h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},
+              'Os recordes de carga, 1RM, série e repetições recomeçam do zero a partir de hoje. Útil quando você troca de academia e os pesos não batem. O histórico e os gráficos permanecem. Essa ação não tem volta.'),
+            h('button',{class:'btn btn-err',onclick:()=>{
+              S.prs[id]={resetEm:agora()};
+              salva('prs'); NET.agenda('prs/'+id, S.prs[id]);
+              UI.fechaFolha(); UI.refaz(); UI.toast('Recordes zerados. Próximo treino define as novas marcas.');
+            }},'Zerar recordes')]);
+        }},'Zerar recordes deste exercício')]);
+    }},'⋯'));
   const m=$('#main'); m.innerHTML='';
   const src=BIB.gif(id);
   if(src) m.appendChild(h('img',{class:'ex-hero',src,alt:x.n}));
@@ -1254,9 +1283,15 @@ TELAS.exercicio = function({id}){
     h('span',{class:'chip'},EQUIPS[x.e]||x.e)));
 
   const p=S.prs[id];
+  if(p && p.resetEm && !(p.kg||p.vol||p.rm||p.reps)){
+    m.appendChild(h('div',{class:'card'},
+      h('div',{class:'f13 mut',style:'line-height:1.6'},'Recordes zerados em '+new Date(p.resetEm).toLocaleDateString('pt-BR')+'. O próximo treino define as novas marcas.')));
+  }
   if(p && (p.kg||p.vol||p.rm||p.reps)){
     m.appendChild(h('div',{class:'card'},
-      h('div',{class:'secao',style:'margin:0 0 10px'},'Recordes pessoais 🏅'),
+      h('div',{class:'linha',style:'margin:0 0 10px'},
+        h('div',{class:'secao',style:'margin:0'},'Recordes pessoais 🏅'), h('div',{class:'esp'}),
+        p.resetEm? h('div',{class:'f12 mut2'},'desde '+new Date(p.resetEm).toLocaleDateString('pt-BR')):null),
       h('div',{class:'stats3'},
         p.kg? h('div',{},h('div',{class:'k'},'Maior carga'),h('div',{class:'v'},CORE.fmtKg(p.kg.v)+' kg')):null,
         p.rm? h('div',{},h('div',{class:'k'},'1RM estimado'),h('div',{class:'v'},CORE.fmtKg(p.rm.v)+' kg')):null,
@@ -1404,7 +1439,7 @@ TELAS.config = function(){
     h('button',{class:'btn',onclick:exporta},'Exportar meus dados (JSON)')));
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
-    'Treino Gym v3.0', h('br'),
+    'Treino Gym v3.2', h('br'),
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
   function exporta(){
@@ -2020,7 +2055,8 @@ const HEVYIMP = {
         h('div',{class:'f13 mut',style:'margin-top:8px'},'Os recordes pessoais serão recalculados considerando todo o histórico.')),
       h('button',{class:'btn btn-p',onclick:()=>{
         novosT.forEach(t=>{ t.atualizado=t.fim; S.treinos[t.id]=t; });
-        const prs=CORE.recomputaPRs(Object.values(S.treinos).filter(t=>!t.apagado));
+        const resets={}; Object.entries(S.prs).forEach(([ex,p])=>{ if(p && p.resetEm) resets[ex]=p.resetEm; });
+        const prs=CORE.recomputaPRs(Object.values(S.treinos).filter(t=>!t.apagado), resets);
         S.prs=prs;
         salva('custom'); salva('treinos'); salva('prs');
         BIB.lista=BIB.lista.filter(x=>!x.custom).concat(Object.values(S.custom)); BIB.indexa();

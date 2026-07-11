@@ -6,6 +6,17 @@
 <title>ForgeX — Gym Workout Tracker</title>
 <meta name="description" content="Registre seus treinos de academia: rotinas, séries, cargas, recordes e evolução. Rápido, offline e sem enrolação.">
 <meta name="theme-color" content="#0D0D0F">
+<link rel="icon" type="image/png" href="favicon-64.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ForgeX">
+<meta property="og:title" content="ForgeX — Gym Workout Tracker">
+<meta property="og:description" content="Registre séries, cargas e recordes em segundos. Feed com amigos, comparações e evolução. Funciona offline, direto da academia.">
+<meta property="og:url" content="https://chrismello0211.github.io/treino-gym/">
+<meta property="og:image" content="https://chrismello0211.github.io/treino-gym/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://chrismello0211.github.io/treino-gym/og-card.png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -272,7 +283,7 @@ body.claro{
 
 <div id="fantasma" class="fantasma">
   <img src="icon-192.png" alt="" width="96" height="96" style="border-radius:24px">
-  <div style="display:flex;align-items:center;gap:5px;margin-top:14px"><span class="fx-word" style="font-style:italic;letter-spacing:-1px">Forge</span><img src="logo-x.png" alt="" style="height:27px;width:auto"></div>
+  <img src="logo-word.png" alt="ForgeX" style="height:30px;width:auto;margin-top:16px">
 </div>
 
 <div id="ta-progresso"></div>
@@ -340,7 +351,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.6';
+const APP_VER='5.7';
 
 /*CORE-START*/
 const CORE = {
@@ -913,14 +924,11 @@ const UI = {
   },
   fechaFolha(){ $('#veu').classList.remove('on'); $('#folha').classList.remove('on'); document.body.style.overflow=''; }
 };
-function logoFX(alt, tam, comTag){
-  const box=h('div',{style:'display:flex;flex-direction:column;align-items:center'},
-    h('div',{style:'display:flex;align-items:center;gap:'+Math.max(4,Math.round(tam*0.14))+'px'},
-      h('span',{class:'fx-word',style:'font-size:'+tam+'px;font-style:italic;letter-spacing:-1px'},'Forge'),
-      h('img',{src:'logo-x.png',alt:'',style:'height:'+Math.round(tam*1.16)+'px;width:auto'})),
-    comTag? h('div',{class:'mut',style:'font-size:'+Math.max(10,Math.round(tam*0.30))+'px;letter-spacing:'+Math.max(2,Math.round(tam*0.12))+'px;text-transform:uppercase;margin-top:4px'},'Gym Workout Tracker'):null);
-  box.setAttribute('role','img'); box.setAttribute('aria-label', alt||'ForgeX');
-  return box;
+function logoFX(alt, altura, comTag){
+  const claro=document.body.classList.contains('claro');
+  const src = comTag ? (claro?'logo-forgex-claro.png':'logo-forgex.png')
+                     : (claro?'logo-word-claro.png':'logo-word.png');
+  return h('img',{src, alt:alt||'ForgeX', style:'height:'+altura+'px;width:auto;display:block'});
 }
 function aplicaTema(t){
   document.body.classList.toggle('claro', t==='claro');
@@ -3730,12 +3738,12 @@ const HEVYIMP = {
 
 /* ---------- primeiro acesso ---------- */
 TELAS.boasVindas = function(){
-  UI.topo(logoFX('ForgeX', 21, false));
+  UI.topo(logoFX('ForgeX', 24, false));
   $('#tabbar').style.display='none';
   const m=$('#main'); m.innerHTML='';
   const inp=h('input',{placeholder:'Como quer ser chamado?',style:'font-size:17px;padding:14px'});
   m.appendChild(h('div',{style:'padding-top:8vh;text-align:center'},
-    h('div',{style:'display:flex;justify-content:center;margin-bottom:20px'}, logoFX('ForgeX — Gym Workout Tracker', 42, true)),
+    h('div',{style:'display:flex;justify-content:center;margin-bottom:20px'}, logoFX('ForgeX — Gym Workout Tracker', 96, true)),
     h('div',{class:'b800',style:'font-size:22px;margin-bottom:8px'},'Controle total do treino'),
     h('div',{class:'mut f14',style:'line-height:1.6;max-width:320px;margin:0 auto 26px'},
       'Registre séries, cargas e recordes em segundos.',

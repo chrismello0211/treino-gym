@@ -356,7 +356,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='6.4';
+const APP_VER='6.5';
 
 /*CORE-START*/
 const CORE = {
@@ -2106,6 +2106,8 @@ TELAS.config = function(){
         ts.forEach(t=>NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)));
         UI.toast(ts.length+' treinos enviados para o feed', true);
       }},'Enviar histórico para o feed'),
+      h('button',{class:'menu-op',onclick:()=>RESTAURA.folha()},
+        '☁️ Restaurar meus dados na nuvem', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'reenviar')),
       (S.perfil.user==='chris_mello')? h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
         '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')) : null,
       h('button',{class:'btn',onclick:CONTA.sair},'Sair da conta'));
@@ -3399,6 +3401,49 @@ function pubRotina(r){
   vv.addEventListener('resize', aj); vv.addEventListener('scroll', aj); aj();
 })();
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+const RESTAURA = {
+  async tudo(btn){
+    if(!S.auth || !S.perfil?.user){ UI.toast('Entre com sua conta e defina o @usuario primeiro'); return; }
+    if(btn){ btn.disabled=true; btn.textContent='Restaurando…'; }
+    let n=0;
+    try{
+      // 1) username -> aponta pro meu uid
+      try{ await NET.putD('/usernames/'+S.perfil.user, S.auth.uid); n++; }catch(e){}
+      // 2) perfil público
+      try{ await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); n++; }catch(e){}
+      // 3) feed: republica meus treinos (com foto local quando houver)
+      const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio).slice(0,60);
+      for(const t of ts){
+        try{ await NET.putD('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); n++; }catch(e){}
+      }
+      // 4) seguidores/seguindo: reescreve a partir da minha lista local
+      const seg=Object.entries(S.social.seguindo||{});
+      for(const [uid2,p] of seg){
+        try{
+          await NET.putD('/seguindo/'+S.auth.uid+'/'+uid2, {user:p.user||'', nome:p.nome||'', ts:agora()});
+          await NET.putD('/seguidores/'+uid2+'/'+S.auth.uid, true);
+          n++;
+        }catch(e){}
+      }
+      // 5) fotos de progresso (medições) — essas ficam locais em MED._fotos
+      try{
+        if(MED._fotos && Object.keys(MED._fotos).length){
+          for(const [id,f] of Object.entries(MED._fotos)){ if(f){ try{ await NET.putD('/fotosProg/'+id, f); n++; }catch(e){} } }
+        }
+      }catch(e){}
+      // 6) rotinas públicas
+      try{ if(S.cfg.rotPub!==false) ROTPUB.syncTudo(); }catch(e){}
+      UI.fechaFolha();
+      UI.toast('Seus dados foram reenviados à nuvem ✓ ('+n+' itens)', true);
+    }catch(e){ UI.toast('Deu erro no meio. Rode de novo com internet estável.'); }
+    if(btn){ btn.disabled=false; btn.textContent='Restaurar agora'; }
+  },
+  folha(){
+    UI.folha('Restaurar meus dados na nuvem',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.7'},'Reenvia para a nuvem, a partir do que está neste aparelho: seu perfil, seus treinos no feed, suas fotos de progresso (medições) e a lista de quem você segue. Fotos de treino não ficam salvas no aparelho, então essas não voltam por aqui. Seguro: não apaga nada.'),
+      h('button',{class:'btn btn-p',onclick:function(){ RESTAURA.tudo(this); }},'Restaurar agora')]);
+  }
+};
 const ADMIN = {
   broadcast(){
     const inT=h('input',{value:'Tem novidade no ar 🔥',maxlength:'60'});

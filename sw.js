@@ -3,7 +3,7 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v5.9', GCACHE='tg-gifs-v1';
+const CACHE='tg-v6.1', GCACHE='tg-gifs-v1';
 const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
 
 self.addEventListener('install',e=>{ self.skipWaiting();
@@ -35,5 +35,27 @@ self.addEventListener('fetch',e=>{
   e.respondWith(caches.match(req).then(hit=>{
     const net=fetch(req).then(res=>{ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); return res; }).catch(()=>hit);
     return hit||net;
+  }));
+});
+
+/* ---------- push (FCM data-only) ---------- */
+self.addEventListener('push', e=>{
+  let d={}; try{ d=e.data.json(); }catch(_){}
+  const dd=(d&&d.data)||d||{};
+  const title=dd.title||'ForgeX';
+  e.waitUntil(self.registration.showNotification(title,{
+    body: dd.body||'',
+    icon:'icon-192.png',
+    badge:'icon-192.png',
+    tag: dd.tipo? (dd.tipo+':'+(dd.tid||dd.quem||'')) : undefined,
+    data:{ url: dd.url||'./' }
+  }));
+});
+self.addEventListener('notificationclick', e=>{
+  e.notification.close();
+  const url=(e.notification.data&&e.notification.data.url)||'./';
+  e.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(list=>{
+    for(const c of list){ if('focus' in c) return c.focus(); }
+    return clients.openWindow(url);
   }));
 });

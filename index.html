@@ -351,7 +351,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.9';
+const APP_VER='6.1';
 
 /*CORE-START*/
 const CORE = {
@@ -514,7 +514,17 @@ const IMP = {
 /* ---------- config Firebase ---------- */
 const FB = {
   key:'AIzaSyCdP_14g4EDBLAVwSJ_TGmg9SX5_i9j7G8',
-  db:'https://iron-gym-aa932-default-rtdb.firebaseio.com'
+  db:'https://iron-gym-aa932-default-rtdb.firebaseio.com',
+  cfg:{
+    apiKey:'AIzaSyCdP_14g4EDBLAVwSJ_TGmg9SX5_i9j7G8',
+    authDomain:'iron-gym-aa932.firebaseapp.com',
+    databaseURL:'https://iron-gym-aa932-default-rtdb.firebaseio.com',
+    projectId:'iron-gym-aa932',
+    storageBucket:'iron-gym-aa932.firebasestorage.app',
+    messagingSenderId:'614727735456',
+    appId:'1:614727735456:web:b5ae625e12e495ccea91c5'
+  },
+  vapid:'BLL5q4RlZhzTQCMNqk63AhdA-9HduXZ6ey5jYgyqqZEVyz9OwMgMYTDYX1LAuQCWgFqSOQAn0pLH7X76NwaxKn8'
 };
 
 /* ---------- armazenamento local ---------- */
@@ -1076,7 +1086,7 @@ const PICKER = {
     PICKER.menuFiltro(ops, 'e', $('#pk-f-e'), 'Todo equipamento');
   },
   filtroGrupo(){
-    const ops=[[null,'Todos os músculos']].concat(Object.entries(GRUPOS));
+    const ops=[[null,'Todos os músculos']].concat(Object.entries(GRUPOS).sort((a,b)=>a[1].localeCompare(b[1],'pt')));
     PICKER.menuFiltro(ops, 'g', $('#pk-f-g'), 'Todos os músculos');
   },
   menuFiltro(ops, campo, botao, padrao){
@@ -1146,7 +1156,7 @@ const PICKER = {
     const nome=h('input',{placeholder:'Nome do exercício'});
     if(typeof prefill==='string' && prefill.trim()) nome.value=prefill.trim();
     let fotoB64=null;
-    const selG=h('select',{}, ...Object.entries(GRUPOS).map(([v,r])=>h('option',{value:v},r)));
+    const selG=h('select',{}, ...Object.entries(GRUPOS).sort((a,b)=>a[1].localeCompare(b[1],'pt')).map(([v,r])=>h('option',{value:v},r)));
     const selE=h('select',{}, ...Object.entries(EQUIPS).map(([v,r])=>h('option',{value:v},r)));
     const selT=h('select',{}, h('option',{value:'peso_reps'},'Peso × repetições'), h('option',{value:'reps'},'Só repetições'), h('option',{value:'tempo'},'Tempo (segundos)'));
     const est={g:null, gs:{}, e:null, t:'peso_reps', _ab:null};
@@ -1179,7 +1189,7 @@ const PICKER = {
       secoes.push(linhaSel('Grupo muscular primário', est.g? (GRUPOS[est.g]||est.g):'', 'g'));
       if(est._ab==='g'){
         const box=h('div',{style:'max-height:34vh;overflow-y:auto'});
-        Object.entries(GRUPOS).forEach(([v,r])=>box.append(h('button',{class:'menu-op',style:'gap:12px',onclick:()=>{est.g=v; delete est.gs[v]; est._ab=null; render();}},
+        Object.entries(GRUPOS).sort((a,b)=>a[1].localeCompare(b[1],'pt')).forEach(([v,r])=>box.append(h('button',{class:'menu-op',style:'gap:12px',onclick:()=>{est.g=v; delete est.gs[v]; est._ab=null; render();}},
           h('span',{style:'flex-shrink:0'}, corpoSVG(new Map([[v,1]]),50)), r,
           est.g===v? h('span',{class:'esp',style:'text-align:right;color:var(--brand2);font-weight:800'},'✓'):null)));
         secoes.push(box);
@@ -1188,7 +1198,7 @@ const PICKER = {
       secoes.push(linhaSel('Outros músculos (opcional)', gsArr.length? gsArr.map(g2=>GRUPOS[g2]||g2).join(', '):'', 'gs'));
       if(est._ab==='gs'){
         const box=h('div',{style:'max-height:34vh;overflow-y:auto'});
-        Object.entries(GRUPOS).forEach(([v,r])=>{ if(v===est.g) return;
+        Object.entries(GRUPOS).sort((a,b)=>a[1].localeCompare(b[1],'pt')).forEach(([v,r])=>{ if(v===est.g) return;
           box.append(h('button',{class:'menu-op',style:'gap:12px',onclick:()=>{ if(est.gs[v]) delete est.gs[v]; else est.gs[v]=1; render(); }},
             h('span',{style:'flex-shrink:0'}, corpoSVG(new Map([[v,1]]),50)), r,
             h('span',{class:'esp',style:'text-align:right;color:var(--brand2);font-weight:800'}, est.gs[v]?'✓':'')));
@@ -1963,6 +1973,9 @@ TELAS.config = function(){
         this.querySelector('.chip').classList.toggle('on',liga);
       }},
         'Rotinas públicas no perfil', h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg.rotPub!==false?' on':'')},S.cfg.rotPub!==false?'Ligado':'Desligado')),
+      h('button',{class:'menu-op',onclick:()=>{ S.cfg.push? PUSH.desativa() : PUSH.ativa(); }},
+        'Notificações push', h('span',{class:'esp'}),
+        h('span',{class:'chip'+(S.cfg.push?' on':'')}, S.cfg.push?'Ligado':'Desligado')),
       h('button',{class:'menu-op',onclick:async function(){
         this.disabled=true; UI.toast('Sincronizando…');
         try{ await NET.despacha(); await FEED.carrega(); }catch(e){}
@@ -3260,6 +3273,62 @@ function pubRotina(r){
       return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t,
         ser:(e.series||[]).length||3, reps:(e.series&&e.series[0]&&e.series[0].reps)||'10', descanso:e.descanso||90 }; }) };
 }
+function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+const PUSH = {
+  _m:null,
+  suportado(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },
+  instalado(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; },
+  iphone(){ return /iPhone|iPad|iPod/.test(navigator.userAgent); },
+  async sdk(){
+    if(PUSH._m) return PUSH._m;
+    await carregaScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+    await carregaScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+    if(!firebase.apps.length) firebase.initializeApp(FB.cfg);
+    PUSH._m = firebase.messaging();
+    return PUSH._m;
+  },
+  async ativa(){
+    if(!S.auth || !S.perfil?.user){ UI.toast('Crie sua conta com e-mail primeiro'); return; }
+    if(!PUSH.suportado()){ UI.toast(PUSH.iphone()? 'Atualize o iOS (16.4+) e abra pelo app instalado' : 'Este navegador não suporta notificações'); return; }
+    if(PUSH.iphone() && !PUSH.instalado()){
+      UI.folha('Quase lá',[h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.7'},
+        'No iPhone, as notificações só funcionam pelo app instalado. Toque em Compartilhar no Safari → "Adicionar à Tela de Início", abra o ForgeX por lá e ative nas configurações.')]);
+      return;
+    }
+    try{
+      const perm = await Notification.requestPermission();
+      if(perm!=='granted'){ UI.toast('Permissão de notificação negada'); return; }
+      const m = await PUSH.sdk();
+      const reg = await navigator.serviceWorker.ready;
+      const tok = await m.getToken({vapidKey:FB.vapid, serviceWorkerRegistration:reg});
+      if(!tok){ UI.toast('Não consegui registrar. Tenta de novo em instantes.'); return; }
+      S.cfg.push=1; S.cfg.pushTok=tok; salva('cfg');
+      await NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, {ts:agora(), ua:(navigator.userAgent||'').slice(0,80)});
+      UI.toast('Notificações ativadas ✓', true); UI.refaz();
+    }catch(e){ if(DEBUG)console.log('push', e); UI.toast('Falhou ao ativar. Tenta de novo.'); }
+  },
+  async desativa(){
+    const tok=S.cfg.pushTok;
+    try{ if(tok && S.auth) await NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, null); }catch(e){}
+    try{ const m=await PUSH.sdk(); await m.deleteToken(); }catch(e){}
+    S.cfg.push=0; delete S.cfg.pushTok; salva('cfg');
+    UI.toast('Notificações desativadas', true); UI.refaz();
+  },
+  async renova(){
+    if(!S.cfg.push || !S.auth || !PUSH.suportado()) return;
+    if(Notification.permission!=='granted'){ S.cfg.push=0; delete S.cfg.pushTok; salva('cfg'); return; }
+    try{
+      const m=await PUSH.sdk();
+      const reg=await navigator.serviceWorker.ready;
+      const tok=await m.getToken({vapidKey:FB.vapid, serviceWorkerRegistration:reg});
+      if(tok && tok!==S.cfg.pushTok){
+        if(S.cfg.pushTok) NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+S.cfg.pushTok, null).catch(()=>{});
+        S.cfg.pushTok=tok; salva('cfg');
+        NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, {ts:agora(), ua:(navigator.userAgent||'').slice(0,80)});
+      }
+    }catch(e){}
+  }
+};
 function limpaCustomsDuplicados(){
   if(S.cfg.customLimpa) return;
   if(!BIB.pronta){ setTimeout(limpaCustomsDuplicados, 1200); return; }
@@ -3454,6 +3523,7 @@ const CONTA = {
     UI.folha('Sair da conta?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},'Os dados continuam salvos na conta e voltam quando você entrar de novo. Este aparelho recomeça zerado.'),
       h('button',{class:'btn btn-err',onclick:()=>{
+        if(S.cfg.pushTok && S.auth){ try{ fetch(FB.db+'/usuarios/'+S.auth.uid+'/fcm/'+S.cfg.pushTok+'.json?auth='+(S.auth.tk||''),{method:'DELETE'}); }catch(e){} }
         Object.keys(localStorage).filter(k=>k.startsWith('tg_')).forEach(k=>localStorage.removeItem(k));
         location.reload();
       }},'Sair e limpar este aparelho')]);
@@ -3826,7 +3896,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); setTimeout(()=>PUSH.renova(), 2500); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

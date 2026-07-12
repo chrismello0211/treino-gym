@@ -3,7 +3,7 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v6.6', GCACHE='tg-gifs-v1';
+const CACHE='tg-v6.7', GCACHE='tg-gifs-v1';
 const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
 
 self.addEventListener('install',e=>{ self.skipWaiting();
@@ -43,13 +43,18 @@ self.addEventListener('push', e=>{
   let d={}; try{ d=e.data.json(); }catch(_){}
   const dd=(d&&d.data)||d||{};
   const title=dd.title||'ForgeX';
-  e.waitUntil(self.registration.showNotification(title,{
-    body: dd.body||'',
-    icon:'icon-192.png',
-    badge:'icon-192.png',
-    tag: dd.tipo? (dd.tipo+':'+(dd.tid||dd.quem||'')) : undefined,
-    data:{ url: dd.url||'./' }
-  }));
+  e.waitUntil((async()=>{
+    await self.registration.showNotification(title,{
+      body: dd.body||'',
+      icon:'icon-192.png',
+      badge:'icon-192.png',
+      tag: dd.tipo? (dd.tipo+':'+(dd.tid||dd.quem||'')) : undefined,
+      data:{ url: dd.url||'./' }
+    });
+    // avisa janelas abertas (app em primeiro plano)
+    const cs=await clients.matchAll({type:'window', includeUncontrolled:true});
+    cs.forEach(c=>c.postMessage({tipo:'push-fg', title, body:dd.body||''}));
+  })());
 });
 self.addEventListener('notificationclick', e=>{
   e.notification.close();

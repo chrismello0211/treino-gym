@@ -351,7 +351,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='5.7';
+const APP_VER='5.9';
 
 /*CORE-START*/
 const CORE = {
@@ -845,6 +845,7 @@ const BIB = {
       out.push([pontuaBusca(x._nn||'', nq, usos[x.id]||0), x]);
     });
     if(nq) out.sort((a,b)=>b[0]-a[0]);
+    else out.sort((a,b)=> (a[1]._nn||'') < (b[1]._nn||'') ? -1 : 1);
     return out.map(p=>p[1]);
   }
 };
@@ -880,7 +881,13 @@ function dataLonga(ts){ const s=new Date(ts).toLocaleDateString('pt-BR',{weekday
 function thumbEl(exId, tam){
   const xf=BIB.porId[exId];
   if(xf && xf.foto) return h('img',{class:'thumb', src:xf.foto, alt:'', loading:'lazy'});
-  const src = BIB.gif(exId);
+  let gifId = exId;
+  if(xf && xf.custom){
+    const nn = xf._nn || BIB.norm(xf.n);
+    const eq = BIB.lista.find(q=>!q.custom && (q._nn===nn || (q._nn && q._nn.indexOf(nn+' (')===0)));
+    if(eq) gifId = eq.id;
+  }
+  const src = BIB.gif(gifId);
   if(src) return h('img',{class:'thumb', src, loading:'lazy', alt:'', onerror:function(){
     if(!this._r){ this._r=1; const s0=this.src.split('?')[0]; setTimeout(()=>{ this.src=s0+'?r='+Date.now(); }, 900); }
     else this.replaceWith(thumbIni(exId));
@@ -1099,7 +1106,7 @@ const PICKER = {
           sug.forEach(x=>alvo.appendChild(PICKER.linha(x)));
         }
       }
-      const rec = PICKER.recentes().filter(id=>BIB.porId[id]);
+      const rec = PICKER.recentes().filter(id=>BIB.porId[id] && !BIB.porId[id].oc);
       if(rec.length){
         alvo.appendChild(h('div',{class:'secao',style:PICKER.sug?'':'margin-top:4px'},'Recentes'));
         rec.slice(0,6).forEach(id=>alvo.appendChild(PICKER.linha(BIB.porId[id])));
@@ -1754,6 +1761,7 @@ TELAS.treinoDet = function({id}){
 /* ---------- DETALHE DO EXERCÍCIO ---------- */
 TELAS.exercicio = function({id}){
   const x=BIB.ex(id);
+  const podeFoto = !!(x.custom && S.custom[id]);
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:18px'},x.n),
     h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>{
       UI.folha(x.n,[
@@ -1770,6 +1778,31 @@ TELAS.exercicio = function({id}){
         }},'Zerar recordes deste exercício')]);
     }},'⋯'));
   const m=$('#main'); m.innerHTML='';
+  if(podeFoto) m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:()=>{
+    const inp=h('input',{type:'file',accept:'image/*',style:'display:none'});
+    inp.onchange=async()=>{
+      const f=inp.files&&inp.files[0]; if(!f){ inp.remove(); return; }
+      try{
+        let b64=await IMG.comprime(f, 256, 0.75);
+        if(b64.length>70000) b64=await IMG.comprime(f, 192, 0.68);
+        S.custom[id].foto=b64; S.custom[id].atualizado=agora();
+        salva('custom'); NET.agenda('custom/'+id, S.custom[id]);
+        UI.refaz(); UI.toast('Foto do exercício atualizada ✓', true);
+      }catch(e){ UI.toast('Não consegui ler a imagem'); }
+      inp.remove();
+    };
+    document.body.appendChild(inp); inp.click();
+  }}, (x.foto?'Alterar':'Adicionar')+' foto do exercício', h('span',{class:'esp'}), h('span',{style:'font-size:16px'},'📷')));
+  if(podeFoto) m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:function(){
+    const c=S.custom[id];
+    if(c.oc) delete c.oc; else c.oc=1;
+    c.atualizado=agora();
+    salva('custom'); NET.agenda('custom/'+id, c); BIB.indexa();
+    UI.toast(c.oc? 'Arquivado: sai da busca, histórico preservado ✓' : 'Exercício restaurado ✓', true);
+    UI.refaz();
+  }}, (S.custom[id].oc? 'Restaurar exercício' : 'Arquivar exercício'),
+     h('span',{class:'esp'}),
+     h('span',{class:'f12 mut'}, S.custom[id].oc? 'fora da busca' : 'tira da busca')));
   const src=BIB.gif(id);
   if(src) m.appendChild(h('img',{class:'ex-hero',src,alt:x.n}));
   m.appendChild(h('div',{style:'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px'},
@@ -3227,6 +3260,19 @@ function pubRotina(r){
       return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t,
         ser:(e.series||[]).length||3, reps:(e.series&&e.series[0]&&e.series[0].reps)||'10', descanso:e.descanso||90 }; }) };
 }
+function limpaCustomsDuplicados(){
+  if(S.cfg.customLimpa) return;
+  if(!BIB.pronta){ setTimeout(limpaCustomsDuplicados, 1200); return; }
+  let n=0;
+  Object.values(S.custom).forEach(c=>{
+    if(!c || c.oc) return;
+    const nn = BIB.norm(c.n||'');
+    const eq = BIB.lista.find(q=>!q.custom && !q.oc && (q._nn===nn || (q._nn && q._nn.indexOf(nn+' (')===0)));
+    if(eq){ c.oc=1; c.atualizado=agora(); NET.agenda('custom/'+c.id, c); n++; }
+  });
+  if(n){ salva('custom'); BIB.indexa(); if(['inicio','treino'].includes(UI.telaAtual)) UI.refaz(); }
+  S.cfg.customLimpa=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+}
 async function hidrataSocial(){
   if(!S.auth) return;
   try{
@@ -3780,7 +3826,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

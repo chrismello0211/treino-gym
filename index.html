@@ -356,7 +356,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='6.3';
+const APP_VER='6.4';
 
 /*CORE-START*/
 const CORE = {
@@ -2106,6 +2106,8 @@ TELAS.config = function(){
         ts.forEach(t=>NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)));
         UI.toast(ts.length+' treinos enviados para o feed', true);
       }},'Enviar histórico para o feed'),
+      (S.perfil.user==='chris_mello')? h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
+        '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')) : null,
       h('button',{class:'btn',onclick:CONTA.sair},'Sair da conta'));
   } else {
     cardConta.append(
@@ -3397,6 +3399,27 @@ function pubRotina(r){
   vv.addEventListener('resize', aj); vv.addEventListener('scroll', aj); aj();
 })();
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+const ADMIN = {
+  broadcast(){
+    const inT=h('input',{value:'Tem novidade no ar 🔥',maxlength:'60'});
+    const inB=h('textarea',{rows:'3',maxlength:'160',style:'resize:none'},'Perfil novo, gráficos, foto de progresso e muito mais. Entra pra ver!');
+    UI.folha('Enviar aviso para todos',[
+      h('div',{class:'f13 mut',style:'margin-bottom:10px;line-height:1.6'},'Chega em quem ativou notificações. Vai para todos os usuários do app.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Título'), inT,
+      h('div',{style:'height:10px'}),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Mensagem'), inB,
+      h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:async function(){
+        const title=(inT.value||'').trim(), body=(inB.value||'').trim();
+        if(!title||!body){ UI.toast('Preencha título e mensagem'); return; }
+        this.disabled=true; this.textContent='Enviando…';
+        try{
+          await NET.putD('/broadcast/'+uid(), {title, body, de:S.perfil.user, ts:agora()});
+          UI.fechaFolha(); UI.toast('Aviso enviado a todos ✓', true);
+        }catch(e){ this.disabled=false; this.textContent='Enviar agora'; UI.toast('Falhou. Tenta de novo.'); }
+      }},'Enviar agora')]);
+  }
+};
 const PUSH = {
   _m:null,
   suportado(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },

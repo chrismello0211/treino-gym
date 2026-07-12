@@ -356,7 +356,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='6.5';
+const APP_VER='6.6';
 
 /*CORE-START*/
 const CORE = {
@@ -2108,9 +2108,11 @@ TELAS.config = function(){
       }},'Enviar histórico para o feed'),
       h('button',{class:'menu-op',onclick:()=>RESTAURA.folha()},
         '☁️ Restaurar meus dados na nuvem', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'reenviar')),
-      (S.perfil.user==='chris_mello')? h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
-        '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')) : null,
       h('button',{class:'btn',onclick:CONTA.sair},'Sair da conta'));
+  if(S.perfil.user==='chris_mello') cardConta.insertBefore(
+    h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
+      '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')),
+    cardConta.lastChild);
   } else {
     cardConta.append(
       h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:10px'},'Sua conta anônima vive só neste aparelho. Com e-mail, você entra de qualquer lugar, não perde nada se trocar de celular e libera o feed com amigos.'),

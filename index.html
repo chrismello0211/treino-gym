@@ -277,6 +277,8 @@ body.claro{
 .fx-logo{display:flex;align-items:center;gap:9px;justify-content:center}
 .fx-logo svg{width:30px;height:30px;flex-shrink:0}
 .fx-hero-ray{filter:drop-shadow(0 0 18px rgba(255,90,0,.55))}
+body.kb .folha{transform:translateY(calc(-1 * var(--kb,0px)))!important;transition:transform .12s ease-out}
+body.kb .folha .folha-corpo{max-height:38vh}
 </style>
 </head>
 <body>
@@ -351,7 +353,7 @@ body.claro{
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='6.1';
+const APP_VER='6.2';
 
 /*CORE-START*/
 const CORE = {
@@ -1037,6 +1039,32 @@ function grafBarras(canvas, dados, formata){
   });
   c.fillStyle=T.txt; c.textAlign='left'; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif';
   c.fillText(formata?formata(max):String(max), 4, 14);
+  canvas._g={x0,bw,gap,dados,formata};
+  canvas.style.cursor='pointer';
+  canvas.onclick=ev=>{
+    const g=canvas._g; if(!g) return;
+    const r=canvas.getBoundingClientRect();
+    const i=Math.floor(((ev.clientX-r.left)-g.x0)/(g.bw+g.gap));
+    const d=g.dados[i]; if(i<0||!d) return;
+    const lbl=d.rotFull||d.rot||'';
+    UI.toast((lbl?lbl+': ':'')+(g.formata?g.formata(d.v):String(d.v)), true);
+  };
+}
+function grafLinhaClicavel(cv, pontos, formata){
+  grafLinhaClicavel(cv, pontos, formata);
+  const W=cv.clientWidth||320, pad=18;
+  cv.style.cursor='pointer';
+  cv.onclick=ev=>{
+    if(!pontos.length) return;
+    const r=cv.getBoundingClientRect();
+    const x=ev.clientX-r.left;
+    const X=i=>pad+(W-pad*2)*(pontos.length===1?0.5:i/(pontos.length-1));
+    let bi=-1, bd=1e9;
+    pontos.forEach((p,i)=>{ const d=Math.abs(X(i)-x); if(d<bd){bd=d; bi=i;} });
+    if(bi<0||bd>28) return;
+    const p=pontos[bi];
+    UI.toast((p.rot?p.rot+': ':'')+(formata?formata(p.v):String(p.v)), true);
+  };
 }
 function grafLinha(canvas, pontos, formata){
   const dpr=window.devicePixelRatio||1, W=canvas.clientWidth||320, H=canvas.clientHeight||170;
@@ -1875,17 +1903,19 @@ TELAS.perfil = function(){
   const horasSemana=nestaSemana.reduce((a,t)=>a+(t.fim-t.inicio)/3600e3,0);
 
   m.appendChild(h('div',{class:'card'},
-    h('div',{class:'linha'},
+    h('div',{class:'linha',style:'gap:14px'},
       avatarEl(S.perfil?.foto, S.perfil?.nome, 60, '18px'),
-      h('div',{class:'esp'},
+      h('div',{class:'esp',style:'min-width:0'},
         h('div',{class:'b800 f20'},S.perfil?.nome||'Atleta'),
-        h('div',{class:'f13 mut'},ts.length+' treinamentos · ',
-          h('span',{id:'pf-segrs',style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguidores', S.auth&&S.auth.uid)},'· seguidores'),' · ',
-          h('span',{style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguindo', S.auth&&S.auth.uid)},Object.keys(S.social.seguindo||{}).length+' seguindo')))),
+        h('div',{class:'f12',style:'color:var(--tx2);margin-top:2px'},ts.length+' treinamentos · ',
+          h('span',{id:'pf-segrs',style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguidores', S.auth&&S.auth.uid)},'… seguidores'),' · ',
+          h('span',{style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguindo', S.auth&&S.auth.uid)},Object.keys(S.social.seguindo||{}).length+' seguindo')),
+        S.perfil?.bio? h('div',{class:'f13',style:'margin-top:8px;line-height:1.5;white-space:pre-wrap'},S.perfil.bio):null,
+        S.perfil?.link? h('a',{href:S.perfil.link,target:'_blank',rel:'noopener',class:'f13',style:'color:var(--brand2);font-weight:700;display:inline-block;margin-top:4px;text-decoration:none'},S.perfil.link.replace(/^https?:\/\//,'')):null)),
     h('div',{class:'stats3',style:'margin-top:14px'},
-      h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v'},nestaSemana.length+'x')),
-      h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},ts.reduce((a,t)=>a+(t.recordes||0),0)+' 🏅')))));
+      h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v',style:'font-size:16px'},nestaSemana.length+'x')),
+      h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v',style:'font-size:16px'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:16px'},ts.reduce((a,t)=>a+(t.recordes||0),0)+' 🏅')))));
 
   // gráfico semanal com período e métrica
   const card=h('div',{class:'card'});
@@ -1897,7 +1927,7 @@ TELAS.perfil = function(){
     const dados=CORE.agregaSemanas(Object.fromEntries(ts.map(t=>[t.id,t])), semanas, agora());
     const passo=semanas>40?8:semanas>20?4:2;
     const conf={dur:{f:d=>d.dur/3600, fmt:v=>(Math.round(v*10)/10)+'h'}, vol:{f:d=>d.vol, fmt:v=>CORE.fmtKg(v)+'kg'}, ser:{f:d=>d.ser, fmt:v=>String(Math.round(v))}}[metrica];
-    grafBarras(cv, dados.map((d,i)=>({v:conf.f(d), rot:(i%passo===0)?new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):''})), conf.fmt);
+    grafBarras(cv, dados.map((d,i)=>{ const rf=new Date(d.w).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}); return {v:conf.f(d), rot:(i%passo===0)?rf:'', rotFull:'Semana de '+rf}; }), conf.fmt);
   };
   [['3 meses',13],['6 meses',26],['Ano',52]].forEach(([rot,n])=>{
     per.appendChild(h('button',{class:'chip'+(n===semanas?' on':''),onclick:function(){ semanas=n; per.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); this.classList.add('on'); desenha(); }},rot));
@@ -1912,11 +1942,25 @@ TELAS.perfil = function(){
   if(S.auth) NET.get('/seguidores/'+S.auth.uid).then(v=>{ const el=$('#pf-segrs'); if(el) el.textContent=Object.keys(v||{}).length+' seguidores'; });
   m.appendChild(h('div',{class:'secao'},'Painel'));
   m.appendChild(h('div',{class:'grade2'},
-    h('button',{class:'btn',onclick:()=>UI.vai('meusTreinos')},'Treinamentos'),
     h('button',{class:'btn',onclick:()=>UI.vai('stats')},'Estatísticas'),
     h('button',{class:'btn',onclick:()=>PICKER.abre(null,'consulta')},'Exercícios'),
     h('button',{class:'btn',onclick:()=>UI.vai('medidas')},'Medições'),
     h('button',{class:'btn',onclick:()=>UI.vai('calendario')},'Calendário')));
+
+  m.appendChild(h('div',{class:'secao'},'Treinamentos'));
+  const meus=ts.slice().sort((a,b)=>b.inicio-a.inicio);
+  if(!meus.length) m.appendChild(h('div',{class:'vazio'},'Nenhum treino registrado ainda.'));
+  else{
+    const alvoLs=h('div',{}); m.appendChild(alvoLs);
+    let mostrando=0;
+    const maisBt=h('button',{class:'btn',style:'margin-top:2px'},'Mostrar mais');
+    const poe=n=>{
+      meus.slice(mostrando, mostrando+n).forEach(t=>alvoLs.appendChild(cartaoFeed({meu:true, dono:S.auth&&S.auth.uid, t, id:t.id, inicio:t.inicio})));
+      mostrando+=n; if(mostrando>=meus.length) maisBt.remove();
+    };
+    maisBt.onclick=()=>poe(10);
+    poe(10); if(meus.length>10) m.appendChild(maisBt);
+  }
 };
 
 /* ---------- CONFIG ---------- */
@@ -1932,7 +1976,7 @@ TELAS.config = function(){
       h('button',{class:'chip'+(S.cfg.tema==='claro'?' on':''),onclick:()=>{ S.cfg.tema='claro'; salvaCfg(); aplicaTema('claro'); UI.refaz(); }},'Claro')),
     h('div',{class:'f12 mut2',style:'margin-top:8px'},'O escuro é o padrão do app.')));
   const salvaPerfil=()=>{ S.perfil.atualizado=agora(); salva('perfil'); NET.agenda('app/perfil',S.perfil);
-    if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, atualizado:agora()}); };
+    if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); };
 
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'linha',style:'margin-bottom:12px'},
@@ -1951,7 +1995,15 @@ TELAS.config = function(){
           delete S.perfil.foto; salvaPerfil(); UI.refaz();
         }},'Remover'):null)),
     h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Seu nome'),
-    h('input',{value:S.perfil?.nome||'',oninput:e=>{ if(!S.perfil) S.perfil={criado:agora()}; S.perfil.nome=e.target.value; },onblur:()=>{ if(S.perfil?.nome) salvaPerfil(); }})));
+    h('input',{value:S.perfil?.nome||'',oninput:e=>{ if(!S.perfil) S.perfil={criado:agora()}; S.perfil.nome=e.target.value; },onblur:()=>{ if(S.perfil?.nome) salvaPerfil(); }}),
+    h('div',{class:'f13 mut',style:'margin:12px 0 6px'},'Bio (opcional)'),
+    h('textarea',{rows:'2',maxlength:'150',style:'resize:none',
+      oninput:e=>{ if(!S.perfil) S.perfil={criado:agora()}; S.perfil.bio=e.target.value.slice(0,150); },
+      onblur:()=>salvaPerfil()}, S.perfil?.bio||''),
+    h('div',{class:'f13 mut',style:'margin:12px 0 6px'},'Link (opcional)'),
+    h('input',{value:S.perfil?.link||'',placeholder:'instagram.com/voce',autocapitalize:'off',
+      oninput:e=>{ if(!S.perfil) S.perfil={criado:agora()}; S.perfil.link=e.target.value; },
+      onblur:()=>{ let v=(S.perfil?.link||'').trim(); if(v && !/^https?:\/\//i.test(v)) v='https://'+v; S.perfil.link=v.slice(0,120); salvaPerfil(); UI.refaz(); }})));
 
   const cardConta=h('div',{class:'card'}, h('div',{class:'secao',style:'margin:0 0 8px'},'Conta'));
   if(S.perfil?.email){
@@ -2015,9 +2067,9 @@ TELAS.config = function(){
   m.appendChild(h('div',{class:'card'}, sw('Som do timer','som'), sw('Vibração','vibra')));
 
   m.appendChild(h('div',{class:'card'},
-    h('div',{class:'secao',style:'margin:0 0 8px'},'Importar do Hevy'),
+    h('div',{class:'secao',style:'margin:0 0 8px'},'Importar treinos'),
     h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:10px'},
-      'No Hevy: Perfil \u25b8 Configura\u00e7\u00f5es \u25b8 Exportar dados. Depois selecione os arquivos aqui. Nada \u00e9 duplicado se importar de novo.'),
+      'No seu app de treino: Perfil \u25b8 Configura\u00e7\u00f5es \u25b8 Exportar dados. Depois selecione os arquivos aqui. Nada \u00e9 duplicado se importar de novo.'),
     h('button',{class:'btn',style:'margin-bottom:8px',onclick:()=>HEVYIMP.pede('treinos')},'Importar treinos (workout_data.csv)'),
     h('button',{class:'btn',onclick:()=>HEVYIMP.pede('medidas')},'Importar medidas (measurement_data.csv)')));
 
@@ -2640,7 +2692,9 @@ TELAS.perfilAmigo = function({uid:alvo}){
         avatarEl(p.foto, p.nome||p.user, 60),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b800',style:'font-size:18px'},p.nome||'Atleta'),
-          p.user? h('div',{class:'f13 mut2'},'@'+p.user):null),
+          p.user? h('div',{class:'f13 mut2'},'@'+p.user):null,
+          p.bio? h('div',{class:'f13',style:'margin-top:6px;line-height:1.5;white-space:pre-wrap'},String(p.bio).slice(0,150)):null,
+          (p.link && /^https:\/\//.test(p.link))? h('a',{href:p.link,target:'_blank',rel:'noopener',class:'f13',style:'color:var(--brand2);font-weight:700;display:inline-block;margin-top:4px;text-decoration:none'},String(p.link).replace(/^https?:\/\//,'').slice(0,40)):null),
         h('button',{class:'btn btn-mini'+(sigo?'':' btn-p'),style:'width:auto;padding:9px 14px',onclick:async function(){
           this.disabled=true;
           try{
@@ -3273,6 +3327,16 @@ function pubRotina(r){
       return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t,
         ser:(e.series||[]).length||3, reps:(e.series&&e.series[0]&&e.series[0].reps)||'10', descanso:e.descanso||90 }; }) };
 }
+(function(){
+  if(!window.visualViewport) return;
+  const vv=window.visualViewport;
+  const aj=()=>{
+    const kb=Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--kb', kb+'px');
+    document.body.classList.toggle('kb', kb>60);
+  };
+  vv.addEventListener('resize', aj); vv.addEventListener('scroll', aj); aj();
+})();
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 const PUSH = {
   _m:null,
@@ -3480,7 +3544,7 @@ const CONTA = {
           if(dono && dono!==S.auth.uid) throw new Error('Esse nome de usuário já está em uso.');
           await NET.criarConta(email, senha);
           await NET.putD('/usernames/'+u, S.auth.uid);
-          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil?.nome||'Atleta', user:u, foto:S.perfil?.foto||null, atualizado:agora()});
+          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil?.nome||'Atleta', user:u, foto:S.perfil?.foto||null, bio:(S.perfil?.bio||'')||null, link:S.perfil?.link||null, atualizado:agora()});
           if(!S.perfil) S.perfil={criado:agora(), nome:'Atleta'};
           S.perfil.email=email; S.perfil.user=u; S.perfil.atualizado=agora();
           salva('perfil'); NET.agenda('app/perfil',S.perfil);
@@ -3560,7 +3624,7 @@ const USERNAME = {
           await NET.putD('/usernames/'+u, S.auth.uid);
           if(!S.perfil) S.perfil={criado:agora()};
           S.perfil.user=u; S.perfil.atualizado=agora(); salva('perfil');
-          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:u, foto:S.perfil.foto||null, atualizado:agora()});
+          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:u, foto:S.perfil.foto||null, bio:(S.perfil.bio||'')||null, link:S.perfil.link||null, atualizado:agora()});
           NET.agenda('app/perfil', S.perfil);
           UI.fechaFolha(); UI.refaz(); UI.toast('Nome de usuário definido: @'+u, true);
           if(aposDefinir) aposDefinir();
@@ -3809,11 +3873,11 @@ const HEVYIMP = {
   },
   previewTreinos(texto){
     const rows=IMP.parseCSV(texto);
-    if(!rows.length || !('exercise_title' in rows[0])){ UI.toast('Esse não parece ser o workout_data.csv do Hevy'); return; }
+    if(!rows.length || !('exercise_title' in rows[0])){ UI.toast('Esse não parece ser o workout_data.csv exportado'); return; }
     const criados=[];
     const treinos=IMP.montaTreinos(rows, t=>HEVYIMP.resolve(t, criados));
     const novosT=treinos.filter(t=>!S.treinos[t.id]);
-    UI.folha('Importar do Hevy',[
+    UI.folha('Importar treinos',[
       h('div',{class:'f14',style:'line-height:1.8;padding:2px 2px 12px'},
         h('div',{},h('span',{class:'b800'},String(treinos.length)),' treinos no arquivo'),
         h('div',{},h('span',{class:'b800',style:'color:var(--ok)'},String(novosT.length)),' novos serão importados'),
@@ -3837,7 +3901,7 @@ const HEVYIMP = {
   },
   previewMedidas(texto){
     const rows=IMP.parseCSV(texto);
-    if(!rows.length || !('date' in rows[0])){ UI.toast('Esse não parece ser o measurement_data.csv do Hevy'); return; }
+    if(!rows.length || !('date' in rows[0])){ UI.toast('Esse não parece ser o measurement_data.csv exportado'); return; }
     const meds=IMP.montaMedidas(rows);
     const novas=meds.filter(x=>!S.medidas[x.id]);
     UI.folha('Importar medidas',[

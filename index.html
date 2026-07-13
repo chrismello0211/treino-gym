@@ -101,6 +101,7 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
 .srow{border-radius:11px;padding:5px 4px;margin:2px -4px}
 .srow.feita{background:var(--okbg)}
 .srow input{padding:9px 4px;background:var(--surf2)}
+.srow input.sugerido{color:var(--tx3);opacity:.55;font-weight:600}
 .srow.feita input{background:rgba(255,255,255,.06);border-color:transparent}
 .stipo{font-weight:800;font-size:15px;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--surf2)}
 .stipo.W{color:var(--warn)} .stipo.D{color:var(--azul)} .stipo.F{color:var(--err)} .stipo.N{color:var(--tx)}
@@ -357,7 +358,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='6.9';
+const APP_VER='7.0';
 
 /*CORE-START*/
 const CORE = {
@@ -1540,6 +1541,7 @@ const ATIVO = {
       if(x.t==='peso_reps' && pcEx && !s.reps){ UI.toast('Preencha as repetições antes de concluir'); return; }
       if(x.t!=='peso_reps' && !s.reps){ UI.toast('Preencha o valor antes de concluir'); return; }
       if(pcEx){ const pc=pesoCorporalAtual(); if(pc>0) s.pc=pc; if(!s.kg) s.kg=''; }
+      delete s._sugKg; delete s._sugReps;
       s.ok=true; SOM.check(); VIB.v(12);
       const estreia = !S.prs[e.exId];
       const prs=CORE.detectaPR(S.prs, e.exId, {...s});
@@ -1616,7 +1618,7 @@ const ATIVO = {
   },
   concluir(){
     const t=S.ativo;
-    const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; delete c._auto; return c; }) })).filter(e=>e.series.length);
+    const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; delete c._auto; delete c._sugKg; delete c._sugReps; return c; }) })).filter(e=>e.series.length);
     if(!feitos.length){ UI.toast('Nenhuma série concluída ainda'); return; }
     let foto=null;
     const fotoArea=h('div',{class:'linha',style:'padding:0 2px 16px;gap:12px'});
@@ -1734,8 +1736,8 @@ TELAS.ativo = function(){
     const ant=ATIVO.serieAnterior(e.exId, si);
     // auto-preencher com o anterior quando a série ainda está em branco (editável, só dar check)
     if(ant && !s.ok && !s._auto){
-      if((s.kg===''||s.kg==null) && ant.kg!=null && ant.kg!=='' && !pcEx) s.kg=ant.kg;
-      if((s.reps===''||s.reps==null) && ant.reps!=null && ant.reps!=='') s.reps=ant.reps;
+      if((s.kg===''||s.kg==null) && ant.kg!=null && ant.kg!=='' && !pcEx){ s.kg=ant.kg; s._sugKg=1; }
+      if((s.reps===''||s.reps==null) && ant.reps!=null && ant.reps!=='' ){ s.reps=ant.reps; s._sugReps=1; }
       s._auto=1;
     }
     const antTxt = ant ? (x.t==='peso_reps' ? CORE.fmtKg(ant.kg)+'kg × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';
@@ -1744,11 +1746,11 @@ TELAS.ativo = function(){
         s.tipo==='N'?String(numerada||1):s.tipo, s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null),
       h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(ant&&!s.ok){ s.kg=ant.kg; s.reps=ant.reps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
-        ? h('input',{type:'number',inputmode:'decimal',value:s.kg,placeholder: pcEx? '+kg' : (ant?String(ant.kg):'kg'),oninput:ev=>{s.kg=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        ? h('input',{type:'number',inputmode:'decimal',value:s.kg,class:(s._sugKg&&!s.ok)?'sugerido':'',placeholder: pcEx? '+kg' : (ant?String(ant.kg):'kg'),oninput:ev=>{s.kg=ev.target.value; if(s._sugKg){delete s._sugKg; ev.target.classList.remove('sugerido');} salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : h('div',{class:'anterior'},'—'),
       cardioMin
-        ? h('input',{type:'text',inputmode:'numeric',value:fmtMin(s.reps),placeholder:ant?fmtMin(ant.reps):'min',oninput:ev=>{s.reps=parseMin(ev.target.value);salva('ativo');ATIVO.pinta();},disabled:s.ok})
-        : h('input',{type:'number',inputmode:'numeric',value:s.reps,placeholder:ant?String(ant.reps):(x.t==='tempo'?'seg':'reps'),oninput:ev=>{s.reps=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok}),
+        ? h('input',{type:'text',inputmode:'numeric',value:fmtMin(s.reps),class:(s._sugReps&&!s.ok)?'sugerido':'',placeholder:ant?fmtMin(ant.reps):'min',oninput:ev=>{s.reps=parseMin(ev.target.value); if(s._sugReps){delete s._sugReps; ev.target.classList.remove('sugerido');} salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        : h('input',{type:'number',inputmode:'numeric',value:s.reps,class:(s._sugReps&&!s.ok)?'sugerido':'',placeholder:ant?String(ant.reps):(x.t==='tempo'?'seg':'reps'),oninput:ev=>{s.reps=ev.target.value; if(s._sugReps){delete s._sugReps; ev.target.classList.remove('sugerido');} salva('ativo');ATIVO.pinta();},disabled:s.ok}),
       h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s,row)}, s.pr?'🏅':(s.ok?'✓':'○')));
     if(s.pr) row.classList.add('feita');
     (function(){

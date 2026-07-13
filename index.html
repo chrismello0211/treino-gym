@@ -103,6 +103,7 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
 .srow input{padding:9px 4px;background:var(--surf2)}
 .srow input.sugerido{color:var(--tx3);opacity:.55;font-weight:600}
 .srow.feita input{background:rgba(255,255,255,.06);border-color:transparent}
+.srow.feita input,.srow.feita input.sugerido{color:var(--tx)!important;opacity:1!important;font-weight:700!important;-webkit-text-fill-color:var(--tx)}
 .stipo{font-weight:800;font-size:15px;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--surf2)}
 .stipo.W{color:var(--warn)} .stipo.D{color:var(--azul)} .stipo.F{color:var(--err)} .stipo.N{color:var(--tx)}
 .scheck{width:38px;height:38px;border-radius:11px;background:var(--surf2);display:flex;align-items:center;justify-content:center;border:1px solid var(--line)}
@@ -358,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.2';
+const APP_VER='7.3';
 
 /*CORE-START*/
 const CORE = {

@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.6';
+const APP_VER='7.7';
 
 /*CORE-START*/
 const CORE = {
@@ -2122,26 +2122,8 @@ TELAS.config = function(){
         'Notificações push', h('span',{class:'esp'}),
         h('span',{class:'chip'+(S.cfg.push?' on':'')}, S.cfg.push?'Ligado':'Desligado')),
       h('button',{class:'menu-op',onclick:async function(){
-        this.disabled=true; UI.toast('Sincronizando…');
-        try{ await NET.despacha(); await FEED.carrega(); }catch(e){}
-        UI.toast(S.fila.length? ('Ainda pendentes: '+S.fila.length+'. Verifique a conexão.') : 'Tudo sincronizado ✓', !S.fila.length);
-        this.disabled=false;
-      }},'Forçar sincronização agora'),
-      h('button',{class:'menu-op',onclick:function(){
-        if(!S.perfil?.user){ UI.toast('Defina seu @usuario primeiro'); return; }
-        const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio).slice(0,40);
-        ts.forEach(t=>NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)));
-        ROTPUB.syncTudo(); NET.despacha();
-        UI.toast('Reenviando '+ts.length+' treinos para o feed ✓', true);
-      }},'Republicar meus treinos no feed'),
-      h('button',{class:'btn',style:'margin:8px 0',onclick:()=>{
-        const ts=Object.values(S.treinos).filter(t=>!t.apagado);
-        if(!ts.length){ UI.toast('Nada para publicar ainda'); return; }
-        ts.forEach(t=>NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)));
-        UI.toast(ts.length+' treinos enviados para o feed', true);
-      }},'Enviar histórico para o feed'),
-      h('button',{class:'menu-op',onclick:()=>RESTAURA.folha()},
-        '☁️ Restaurar meus dados na nuvem', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'reenviar')),
+        await RESTAURA.tudo(this, {silencioso:false});
+      }},'Sincronizar agora', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'enviar tudo')),
       h('button',{class:'btn',onclick:CONTA.sair},'Sair da conta'));
   if(S.perfil.user==='chris_mello') cardConta.insertBefore(
     h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
@@ -3570,11 +3552,13 @@ if('serviceWorker' in navigator){
 }
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 const RESTAURA = {
-  async tudo(btn){
-    if(!S.auth || !S.perfil?.user){ UI.toast('Entre com sua conta e defina o @usuario primeiro'); return; }
-    if(btn){ btn.disabled=true; btn.textContent='Restaurando…'; }
+  async tudo(btn, opts){
+    opts=opts||{};
+    if(!S.auth || !S.perfil?.user){ if(!opts.silencioso) UI.toast('Entre com sua conta e defina o @usuario primeiro'); return; }
+    if(btn){ btn.disabled=true; btn.textContent='Sincronizando…'; }
     let n=0;
     try{
+      await NET.despacha();
       // 1) username -> aponta pro meu uid
       try{ await NET.putD('/usernames/'+S.perfil.user, S.auth.uid); n++; }catch(e){}
       // 2) perfil público
@@ -3601,10 +3585,14 @@ const RESTAURA = {
       }catch(e){}
       // 6) rotinas públicas
       try{ if(S.cfg.rotPub!==false) ROTPUB.syncTudo(); }catch(e){}
-      UI.fechaFolha();
-      UI.toast('Seus dados foram reenviados à nuvem ✓ ('+n+' itens)', true);
-    }catch(e){ UI.toast('Deu erro no meio. Rode de novo com internet estável.'); }
-    if(btn){ btn.disabled=false; btn.textContent='Restaurar agora'; }
+      try{ await FEED.carrega(); }catch(e){}
+      if(!opts.silencioso){
+        if(typeof UI.fechaFolha==='function') UI.fechaFolha();
+        UI.toast(S.fila.length? ('Sincronizado. Pendências: '+S.fila.length) : 'Tudo sincronizado ✓', !S.fila.length);
+      }
+    }catch(e){ if(!opts.silencioso) UI.toast('Deu erro no meio. Rode de novo com internet estável.'); }
+    if(btn){ btn.disabled=false; btn.textContent='Sincronizar agora'; }
+    return n;
   },
   folha(){
     UI.folha('Restaurar meus dados na nuvem',[
@@ -3688,6 +3676,33 @@ const PUSH = {
     }catch(e){}
   }
 };
+async function autocuraNuvem(){
+  // roda em silêncio no boot: detecta perda de dados públicos e republica sem pedir nada ao usuário
+  if(!S.auth || !S.perfil?.user) return;
+  const meusTreinos = Object.values(S.treinos||{}).filter(t=>!t.apagado);
+  if(!meusTreinos.length) return;                 // nada local pra republicar
+  if(S.cfg.autocuraTs && (agora()-S.cfg.autocuraTs) < 6*3600e3) return;  // no máx. 1x a cada 6h
+  try{
+    // checagens baratas na nuvem
+    const [perfilPub, feedPub, unamePub] = await Promise.all([
+      NET.get('/perfis/'+S.auth.uid).catch(()=>null),
+      NET.get('/feed/'+S.auth.uid).catch(()=>null),
+      NET.get('/usernames/'+S.perfil.user).catch(()=>null)
+    ]);
+    const feedVazio = !feedPub || Object.keys(feedPub).length===0;
+    const perfilVazio = !perfilPub || !perfilPub.user;
+    const unameVazio = !unamePub;
+    // se qualquer pilar público sumiu enquanto tenho dados locais -> autocura
+    if(feedVazio || perfilVazio || unameVazio){
+      const n = await RESTAURA.tudo(null, {silencioso:true});
+      S.cfg.autocuraTs = agora(); salva('cfg');
+      if(n>0 && typeof UI!=='undefined' && UI.toast) {
+        // aviso discreto e não-intrusivo (o usuário não precisou fazer nada)
+        setTimeout(()=>UI.toast('Dados sincronizados com a nuvem', true), 400);
+      }
+    }
+  }catch(e){}
+}
 function corrigeTiposCustoms(){
   const LOAD=['anilha','halter','barra','maquina','cabo','kettlebell','smith','polia','barra-w'];
   let n=0;
@@ -4282,7 +4297,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); setTimeout(()=>PUSH.renova(), 2500); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

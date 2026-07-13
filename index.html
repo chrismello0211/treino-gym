@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.4';
+const APP_VER='7.5';
 
 /*CORE-START*/
 const CORE = {
@@ -2241,9 +2241,9 @@ const SHARE = {
     const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
     const c=cv.getContext('2d');
     let temFundoFoto=false;
-    if(o.foto && t.temFoto && S.auth){
+    if(o.foto && t.temFoto && (t._dono || S.auth)){
       try{
-        const b64=await FOTOS.pega(S.auth.uid, t.id);
+        const b64=await FOTOS.pega(t._dono || S.auth.uid, t.id);
         if(b64){ const im=await SHARE._img(b64);
           const r=Math.max(W/im.width, H/im.height), w=im.width*r, h2=im.height*r;
           c.drawImage(im,(W-w)/2,(H-h2)/2,w,h2); temFundoFoto=true;
@@ -2280,7 +2280,7 @@ const SHARE = {
     const stats=[];
     if(o.dur) stats.push(['DURAÇÃO', CORE.fmtDur((t.fim-t.inicio)/1000)]);
     if(o.vol) stats.push(['VOLUME', CORE.fmtKg(t.volume)+' kg']);
-    if(o.ser) stats.push(['SÉRIES', String(CORE.seriesFeitas(t))]);
+    if(o.ser){ const ns = (t.ex&&t.ex.length)? CORE.seriesFeitas(t) : (t.series!=null? t.series : 0); stats.push(['SÉRIES', String(ns)]); }
     if(o.rec && (t.recordes||0)>0) stats.push(['RECORDES', (t.recordes||0)+' 🏅']);
     const duasCol = stats.length>=3;
     const altStats = stats.length? (duasCol? Math.ceil(stats.length/2)*190 : 190) : 0;
@@ -2751,10 +2751,10 @@ function cartaoFeed(i){
     comBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.4 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l2-5.8a8.38 8.38 0 0 1-.9-3.7 8.5 8.5 0 0 1 8.5-8.5 8.38 8.38 0 0 1 8.4 8.5z"/></svg><span>'+(n||'Comentar')+'</span>'; };
   pintaCom();
   const shareBtn=h('button',{class:'heart',onclick:ev=>{ ev.stopPropagation();
-    const txt=t.titulo+' · '+CORE.fmtDur((t.fim-t.inicio)/1000)+' · '+CORE.fmtKg(t.volume)+' kg no ForgeX';
-    const url='https://chrismello0211.github.io/treino-gym/';
-    if(navigator.share) navigator.share({title:'ForgeX', text:txt, url}).catch(()=>{});
-    else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
+    // usa o treino completo quando for meu; senão, monta um resumo compatível com o cartão
+    const full = (i.meu && S.treinos[tid]) ? S.treinos[tid]
+      : { id:tid, titulo:t.titulo, inicio:t.inicio, fim:t.fim, volume:t.volume, recordes:t.recordes||0, temFoto:!!t.temFoto, series:t.series, _dono:dono, ex:[] };
+    SHARE.folha(full);
   }, html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>'});
   card.appendChild(h('div',{class:'feed-acoes'}, heart, comBtn, shareBtn));
   card.appendChild(quem);

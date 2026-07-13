@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.3';
+const APP_VER='7.4';
 
 /*CORE-START*/
 const CORE = {
@@ -1838,6 +1838,7 @@ TELAS.treinoDet = function({id}){
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
     corpoSVG(gruposDoTreino(t), 92))));
+  m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'));
   if(t.temFoto && S.auth) m.appendChild(FOTOS.lazy(S.auth.uid, t.id));
   const divg=gruposDoTreino(t);
   if(divg.size){
@@ -2227,6 +2228,132 @@ function avatarEl(foto, letra, px, radius){
   if(foto) return h('img',{src:foto, class:'avatar', style:extra});
   return h('div',{class:'avatar', style:extra+(px?('font-size:'+Math.round(px*0.38)+'px;'):'')},(letra||'?')[0].toUpperCase());
 }
+const SHARE = {
+  _img(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; }); },
+  _quebra(c, txt, maxW){
+    const palavras=String(txt||'').split(/\s+/); const linhas=[]; let l='';
+    palavras.forEach(p=>{ const t2=l?l+' '+p:p; if(c.measureText(t2).width>maxW && l){ linhas.push(l); l=p; } else l=t2; });
+    if(l) linhas.push(l);
+    return linhas.slice(0,2);
+  },
+  async card(t, o){
+    const W=1080, H=1920;
+    const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+    const c=cv.getContext('2d');
+    let temFundoFoto=false;
+    if(o.foto && t.temFoto && S.auth){
+      try{
+        const b64=await FOTOS.pega(S.auth.uid, t.id);
+        if(b64){ const im=await SHARE._img(b64);
+          const r=Math.max(W/im.width, H/im.height), w=im.width*r, h2=im.height*r;
+          c.drawImage(im,(W-w)/2,(H-h2)/2,w,h2); temFundoFoto=true;
+          let g=c.createLinearGradient(0,0,0,H*0.42); g.addColorStop(0,'rgba(8,9,12,.78)'); g.addColorStop(1,'rgba(8,9,12,0)');
+          c.fillStyle=g; c.fillRect(0,0,W,H*0.42);
+          g=c.createLinearGradient(0,H*0.4,0,H); g.addColorStop(0,'rgba(8,9,12,0)'); g.addColorStop(1,'rgba(8,9,12,.94)');
+          c.fillStyle=g; c.fillRect(0,H*0.4,W,H*0.6);
+        }
+      }catch(e){}
+    }
+    if(!temFundoFoto){
+      let bg=null; try{ bg=await SHARE._img('share-bg.webp'); }catch(e){}
+      if(bg){ const r=Math.max(W/bg.width, H/bg.height); c.drawImage(bg,(W-bg.width*r)/2,(H-bg.height*r)/2,bg.width*r,bg.height*r); }
+      else{
+        const g=c.createLinearGradient(0,0,W,H); g.addColorStop(0,'#15161B'); g.addColorStop(.55,'#0E0F12'); g.addColorStop(1,'#180D06');
+        c.fillStyle=g; c.fillRect(0,0,W,H);
+        const r1=c.createRadialGradient(W*0.88,H*0.92,0,W*0.88,H*0.92,W*0.95);
+        r1.addColorStop(0,'rgba(255,122,46,.30)'); r1.addColorStop(1,'rgba(255,122,46,0)');
+        c.fillStyle=r1; c.fillRect(0,0,W,H);
+        const r2=c.createRadialGradient(W*0.08,H*0.10,0,W*0.08,H*0.10,W*0.75);
+        r2.addColorStop(0,'rgba(255,122,46,.13)'); r2.addColorStop(1,'rgba(255,122,46,0)');
+        c.fillStyle=r2; c.fillRect(0,0,W,H);
+      }
+    }
+    // wordmark no topo
+    try{
+      const lw=await SHARE._img('logo-word-claro.png');
+      const w=310, h2=lw.height*(w/lw.width);
+      c.drawImage(lw,(W-w)/2, 70, w, h2);
+    }catch(e){
+      c.fillStyle='#fff'; c.font='800 58px -apple-system,Segoe UI,Roboto,sans-serif'; c.textAlign='center'; c.fillText('FORGEX', W/2, 130);
+    }
+    // bloco inferior: título, data, stats
+    const stats=[];
+    if(o.dur) stats.push(['DURAÇÃO', CORE.fmtDur((t.fim-t.inicio)/1000)]);
+    if(o.vol) stats.push(['VOLUME', CORE.fmtKg(t.volume)+' kg']);
+    if(o.ser) stats.push(['SÉRIES', String(CORE.seriesFeitas(t))]);
+    if(o.rec && (t.recordes||0)>0) stats.push(['RECORDES', (t.recordes||0)+' 🏅']);
+    const duasCol = stats.length>=3;
+    const altStats = stats.length? (duasCol? Math.ceil(stats.length/2)*190 : 190) : 0;
+    let y = H - 150 - altStats;
+    // título (até 2 linhas)
+    c.textAlign='left';
+    c.font='800 78px -apple-system,Segoe UI,Roboto,sans-serif';
+    const linhas=SHARE._quebra(c, t.titulo||'Treino', W-160);
+    y -= (linhas.length-1)*92 + 120;
+    c.fillStyle='#FFFFFF';
+    linhas.forEach((l,i)=>c.fillText(l, 80, y + i*92));
+    c.font='600 40px -apple-system,Segoe UI,Roboto,sans-serif';
+    c.fillStyle='rgba(255,255,255,.62)';
+    c.fillText(dataLonga(t.inicio), 80, y + (linhas.length-1)*92 + 62);
+    // stats
+    const y0 = H - 120 - altStats + 40;
+    stats.forEach((st,i)=>{
+      const col = duasCol? i%2 : i;
+      const lin = duasCol? Math.floor(i/2) : 0;
+      const x = 80 + col*(duasCol? (W-160)/2 : 330);
+      const yy = y0 + lin*190;
+      c.font='700 32px -apple-system,Segoe UI,Roboto,sans-serif';
+      c.fillStyle='rgba(255,255,255,.55)';
+      c.fillText(st[0], x, yy);
+      c.font='800 84px -apple-system,Segoe UI,Roboto,sans-serif';
+      c.fillStyle = st[0]==='VOLUME' ? '#FF7A2E' : '#FFFFFF';
+      c.fillText(st[1], x, yy+92);
+    });
+    // rodapé
+    c.strokeStyle='rgba(255,122,46,.85)'; c.lineWidth=6;
+    c.beginPath(); c.moveTo(80, H-84); c.lineTo(200, H-84); c.stroke();
+    c.font='600 30px -apple-system,Segoe UI,Roboto,sans-serif';
+    c.fillStyle='rgba(255,255,255,.55)'; c.textAlign='left';
+    c.fillText('Gym Workout Tracker', 224, H-74);
+    return cv;
+  },
+  async compartilha(t, o, btn){
+    if(btn){ btn.disabled=true; btn.textContent='Gerando…'; }
+    try{
+      const cv=await SHARE.card(t, o);
+      const blob=await new Promise(r=>cv.toBlob(r,'image/png',0.95));
+      const file=new File([blob],'treino-forgex.png',{type:'image/png'});
+      const texto='Confira meu treino no ForgeX 💪';
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], text:texto}).catch(()=>{});
+      } else {
+        const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='treino-forgex.png'; a.click();
+        try{ await navigator.clipboard.writeText(texto); UI.toast('Imagem baixada · legenda copiada ✓', true); }catch(e){ UI.toast('Imagem baixada ✓', true); }
+      }
+    }catch(e){ UI.toast('Não consegui gerar a imagem. Tenta de novo.'); }
+    if(btn){ btn.disabled=false; btn.textContent='Compartilhar'; }
+  },
+  folha(t){
+    const o = Object.assign({dur:1,vol:1,ser:1,rec:1,foto:1}, S.cfg.shareOpts||{});
+    const prev=h('img',{style:'width:58%;max-width:230px;display:block;margin:4px auto 14px;border-radius:14px;border:1px solid var(--stroke)'});
+    let vivo=true, timer=null;
+    const regera=()=>{ clearTimeout(timer); timer=setTimeout(async()=>{
+      try{ const cv=await SHARE.card(t,o); if(vivo) prev.src=cv.toDataURL('image/jpeg',0.6); }catch(e){}
+    }, 60); };
+    const chip=(rot,k,cond=true)=>!cond?null:h('button',{class:'chip'+(o[k]?' on':''),onclick:function(){ o[k]=o[k]?0:1; this.classList.toggle('on',!!o[k]); S.cfg.shareOpts=o; salva('cfg'); regera(); }},rot);
+    regera();
+    UI.folha('Compartilhar treino',[
+      prev,
+      h('div',{class:'f13 mut',style:'margin-bottom:8px'},'Incluir no cartão'),
+      h('div',{style:'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px'},
+        chip('Duração','dur'), chip('Volume','vol'), chip('Séries','ser'),
+        chip('Recordes','rec', (t.recordes||0)>0), chip('Foto do treino','foto', !!t.temFoto)),
+      h('div',{style:'height:8px'}),
+      h('button',{class:'btn btn-p',onclick:function(){ SHARE.compartilha(t, o, this); }},'Compartilhar')]);
+    const fecha=UI.fechaFolha; // preview para de regerar ao fechar
+    setTimeout(()=>{ const f=document.querySelector('.folha'); if(f) f.addEventListener('transitionend',()=>{ if(!f.classList.contains('aberta')) vivo=false; }); }, 200);
+  }
+};
 const FOTOS = {
   cache:{},
   async pega(dono, tid){

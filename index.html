@@ -358,7 +358,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.1';
+const APP_VER='7.2';
 
 /*CORE-START*/
 const CORE = {
@@ -1563,7 +1563,7 @@ const ATIVO = {
     salva('ativo');
     if(row){ row.classList.toggle('feita', !!(s.ok||s.pr));
       const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.pr?'🏅':(s.ok?'✓':'○');
-      row.querySelectorAll('input').forEach(inp=>inp.disabled=!!s.ok); }
+      row.querySelectorAll('input').forEach(inp=>{ inp.disabled=!!s.ok; if(s.ok) inp.classList.remove('sugerido'); }); }
     ATIVO.pinta();
   },
   pinta(){ // atualiza stats + progresso sem redesenhar tudo

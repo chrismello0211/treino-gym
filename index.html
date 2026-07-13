@@ -358,7 +358,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.0';
+const APP_VER='7.1';
 
 /*CORE-START*/
 const CORE = {
@@ -1521,7 +1521,7 @@ const ATIVO = {
       titulo: r ? r.titulo : 'Treino de '+new Date().toLocaleDateString('pt-BR',{weekday:'long'}).replace('-feira',''),
       inicio: agora(),
       ex: r ? r.ex.map(e=>({ exId:e.exId, descanso:e.descanso, notas:e.notas||'', ss:e.ss||null,
-        series: e.series.map(s=>({tipo:s.tipo, kg:s.kg, reps:s.reps, ok:false})) })) : []
+        series: e.series.map(s=>({tipo:s.tipo, kg:s.kg, reps:s.reps, ok:false, _dtKg:(s.kg!==''&&s.kg!=null), _dtReps:(s.reps!==''&&s.reps!=null)})) })) : []
     };
     salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
   },
@@ -1618,7 +1618,7 @@ const ATIVO = {
   },
   concluir(){
     const t=S.ativo;
-    const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; delete c._auto; delete c._sugKg; delete c._sugReps; return c; }) })).filter(e=>e.series.length);
+    const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; delete c._auto; delete c._sugKg; delete c._sugReps; delete c._dtKg; delete c._dtReps; return c; }) })).filter(e=>e.series.length);
     if(!feitos.length){ UI.toast('Nenhuma série concluída ainda'); return; }
     let foto=null;
     const fotoArea=h('div',{class:'linha',style:'padding:0 2px 16px;gap:12px'});
@@ -1735,9 +1735,15 @@ TELAS.ativo = function(){
     const cardioMin = x.t==='tempo' && x.g==='cardio';
     const ant=ATIVO.serieAnterior(e.exId, si);
     // auto-preencher com o anterior quando a série ainda está em branco (editável, só dar check)
-    if(ant && !s.ok && !s._auto){
-      if((s.kg===''||s.kg==null) && ant.kg!=null && ant.kg!=='' && !pcEx){ s.kg=ant.kg; s._sugKg=1; }
-      if((s.reps===''||s.reps==null) && ant.reps!=null && ant.reps!=='' ){ s.reps=ant.reps; s._sugReps=1; }
+    if(!s.ok && !s._auto){
+      // valores herdados do template da rotina também são "sugestão" até serem tocados
+      if(s._dtKg && !pcEx) s._sugKg=1;
+      if(s._dtReps) s._sugReps=1;
+      // e completa com o último treino quando o campo está vazio
+      if(ant){
+        if((s.kg===''||s.kg==null) && ant.kg!=null && ant.kg!=='' && !pcEx){ s.kg=ant.kg; s._sugKg=1; }
+        if((s.reps===''||s.reps==null) && ant.reps!=null && ant.reps!=='' ){ s.reps=ant.reps; s._sugReps=1; }
+      }
       s._auto=1;
     }
     const antTxt = ant ? (x.t==='peso_reps' ? CORE.fmtKg(ant.kg)+'kg × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';

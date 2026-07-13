@@ -131,6 +131,7 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
   border:1px solid var(--brand);border-radius:18px;padding:10px 14px;display:none;align-items:center;gap:10px;
   box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #timerbar.on{display:flex}
+body.tela-ativo #timerbar{bottom:calc(var(--sab) + 12px)}
 #tb-tempo{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;min-width:86px}
 .tb-btn{background:var(--surf2);border:1px solid var(--line);border-radius:11px;padding:9px 13px;font-weight:800;font-size:14px}
 .tb-pular{background:var(--brand);border-color:var(--brand);color:#14100C}
@@ -356,7 +357,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='6.7';
+const APP_VER='6.8';
 
 /*CORE-START*/
 const CORE = {
@@ -375,7 +376,7 @@ const CORE = {
   },
   volumeSerie(s){ return ((Number(s.kg)||0)+(Number(s.pc)||0)) * (Number(s.reps)||0); },
   volumeTreino(t){ let v=0; (t.ex||[]).forEach(e=>(e.series||[]).forEach(s=>{ if(s.ok) v+=CORE.volumeSerie(s); })); return Math.round(v*10)/10; },
-  seriesFeitas(t){ let n=0; (t.ex||[]).forEach(e=>(e.series||[]).forEach(s=>{ if(s.ok && s.tipo!=='W') n++; })); return n; },
+  seriesFeitas(t){ let n=0; (t.ex||[]).forEach(e=>(e.series||[]).forEach(s=>{ if(s.ok) n++; })); return n; },
   melhorSerieKg(series){ let m=null; (series||[]).forEach(s=>{ if(s.ok && s.tipo!=='W' && Number(s.kg)>0){ if(!m || Number(s.kg)>Number(m.kg) || (Number(s.kg)===Number(m.kg)&&Number(s.reps)>Number(m.reps))) m=s; } }); return m; },
   // detecta PRs de uma série concluída contra o placar atual → lista de tipos batidos
   detectaPR(prs, exId, s){
@@ -932,6 +933,7 @@ const UI = {
     window.scrollTo(0,0);
     $$('#tabbar .tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===tela));
     $('#tabbar').style.display = ['inicio','treino','perfil'].includes(tela)?'flex':'none';
+    document.body.classList.toggle('tela-ativo', tela==='ativo');
   },
   volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false); else UI.vai('treino', null, false); },
   refaz(){ if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{}); },
@@ -1028,8 +1030,6 @@ const DESC = {
   inicia(seg, exNome){
     if(seg<=0) return;
     DESC.total=seg; DESC.fim=agora()+seg*1000; DESC.exNome=exNome||'';
-    const tbv=document.querySelector('.tabbar');
-    $('#timerbar').style.bottom = (tbv && tbv.offsetParent) ? '' : 'calc(var(--sab) + 12px)';
     $('#timerbar').classList.add('on'); DESC.tic();
     clearInterval(DESC.intervalo); DESC.intervalo=setInterval(DESC.tic, 250);
   },
@@ -1567,7 +1567,7 @@ const ATIVO = {
   pinta(){ // atualiza stats + progresso sem redesenhar tudo
     if(!S.ativo) return;
     const vol=CORE.volumeTreino(S.ativo), ser=CORE.seriesFeitas(S.ativo);
-    const tot=(S.ativo.ex||[]).reduce((a,e)=>a+e.series.filter(s=>s.tipo!=='W').length,0);
+    const tot=(S.ativo.ex||[]).reduce((a,e)=>a+e.series.length,0);
     const el=$('#ta-vol'); if(el){
       el.textContent=CORE.fmtKg(vol)+' kg';
       $('#ta-ser').textContent=ser+(tot?' / '+tot:'');

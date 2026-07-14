@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.7';
+const APP_VER='7.9';
 
 /*CORE-START*/
 const CORE = {
@@ -426,7 +426,7 @@ CORE.recomputaPRs = function(lista, resets){
       (e.series||[]).forEach(s=>{
         delete s.pr;
         const bate=CORE.detectaPR(prs, e.exId, s);
-        if(bate.length){ s.pr=bate.map(b=>b[0]); CORE.aplicaPR(prs, e.exId, bate, t.id, t.inicio); t.recordes++; }
+        if(bate.length){ s.pr=bate.map(b=>b[0]); CORE.aplicaPR(prs, e.exId, bate, t.id, t.inicio); t.recordes += bate.length; }
       });
     });
     t.volume=CORE.volumeTreino(t);
@@ -1000,7 +1000,7 @@ const SOM = {
     g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(ganho,t+.012); g.gain.exponentialRampToValueAtTime(.001,t+dur);
     o.start(t); o.stop(t+dur+.02);
   },
-  fimDescanso(){ SOM.bip(880,.12,.3,0); SOM.bip(880,.12,.3,.18); SOM.bip(1320,.28,.32,.36); if(S.cfg.vibra && navigator.vibrate) navigator.vibrate([160,90,160,90,300]); },
+  fimDescanso(){ SOM.bip(880,.12,.3,0); SOM.bip(880,.12,.3,.18); SOM.bip(1320,.28,.32,.36); if(S.cfg.vibra && navigator.vibrate) navigator.vibrate([160,90,160,90,300]); DESC.notifica(); },
   check(){ SOM.bip(660,.07,.14); if(S.cfg.vibra && navigator.vibrate) navigator.vibrate(18); },
   pr(){ SOM.bip(784,.1,.25,0); SOM.bip(988,.1,.25,.12); SOM.bip(1319,.3,.3,.24); if(S.cfg.vibra && navigator.vibrate) navigator.vibrate([60,40,60,40,220]); }
 };
@@ -1036,6 +1036,19 @@ const DESC = {
     clearInterval(DESC.intervalo); DESC.intervalo=setInterval(DESC.tic, 250);
   },
   ajusta(d){ DESC.fim+=d*1000; DESC.total=Math.max(1,DESC.total+d); DESC.tic(); },
+  async notifica(){
+    // notificação local: aparece mesmo com o app em segundo plano / tela bloqueada
+    try{
+      if(!('Notification' in window) || Notification.permission!=='granted') return;
+      const reg = await navigator.serviceWorker.getRegistration();
+      if(!reg) return;
+      reg.showNotification('Descanso concluído 💪', {
+        body: (DESC.exNome? DESC.exNome+' — ' : '')+'Bora pra próxima série!',
+        icon:'icon-192.png', badge:'icon-192.png', tag:'descanso',
+        vibrate:[160,90,160,90,300], renotify:true, data:{ url:'./' }
+      });
+    }catch(e){}
+  },
   para(){ clearInterval(DESC.intervalo); $('#timerbar').classList.remove('on'); DESC.fim=0; },
   tic(){
     const resta=(DESC.fim-agora())/1000;
@@ -1282,6 +1295,7 @@ const PICKER = {
         const gs=Object.keys(est.gs); if(gs.length) ent.gs=gs;
         S.custom[id]=ent;
         salva('custom'); NET.agenda('custom/'+id, ent);
+        EXSPUB.publica(ent);
         BIB.lista.push(ent); BIB.indexa();
         FOLHA2.fecha(); PICKER.lista(); UI.toast('Exercício criado ✓', true);
       }},'Salvar exercício'));
@@ -1522,7 +1536,7 @@ const ATIVO = {
       titulo: r ? r.titulo : 'Treino de '+new Date().toLocaleDateString('pt-BR',{weekday:'long'}).replace('-feira',''),
       inicio: agora(),
       ex: r ? r.ex.map(e=>({ exId:e.exId, descanso:e.descanso, notas:e.notas||'', ss:e.ss||null,
-        series: e.series.map(s=>({tipo:s.tipo, kg:s.kg, reps:s.reps, ok:false, _dtKg:(s.kg!==''&&s.kg!=null), _dtReps:(s.reps!==''&&s.reps!=null)})) })) : []
+        series: e.series.map(s=>({tipo:s.tipo, kg:'', reps:'', ok:false, _planKg:(s.kg!==''&&s.kg!=null?s.kg:null), _planReps:(s.reps!==''&&s.reps!=null?s.reps:null)})) })) : []
     };
     salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
   },
@@ -1551,16 +1565,34 @@ const ATIVO = {
         prs.forEach(([t])=>NET.agenda('prs/'+e.exId+'/'+t, S.prs[e.exId][t]));
       } else if(prs.length){
         s.pr=prs.map(p=>p[0]);
+        s._prBackup=JSON.parse(JSON.stringify(prs.map(([t])=>[t, (S.prs[e.exId]||{})[t]])));  // pra reverter se cancelar
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
         prs.forEach(([t])=>NET.agenda('prs/'+e.exId+'/'+t, S.prs[e.exId][t]));
         const NOM={kg:'Maior carga', vol:'Melhor série', rm:'1RM estimado', reps:'Mais repetições'};
-        const det=prs.map(([t,v])=> NOM[t]+' '+(t==='reps'? Math.round(v)+' reps' : CORE.fmtKg(v)+' kg')).join(' · ');
-        SOM.pr(); VIB.v([40,60,40]); UI.toast('Recorde · '+x.n+': '+det+' 🏅', true);
+        // uma notificação por tipo de PR (não um textão)
+        prs.forEach(([t,v],i)=>{
+          const txt='Recorde · '+x.n+': '+NOM[t]+' '+(t==='reps'? Math.round(v)+' reps' : CORE.fmtKg(v)+' kg')+' 🏅';
+          setTimeout(()=>UI.toast(txt, true), i*1400);
+        });
+        SOM.pr(); VIB.v([40,60,40]);
       }
       const ixE=S.ativo.ex.indexOf(e);
       if(e.descanso>0 && CORE.descansaApos(S.ativo.ex, ixE)) DESC.inicia(e.descanso, x.n);
       else if(e.ss && !CORE.descansaApos(S.ativo.ex, ixE)) UI.toast('Superssérie: próximo exercício');
-    } else { s.ok=false; delete s.pr; }
+    } else {
+      s.ok=false;
+      // reverter PRs que esta série havia gravado (senão o recorde some ao remarcar)
+      if(s._prBackup){
+        s._prBackup.forEach(([t,valAntigo])=>{
+          if(!S.prs[e.exId]) return;
+          if(valAntigo) S.prs[e.exId][t]=valAntigo;
+          else delete S.prs[e.exId][t];
+          NET.agenda('prs/'+e.exId+'/'+t, valAntigo||null);
+        });
+        salva('prs'); delete s._prBackup;
+      }
+      delete s.pr;
+    }
     salva('ativo');
     if(row){ row.classList.toggle('feita', !!(s.ok||s.pr));
       const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.pr?'🏅':(s.ok?'✓':'○');
@@ -1619,7 +1651,7 @@ const ATIVO = {
   },
   concluir(){
     const t=S.ativo;
-    const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; delete c._auto; delete c._sugKg; delete c._sugReps; delete c._dtKg; delete c._dtReps; return c; }) })).filter(e=>e.series.length);
+    const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; ['_auto','_sugKg','_sugReps','_dtKg','_dtReps','_planKg','_planReps','_prBackup'].forEach(k=>delete c[k]); return c; }) })).filter(e=>e.series.length);
     if(!feitos.length){ UI.toast('Nenhuma série concluída ainda'); return; }
     let foto=null;
     const fotoArea=h('div',{class:'linha',style:'padding:0 2px 16px;gap:12px'});
@@ -1722,7 +1754,7 @@ TELAS.ativo = function(){
       h('div',{class:'gtab cab'},h('div',{},'Série'),h('div',{style:'text-align:center'},'Anterior'),h('div',{style:'text-align:center'},rot[0]),h('div',{style:'text-align:center'},rot[1]),h('div',{style:'text-align:center'},'✓')),
       ...e.series.map((s,si)=>linha(e,s,si,x)),
       h('button',{class:'btn btn-mini',style:'width:100%;margin-top:8px',onclick:()=>{
-        const ult=e.series.at(-1)||{}; e.series.push({tipo:'N',kg:ult.kg||'',reps:ult.reps||'',ok:false}); salva('ativo'); UI.refaz(); }},'＋ Adicionar série'));
+        e.series.push({tipo:'N',kg:'',reps:'',ok:false}); salva('ativo'); UI.refaz(); }},'＋ Adicionar série'));
     return card;
   }
   function atualizaLinha(row, e, s){
@@ -1735,29 +1767,23 @@ TELAS.ativo = function(){
     const pcEx = x.e==='peso-corporal' && x.t==='peso_reps';
     const cardioMin = x.t==='tempo' && x.g==='cardio';
     const ant=ATIVO.serieAnterior(e.exId, si);
-    // auto-preencher com o anterior quando a série ainda está em branco (editável, só dar check)
-    if(!s.ok && !s._auto){
-      // valores herdados do template da rotina também são "sugestão" até serem tocados
-      if(s._dtKg && !pcEx) s._sugKg=1;
-      if(s._dtReps) s._sugReps=1;
-      // e completa com o último treino quando o campo está vazio
-      if(ant){
-        if((s.kg===''||s.kg==null) && ant.kg!=null && ant.kg!=='' && !pcEx){ s.kg=ant.kg; s._sugKg=1; }
-        if((s.reps===''||s.reps==null) && ant.reps!=null && ant.reps!=='' ){ s.reps=ant.reps; s._sugReps=1; }
-      }
-      s._auto=1;
-    }
+    // o valor anterior serve só de referência (placeholder). O campo começa vazio;
+    // o que a pessoa não digitar não é gravado — igual ao Hevy.
+    const refKg = (ant && ant.kg!=null && ant.kg!=='') ? ant.kg : (s._planKg!=null? s._planKg : null);
+    const refReps = (ant && ant.reps!=null && ant.reps!=='') ? ant.reps : (s._planReps!=null? s._planReps : null);
+    const phKg = refKg!=null ? String(refKg) : (pcEx?'+kg':'kg');
+    const phReps = refReps!=null ? (cardioMin?fmtMin(refReps):String(refReps)) : (cardioMin?'min':(x.t==='tempo'?'seg':'reps'));
     const antTxt = ant ? (x.t==='peso_reps' ? CORE.fmtKg(ant.kg)+'kg × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
       h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(!s.ok) tipoRpe(s); }},
         s.tipo==='N'?String(numerada||1):s.tipo, s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null),
-      h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(ant&&!s.ok){ s.kg=ant.kg; s.reps=ant.reps; salva('ativo'); UI.refaz(); } }}, antTxt),
+      h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
-        ? h('input',{type:'number',inputmode:'decimal',value:s.kg,class:(s._sugKg&&!s.ok)?'sugerido':'',placeholder: pcEx? '+kg' : (ant?String(ant.kg):'kg'),oninput:ev=>{s.kg=ev.target.value; if(s._sugKg){delete s._sugKg; ev.target.classList.remove('sugerido');} salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        ? h('input',{type:'number',inputmode:'decimal',value:(s.kg==null?'':s.kg),placeholder:phKg,oninput:ev=>{s.kg=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : h('div',{class:'anterior'},'—'),
       cardioMin
-        ? h('input',{type:'text',inputmode:'numeric',value:fmtMin(s.reps),class:(s._sugReps&&!s.ok)?'sugerido':'',placeholder:ant?fmtMin(ant.reps):'min',oninput:ev=>{s.reps=parseMin(ev.target.value); if(s._sugReps){delete s._sugReps; ev.target.classList.remove('sugerido');} salva('ativo');ATIVO.pinta();},disabled:s.ok})
-        : h('input',{type:'number',inputmode:'numeric',value:s.reps,class:(s._sugReps&&!s.ok)?'sugerido':'',placeholder:ant?String(ant.reps):(x.t==='tempo'?'seg':'reps'),oninput:ev=>{s.reps=ev.target.value; if(s._sugReps){delete s._sugReps; ev.target.classList.remove('sugerido');} salva('ativo');ATIVO.pinta();},disabled:s.ok}),
+        ? h('input',{type:'text',inputmode:'numeric',value:(s.reps==null||s.reps===''?'':fmtMin(s.reps)),placeholder:phReps,oninput:ev=>{s.reps=parseMin(ev.target.value);salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        : h('input',{type:'number',inputmode:'numeric',value:(s.reps==null?'':s.reps),placeholder:phReps,oninput:ev=>{s.reps=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok}),
       h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s,row)}, s.pr?'🏅':(s.ok?'✓':'○')));
     if(s.pr) row.classList.add('feita');
     (function(){
@@ -1795,7 +1821,7 @@ TELAS.ativo = function(){
     UI.folha(BIB.ex(e.exId).n,[
       ix<t.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{s.ok=false;delete s.pr;}); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{ s.ok=false; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; delete s._dtKg; delete s._dtReps; s.kg=''; s.reps=''; delete s.pc; }); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); reordenar(t.ex, ()=>salva('ativo')); }},'Reordenar exercícios'),
       h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover do treino')
     ]);
@@ -1917,7 +1943,7 @@ TELAS.exercicio = function({id}){
         let b64=await IMG.comprime(f, 256, 0.75);
         if(b64.length>70000) b64=await IMG.comprime(f, 192, 0.68);
         S.custom[id].foto=b64; S.custom[id].atualizado=agora();
-        salva('custom'); NET.agenda('custom/'+id, S.custom[id]);
+        salva('custom'); NET.agenda('custom/'+id, S.custom[id]); EXSPUB.publica(S.custom[id]);
         UI.refaz(); UI.toast('Foto do exercício atualizada ✓', true);
       }catch(e){ UI.toast('Não consegui ler a imagem'); }
       inp.remove();
@@ -1929,11 +1955,23 @@ TELAS.exercicio = function({id}){
     if(c.oc) delete c.oc; else c.oc=1;
     c.atualizado=agora();
     salva('custom'); NET.agenda('custom/'+id, c); BIB.indexa();
+    if(c.oc) EXSPUB.remove(id); else if(!c.ocultoPub) EXSPUB.publica(c);
     UI.toast(c.oc? 'Arquivado: sai da busca, histórico preservado ✓' : 'Exercício restaurado ✓', true);
     UI.refaz();
   }}, (S.custom[id].oc? 'Restaurar exercício' : 'Arquivar exercício'),
      h('span',{class:'esp'}),
      h('span',{class:'f12 mut'}, S.custom[id].oc? 'fora da busca' : 'tira da busca')));
+  if(podeFoto && S.perfil?.user) m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:function(){
+    const c=S.custom[id];
+    if(c.ocultoPub) delete c.ocultoPub; else c.ocultoPub=1;
+    c.atualizado=agora();
+    salva('custom'); NET.agenda('custom/'+id, c);
+    if(c.ocultoPub) EXSPUB.remove(id); else if(!c.oc) EXSPUB.publica(c);
+    UI.toast(c.ocultoPub? 'Oculto: amigos não veem este exercício' : 'Visível para amigos ✓', true);
+    UI.refaz();
+  }}, (S.custom[id].ocultoPub? 'Mostrar para amigos' : 'Ocultar dos amigos'),
+     h('span',{class:'esp'}),
+     h('span',{class:'f12 mut'}, S.custom[id].ocultoPub? 'oculto no perfil' : 'visível no perfil')));
   const src=BIB.gif(id);
   if(src) m.appendChild(h('img',{class:'ex-hero',src,alt:x.n}));
   m.appendChild(h('div',{style:'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px'},
@@ -2921,6 +2959,7 @@ TELAS.perfilAmigo = function({uid:alvo}){
     NET.get('/seguidores/'+alvo).then(v=>{ const el=$('#pa-segrs'); if(el) el.textContent=Object.keys(v||{}).length; }).catch(()=>{});
     NET.get('/seguindo/'+alvo).then(v=>{ const el=$('#pa-segdo'); if(el) el.textContent=Object.keys(v||{}).length; }).catch(()=>{});
     m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>UI.vai('comparaPerfil',{uid:alvo})},'Comparar estatísticas'));
+    m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>EXSVIEW.folha(alvo, p)},'🏋️ Ver exercícios criados'));
     const rotBox=h('div',{});
     m.appendChild(rotBox);
     NET.get('/rotinasPub/'+alvo).then(rp=>{
@@ -3551,6 +3590,67 @@ if('serviceWorker' in navigator){
   });
 }
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+const EXSVIEW = {
+  async folha(alvo, perfil){
+    UI.folha('Exercícios de '+((perfil&&(perfil.nome||perfil.user))||'atleta'), [h('div',{class:'vazio'},'Carregando…')]);
+    let exs={};
+    try{ exs = await NET.get('/exsPub/'+alvo) || {}; }catch(e){}
+    const lista = Object.values(exs).filter(x=>x && x.n).sort((a,b)=>(a.n||'').localeCompare(b.n||'','pt'));
+    if(!lista.length){
+      UI.folha('Exercícios de '+((perfil&&(perfil.nome||perfil.user))||'atleta'),
+        [h('div',{class:'vazio'},'Este atleta ainda não tem exercícios personalizados visíveis.')]);
+      return;
+    }
+    const linhas = lista.map(x=>{
+      const jaTenho = EXSVIEW._jaTenho(x);
+      const bt = h('button',{class:'btn btn-mini'+(jaTenho?'':' btn-p'),style:'width:auto;padding:8px 12px;flex-shrink:0',onclick:function(){
+        if(jaTenho){ UI.toast('Você já tem esse exercício'); return; }
+        EXSVIEW.copia(x); this.textContent='Copiado ✓'; this.disabled=true; this.className='btn btn-mini';
+      }}, jaTenho? 'No acervo' : 'Copiar');
+      return h('div',{class:'med-row'},
+        (x.foto? h('img',{src:x.foto,style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0'})
+               : h('div',{style:'width:40px;height:40px;border-radius:9px;background:var(--surf3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px'},'🏋️')),
+        h('div',{class:'esp',style:'min-width:0'},
+          h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
+          h('div',{class:'f12 mut'}, (GRUPOS[x.g]||x.g||'')+(x.e&&x.e!=='outro'? ' · '+x.e : ''))),
+        bt);
+    });
+    UI.folha('Exercícios de '+((perfil&&(perfil.nome||perfil.user))||'atleta'),
+      [h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Toque em Copiar para adicionar ao seu acervo. Depois é seu, edite à vontade.'), ...linhas]);
+  },
+  _jaTenho(x){
+    // já tenho se houver custom meu com mesmo nome (normalizado) ou id de origem registrado
+    const nn=BIB.norm(x.n);
+    return Object.values(S.custom||{}).some(c=> c && (c.origem===x.id || BIB.norm(c.n)===nn));
+  },
+  copia(x){
+    const id='custom__'+uid();
+    const ent={ id, n:x.n, g:x.g||'corpo-inteiro', e:x.e||'outro', t:x.t||'peso_reps', custom:true, origem:x.id, atualizado:agora() };
+    if(x.gs) ent.gs=x.gs;
+    if(x.foto) ent.foto=x.foto;
+    S.custom[id]=ent; salva('custom'); NET.agenda('custom/'+id, ent);
+    EXSPUB.publica(ent);                 // já republica como meu (visível pros meus amigos)
+    BIB.lista.push(ent); BIB.indexa();
+    UI.toast('“'+x.n+'” copiado para seu acervo ✓', true);
+  }
+};
+const EXSPUB = {
+  // espelha um custom no espaço público, respeitando o toggle de ocultar
+  publica(c){
+    if(!S.auth || !c || !c.custom) return;
+    if(c.ocultoPub){ EXSPUB.remove(c.id); return; }
+    const pub={ id:c.id, n:c.n, g:c.g, e:c.e||'outro', t:c.t, atualizado:c.atualizado||agora() };
+    if(c.gs) pub.gs=c.gs;
+    if(c.foto) pub.foto=c.foto;
+    NET.agenda('/exsPub/'+S.auth.uid+'/'+c.id, pub);
+  },
+  remove(id){ if(S.auth) NET.agenda('/exsPub/'+S.auth.uid+'/'+id, null); },
+  // publica todos os meus customs de uma vez (usado na sincronização/autocura)
+  sincronizaTodos(){
+    if(!S.auth) return;
+    Object.values(S.custom||{}).forEach(c=>{ if(c && c.custom && !c.oc) EXSPUB.publica(c); });
+  }
+};
 const RESTAURA = {
   async tudo(btn, opts){
     opts=opts||{};
@@ -3577,13 +3677,15 @@ const RESTAURA = {
           n++;
         }catch(e){}
       }
-      // 5) fotos de progresso (medições) — essas ficam locais em MED._fotos
+      // 5) exercícios personalizados visíveis no perfil
+      try{ EXSPUB.sincronizaTodos(); }catch(e){}
+      // 6) fotos de progresso (medições) — essas ficam locais em MED._fotos
       try{
         if(MED._fotos && Object.keys(MED._fotos).length){
           for(const [id,f] of Object.entries(MED._fotos)){ if(f){ try{ await NET.putD('/fotosProg/'+id, f); n++; }catch(e){} } }
         }
       }catch(e){}
-      // 6) rotinas públicas
+      // 7) rotinas públicas
       try{ if(S.cfg.rotPub!==false) ROTPUB.syncTudo(); }catch(e){}
       try{ await FEED.carrega(); }catch(e){}
       if(!opts.silencioso){
@@ -3702,6 +3804,11 @@ async function autocuraNuvem(){
       }
     }
   }catch(e){}
+}
+function publicaCustomsIniciais(){
+  if(S.cfg.exsPubInit) return;
+  if(!S.auth || !S.perfil?.user) return;
+  try{ EXSPUB.sincronizaTodos(); S.cfg.exsPubInit=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); }catch(e){}
 }
 function corrigeTiposCustoms(){
   const LOAD=['anilha','halter','barra','maquina','cabo','kettlebell','smith','polia','barra-w'];
@@ -4297,7 +4404,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

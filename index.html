@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.0';
+const APP_VER='8.1';
 
 /*CORE-START*/
 const CORE = {
@@ -423,10 +423,29 @@ CORE.recomputaPRs = function(lista, resets){
     (t.ex||[]).forEach(e=>{
       const rE=resets[e.exId];
       if(rE && t.inicio>=rE && (!prs[e.exId] || !prs[e.exId]._pos)) prs[e.exId]={resetEm:rE,_pos:true};
+      // marca de referência ANTES deste treino (pra saber o que é PR de verdade hoje)
+      const base = Object.assign({}, prs[e.exId]);
+      // 1) achar a melhor série de cada tipo DENTRO deste treino
+      const melhor={};   // tipo -> {v, s}
       (e.series||[]).forEach(s=>{
         delete s.pr;
-        const bate=CORE.detectaPR(prs, e.exId, s);
-        if(bate.length){ s.pr=bate.map(b=>b[0]); CORE.aplicaPR(prs, e.exId, bate, t.id, t.inicio); t.recordes += bate.length; }
+        if(!s.ok || s.tipo==='W' && false) {}          // (W conta; placeholder p/ clareza)
+        if(!s.ok) return;
+        const kg=Number(s.kg)||0, reps=Number(s.reps)||0, vol=CORE.volumeSerie(s), rm=CORE.est1RM(kg,reps);
+        const cand = kg>0 ? {kg, vol, rm} : {reps};
+        Object.entries(cand).forEach(([tp,v])=>{
+          if(v>0 && (!melhor[tp] || v>melhor[tp].v)) melhor[tp]={v, s};
+        });
+      });
+      // 2) para cada tipo, conta PR só se a melhor série do treino superar a marca anterior — UMA vez
+      Object.entries(melhor).forEach(([tp,info])=>{
+        const marcaAnt = base[tp] ? base[tp].v : 0;
+        if(info.v > marcaAnt){
+          (info.s.pr = info.s.pr || []).push(tp);
+          prs[e.exId]=prs[e.exId]||{};
+          prs[e.exId][tp]={v:info.v, tid:t.id, data:t.inicio};
+          t.recordes += 1;                              // 1 recorde por tipo, por treino
+        }
       });
     });
     t.volume=CORE.volumeTreino(t);
@@ -1615,7 +1634,15 @@ const ATIVO = {
       $('#ta-ser').textContent=ser+(tot?' / '+tot:'');
       const pct = tot? Math.round(100*ser/tot) : 0;
       const sk=$('#ta-serk'); if(sk) sk.textContent = tot? ('Séries · '+pct+'%') : 'Séries';
-      const rc=$('#ta-rec'); if(rc){ let n=0; (S.ativo.ex||[]).forEach(e2=>e2.series.forEach(s2=>{ if(s2.ok&&s2.pr) n+=(Array.isArray(s2.pr)?s2.pr.length:1); })); rc.textContent = n? n+' 🏅' : '0'; }
+      const rc=$('#ta-rec'); if(rc){
+        let n=0;
+        (S.ativo.ex||[]).forEach(e2=>{
+          const tipos=new Set();
+          e2.series.forEach(s2=>{ if(s2.ok && Array.isArray(s2.pr)) s2.pr.forEach(tp=>tipos.add(tp)); });
+          n += tipos.size;                       // tipos únicos por exercício (1 peso, 1 vol, 1 rm, 1 reps no máx)
+        });
+        rc.textContent = n? n+' 🏅' : '0';
+      }
     }
     $('#ta-progresso').style.width = tot? Math.min(100, 100*ser/tot)+'%' : '0%';
     const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 74)); }
@@ -3814,10 +3841,10 @@ async function autocuraNuvem(){
 }
 function reconciliaRecordes(){
   // corrige treinos gravados com a contagem antiga (1 por exercício) -> conta cada PR
-  if(S.cfg.recRecalc2) return;
+  if(S.cfg.recRecalc3) return;
   try{
     const lista = Object.values(S.treinos||{}).filter(t=>!t.apagado);
-    if(!lista.length){ S.cfg.recRecalc2=1; salva('cfg'); return; }
+    if(!lista.length){ S.cfg.recRecalc3=1; salva('cfg'); return; }
     const resets={};
     Object.entries(S.prs||{}).forEach(([ex,p])=>{ if(p && p.resetEm) resets[ex]=p.resetEm; });
     const novos = CORE.recomputaPRs(lista, resets);
@@ -3830,7 +3857,7 @@ function reconciliaRecordes(){
     }
     // sincronizar meus PRs pro banco
     Object.entries(S.prs).forEach(([ex,p])=>{ if(p) Object.keys(p).forEach(t=>{ if(t!=='resetEm'&&t!=='_pos') NET.agenda('prs/'+ex+'/'+t, p[t]); }); });
-    S.cfg.recRecalc2=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+    S.cfg.recRecalc3=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
   }catch(e){ if(DEBUG) console.log('reconcilia', e); }
 }
 function publicaCustomsIniciais(){

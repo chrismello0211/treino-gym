@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='7.9';
+const APP_VER='8.0';
 
 /*CORE-START*/
 const CORE = {
@@ -382,7 +382,7 @@ const CORE = {
   melhorSerieKg(series){ let m=null; (series||[]).forEach(s=>{ if(s.ok && s.tipo!=='W' && Number(s.kg)>0){ if(!m || Number(s.kg)>Number(m.kg) || (Number(s.kg)===Number(m.kg)&&Number(s.reps)>Number(m.reps))) m=s; } }); return m; },
   // detecta PRs de uma série concluída contra o placar atual → lista de tipos batidos
   detectaPR(prs, exId, s){
-    if(!s.ok || s.tipo==='W') return [];
+    if(!s.ok) return [];
     const kg=Number(s.kg)||0, reps=Number(s.reps)||0, vol=CORE.volumeSerie(s), rm=CORE.est1RM(kg,reps);
     const p = prs[exId]||{};
     const bate=[];
@@ -1552,6 +1552,13 @@ const ATIVO = {
     const x=BIB.ex(e.exId);
     const pcEx = x.e==='peso-corporal' && x.t==='peso_reps';
     if(!s.ok){
+      // se o campo está vazio mas há referência (o placeholder do anterior/planejado), assume ela ao dar check
+      const si0 = e.series.indexOf(s);
+      const ant0 = ATIVO.serieAnterior(e.exId, si0);
+      const refKg0 = (ant0 && ant0.kg!=null && ant0.kg!=='') ? ant0.kg : (s._planKg!=null? s._planKg : null);
+      const refReps0 = (ant0 && ant0.reps!=null && ant0.reps!=='') ? ant0.reps : (s._planReps!=null? s._planReps : null);
+      if((s.kg===''||s.kg==null) && refKg0!=null && !pcEx) s.kg=refKg0;
+      if((s.reps===''||s.reps==null) && refReps0!=null) s.reps=refReps0;
       if(x.t==='peso_reps' && !pcEx && (!s.kg||!s.reps)){ UI.toast('Preencha kg e reps antes de concluir'); return; }
       if(x.t==='peso_reps' && pcEx && !s.reps){ UI.toast('Preencha as repetições antes de concluir'); return; }
       if(x.t!=='peso_reps' && !s.reps){ UI.toast('Preencha o valor antes de concluir'); return; }
@@ -1608,7 +1615,7 @@ const ATIVO = {
       $('#ta-ser').textContent=ser+(tot?' / '+tot:'');
       const pct = tot? Math.round(100*ser/tot) : 0;
       const sk=$('#ta-serk'); if(sk) sk.textContent = tot? ('Séries · '+pct+'%') : 'Séries';
-      const rc=$('#ta-rec'); if(rc){ let n=0; (S.ativo.ex||[]).forEach(e2=>e2.series.forEach(s2=>{ if(s2.ok&&s2.pr) n++; })); rc.textContent = n? n+' 🏅' : '0'; }
+      const rc=$('#ta-rec'); if(rc){ let n=0; (S.ativo.ex||[]).forEach(e2=>e2.series.forEach(s2=>{ if(s2.ok&&s2.pr) n+=(Array.isArray(s2.pr)?s2.pr.length:1); })); rc.textContent = n? n+' 🏅' : '0'; }
     }
     $('#ta-progresso').style.width = tot? Math.min(100, 100*ser/tot)+'%' : '0%';
     const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 74)); }
@@ -3805,6 +3812,27 @@ async function autocuraNuvem(){
     }
   }catch(e){}
 }
+function reconciliaRecordes(){
+  // corrige treinos gravados com a contagem antiga (1 por exercício) -> conta cada PR
+  if(S.cfg.recRecalc2) return;
+  try{
+    const lista = Object.values(S.treinos||{}).filter(t=>!t.apagado);
+    if(!lista.length){ S.cfg.recRecalc2=1; salva('cfg'); return; }
+    const resets={};
+    Object.entries(S.prs||{}).forEach(([ex,p])=>{ if(p && p.resetEm) resets[ex]=p.resetEm; });
+    const novos = CORE.recomputaPRs(lista, resets);
+    S.prs = novos; salva('prs'); salva('treinos');
+    // republicar o feed com os recordes corrigidos (se tenho perfil público)
+    if(S.auth && S.perfil?.user && S.cfg.feedPub!==false){
+      lista.sort((a,b)=>b.inicio-a.inicio).slice(0,60).forEach(t=>{
+        NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+      });
+    }
+    // sincronizar meus PRs pro banco
+    Object.entries(S.prs).forEach(([ex,p])=>{ if(p) Object.keys(p).forEach(t=>{ if(t!=='resetEm'&&t!=='_pos') NET.agenda('prs/'+ex+'/'+t, p[t]); }); });
+    S.cfg.recRecalc2=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+  }catch(e){ if(DEBUG) console.log('reconcilia', e); }
+}
 function publicaCustomsIniciais(){
   if(S.cfg.exsPubInit) return;
   if(!S.auth || !S.perfil?.user) return;
@@ -4404,7 +4432,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); reconciliaRecordes(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

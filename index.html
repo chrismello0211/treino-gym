@@ -359,7 +359,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.1';
+const APP_VER='8.2';
 
 /*CORE-START*/
 const CORE = {
@@ -3867,11 +3867,18 @@ function publicaCustomsIniciais(){
 }
 function corrigeTiposCustoms(){
   const LOAD=['anilha','halter','barra','maquina','cabo','kettlebell','smith','polia','barra-w'];
+  const CARDIO_KW=['esteira','corrida','correr','bike','bicicleta','elíptico','eliptico','escada rolante','stairmaster','remo ergom','spinning','airbike'];
   let n=0;
   Object.values(S.custom||{}).forEach(c=>{
-    if(!c || c.t!=='reps') return;
+    if(!c) return;
     const e=(c.e||'').toLowerCase();
-    if(LOAD.includes(e)){ c.t='peso_reps'; c.atualizado=agora(); NET.agenda('custom/'+c.id, c); n++; }
+    const nome=(c.n||'').toLowerCase();
+    // carga preso em "só reps" -> peso_reps
+    if(c.t==='reps' && LOAD.includes(e)){ c.t='peso_reps'; c.atualizado=agora(); NET.agenda('custom/'+c.id, c); n++; return; }
+    // cardio do grupo cardio (ou nome clássico) preso em reps/peso_reps -> tempo
+    if(c.t!=='tempo' && (c.g==='cardio' || CARDIO_KW.some(k=>nome.includes(k)))){
+      c.t='tempo'; c.atualizado=agora(); NET.agenda('custom/'+c.id, c); n++;
+    }
   });
   if(n){ salva('custom'); BIB.indexa(); }
 }

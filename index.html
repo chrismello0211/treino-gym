@@ -262,7 +262,8 @@ img.avatar{object-fit:cover}
 }
 .fpg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .fpg img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:pointer}
-.drag-cab{touch-action:none;cursor:grab}
+.drag-cab{touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+[data-dix]{transition:transform .18s cubic-bezier(.2,.8,.3,1)}
 body.claro{
   --bg:#F4F5F7; --surf:#FFFFFF; --surf2:#F0F2F4; --surf3:#E8EBEF; --line:#E3E6EA;
   --tx:#101828; --tx2:#475467; --tx3:#98A2B3;
@@ -359,7 +360,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.2';
+const APP_VER='8.3';
 
 /*CORE-START*/
 const CORE = {
@@ -957,7 +958,9 @@ const UI = {
     document.body.classList.toggle('tela-ativo', tela==='ativo');
   },
   volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false); else UI.vai('treino', null, false); },
-  refaz(){ if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{}); },
+  refaz(){
+    // limpeza defensiva: remove qualquer clone de drag preso e reseta opacidades
+    if(window.__tgDrag){ window.__tgDrag=false; document.querySelectorAll('[style*="z-index:9999"]').forEach(el=>el.remove()); document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; } if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{}); },
   topo(...els){ const t=$('#topo-in'); t.innerHTML=''; els.flat().forEach(e=>{ if(e==null||e===false) return; t.appendChild(e instanceof Node? e : document.createTextNode(String(e))); }); },
   btVoltar(){ return h('button',{class:'btn btn-mini',style:'width:42px;padding:9px', onclick:()=>UI.volta()},
     h('span',{html:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>'})); },
@@ -1042,6 +1045,15 @@ function prDetalhe(exId, tipo){
   const data=p.data? ' · '+new Date(p.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
   UI.toast(NOM[tipo]+': '+(tipo==='reps'? Math.round(p.v)+' reps' : CORE.fmtKg(p.v)+' kg')+extra+data, true);
 }
+const LB_POR_KG = 2.2046226218;
+function kgParaLb(kg){ return (Number(kg)||0)*LB_POR_KG; }
+function lbParaKg(lb){ return (Number(lb)||0)/LB_POR_KG; }
+// unidade de um exercício no treino: e.un ('kg' ou 'lb'); default = config global
+function unEx(e){ return (e && e.un) || (S.cfg.unidade==='lb'?'lb':'kg'); }
+function fmtPeso(kgVal, un){ // recebe SEMPRE em kg, exibe na unidade pedida
+  const v = un==='lb' ? kgParaLb(kgVal) : (Number(kgVal)||0);
+  return Math.round(v*10)/10;
+}
 function pesoCorporalAtual(){ try{ const l=medLista().filter(x=>x.peso!=null); return l.length? (Number(l.at(-1).peso)||0):0; }catch(e){ return 0; } }
 function fmtMin(seg){ seg=Number(seg)||0; if(!seg) return ''; const m=Math.floor(seg/60), s=Math.round(seg%60); return s? m+':'+String(s).padStart(2,'0') : String(m); }
 function parseMin(v){ v=String(v||'').trim().replace(',',':'); if(!v) return ''; if(v.includes(':')){ const [m,s]=v.split(':'); return (parseInt(m,10)||0)*60+(parseInt(s,10)||0); } return (parseFloat(v)||0)*60; }
@@ -1061,10 +1073,13 @@ const DESC = {
       if(!('Notification' in window) || Notification.permission!=='granted') return;
       const reg = await navigator.serviceWorker.getRegistration();
       if(!reg) return;
+      // fecha qualquer notificação de descanso anterior antes de mostrar a nova (não acumula)
+      const antigas = await reg.getNotifications({tag:'forgex-descanso'});
+      antigas.forEach(n=>n.close());
       reg.showNotification('Descanso concluído 💪', {
         body: (DESC.exNome? DESC.exNome+' — ' : '')+'Bora pra próxima série!',
-        icon:'icon-192.png', badge:'icon-192.png', tag:'descanso',
-        vibrate:[160,90,160,90,300], renotify:true, data:{ url:'./' }
+        icon:'icon-192.png', badge:'icon-192.png', tag:'forgex-descanso',
+        vibrate:[160,90,160,90,300], renotify:true, silent:false, data:{ url:'./' }
       });
     }catch(e){}
   },
@@ -1495,6 +1510,7 @@ TELAS.rotinaEditor = function(){
   function cartaoEx(e,ix){
     const x=BIB.ex(e.exId);
     const rot=(x.t==='tempo' && x.g==='cardio')? ['—','MIN'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
+    const unAtual=unEx(e);
     const card=h('div',{class:'card'});
     card.dataset.dix=ix;
     const sstag=SS.aplica(card, r.ex, e); if(sstag) card.append(sstag);
@@ -1771,6 +1787,7 @@ TELAS.ativo = function(){
   function cartao(e,ix){
     const x=BIB.ex(e.exId);
     const rot=(x.t==='tempo' && x.g==='cardio')? ['—','MIN'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
+    const unAtual=unEx(e);
     const card=h('div',{class:'card'});
     card.dataset.dix=ix;
     const sstag=SS.aplica(card, t.ex, e); if(sstag) card.append(sstag);
@@ -1785,7 +1802,11 @@ TELAS.ativo = function(){
       h('div',{class:'linha f13',style:'color:var(--azul);margin-bottom:6px',onclick:()=>mudaDescanso(e)},'⏱ Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
       (x.e==='peso-corporal' && x.t==='peso_reps') ? h('div',{class:'f12',style:'color:var(--tx2);margin:-2px 0 8px',onclick:()=>MED.registrar()},
         'Peso corporal: '+(pesoCorporalAtual()>0? CORE.fmtKg(pesoCorporalAtual())+' kg' : 'não informado')+' · ', h('span',{style:'text-decoration:underline'},'atualizar')) : h('span',{style:'display:none'}),
-      h('div',{class:'gtab cab'},h('div',{},'Série'),h('div',{style:'text-align:center'},'Anterior'),h('div',{style:'text-align:center'},rot[0]),h('div',{style:'text-align:center'},rot[1]),h('div',{style:'text-align:center'},'✓')),
+      h('div',{class:'gtab cab'},h('div',{},'Série'),h('div',{style:'text-align:center'},'Anterior'),
+        (x.t==='peso_reps'
+          ? h('div',{style:'text-align:center;cursor:pointer;color:var(--brand2);font-weight:700',onclick:()=>{ e.un = unEx(e)==='lb'?'kg':'lb'; salva('ativo'); UI.refaz(); }}, unEx(e).toUpperCase())
+          : h('div',{style:'text-align:center'},rot[0])),
+        h('div',{style:'text-align:center'},rot[1]),h('div',{style:'text-align:center'},'✓')),
       ...e.series.map((s,si)=>linha(e,s,si,x)),
       h('button',{class:'btn btn-mini',style:'width:100%;margin-top:8px',onclick:()=>{
         e.series.push({tipo:'N',kg:'',reps:'',ok:false}); salva('ativo'); UI.refaz(); }},'＋ Adicionar série'));
@@ -1805,15 +1826,15 @@ TELAS.ativo = function(){
     // o que a pessoa não digitar não é gravado — igual ao Hevy.
     const refKg = (ant && ant.kg!=null && ant.kg!=='') ? ant.kg : (s._planKg!=null? s._planKg : null);
     const refReps = (ant && ant.reps!=null && ant.reps!=='') ? ant.reps : (s._planReps!=null? s._planReps : null);
-    const phKg = refKg!=null ? String(refKg) : (pcEx?'+kg':'kg');
+    const phKg = refKg!=null ? String(fmtPeso(refKg, unEx(e))) : (pcEx?('+'+unEx(e)):unEx(e));
     const phReps = refReps!=null ? (cardioMin?fmtMin(refReps):String(refReps)) : (cardioMin?'min':(x.t==='tempo'?'seg':'reps'));
-    const antTxt = ant ? (x.t==='peso_reps' ? CORE.fmtKg(ant.kg)+'kg × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';
+    const antTxt = ant ? (x.t==='peso_reps' ? fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
       h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(!s.ok) tipoRpe(s); }},
         s.tipo==='N'?String(numerada||1):s.tipo, s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null),
       h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
-        ? h('input',{type:'number',inputmode:'decimal',value:(s.kg==null?'':s.kg),placeholder:phKg,oninput:ev=>{s.kg=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        ? h('input',{type:'number',inputmode:'decimal',value:(s.kg==null||s.kg===''?'':fmtPeso(s.kg, unEx(e))),placeholder:phKg,oninput:ev=>{ const raw=ev.target.value; s.kg = raw===''?'':(unEx(e)==='lb'? lbParaKg(raw) : raw); salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : h('div',{class:'anterior'},'—'),
       cardioMin
         ? h('input',{type:'text',inputmode:'numeric',value:(s.reps==null||s.reps===''?'':fmtMin(s.reps)),placeholder:phReps,oninput:ev=>{s.reps=parseMin(ev.target.value);salva('ativo');ATIVO.pinta();},disabled:s.ok})
@@ -2190,6 +2211,8 @@ TELAS.config = function(){
         this.querySelector('.chip').classList.toggle('on',liga);
       }},
         'Rotinas públicas no perfil', h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg.rotPub!==false?' on':'')},S.cfg.rotPub!==false?'Ligado':'Desligado')),
+      h('button',{class:'menu-op',onclick:()=>{ S.cfg.unidade = (S.cfg.unidade==='lb'?'kg':'lb'); salva('cfg'); UI.refaz(); }},
+        'Unidade de peso padrão', h('span',{class:'esp'}), h('span',{class:'chip on'}, (S.cfg.unidade==='lb'?'lb':'kg'))),
       h('button',{class:'menu-op',onclick:()=>{ S.cfg.push? PUSH.desativa() : PUSH.ativa(); }},
         'Notificações push', h('span',{class:'esp'}),
         h('span',{class:'chip'+(S.cfg.push?' on':'')}, S.cfg.push?'Ligado':'Desligado')),
@@ -2484,7 +2507,7 @@ function dragOrdena(container, aoSoltar){
   }
   function move(ev){
     if(timer && !ativo){
-      if(Math.abs(ev.clientX-sx)>10 || Math.abs(ev.clientY-sy)>10){ clearTimeout(timer); timer=null; limpaDoc(); alvo=null; }
+      if(Math.abs(ev.clientX-sx)>12 || Math.abs(ev.clientY-sy)>12){ clearTimeout(timer); timer=null; limpaDoc(); alvo=null; document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; }
       return;
     }
     if(!ativo || !alvo) return;
@@ -2508,7 +2531,7 @@ function dragOrdena(container, aoSoltar){
     if(!ativo){ alvo=null; return; }
     ativo=false; window.__tgDrag=false;
     if(clone){ clone.remove(); clone=null; }
-    document.body.style.userSelect='';
+    document.body.style.userSelect=''; document.body.style.webkitUserSelect='';
     if(alvo) alvo.style.opacity='';
     const ordem=cards().map(c=>+c.dataset.dix);
     alvo=null;
@@ -2520,10 +2543,12 @@ function dragOrdena(container, aoSoltar){
     if(ev.target.closest('button,input,select,textarea')) return;
     alvo=cab.closest('[data-dix]'); if(!alvo) return;
     sx=ev.clientX; sy=ev.clientY;
+    document.body.style.userSelect='none';          // trava seleção de texto durante o gesto
+    document.body.style.webkitUserSelect='none';
     document.addEventListener('pointermove', move, {passive:false});
     document.addEventListener('pointerup', solta);
     document.addEventListener('pointercancel', solta);
-    timer=setTimeout(inicia, 420);
+    timer=setTimeout(inicia, 300);                  // resposta mais rápida (era 420)
   });
 }
 function reordenar(lista, aoCommit){
@@ -3182,6 +3207,7 @@ TELAS.rotinaVer = function({rid}){
   (r.ex||[]).forEach(e=>{
     const x=BIB.ex(e.exId);
     const rot=(x.t==='tempo' && x.g==='cardio')? ['—','MIN'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
+    const unAtual=unEx(e);
     const c=h('div',{class:'card'});
     const sstag=SS.aplica(c, r.ex, e); if(sstag) c.append(sstag);
     c.append(h('div',{class:'linha',style:'margin-bottom:6px'}, thumbEl(e.exId),

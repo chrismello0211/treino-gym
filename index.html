@@ -262,7 +262,7 @@ img.avatar{object-fit:cover}
 }
 .fpg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .fpg img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:pointer}
-.drag-cab{touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
+.drag-cab{touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
 [data-dix]{transition:transform .18s cubic-bezier(.2,.8,.3,1)}
 body.claro{
   --bg:#F4F5F7; --surf:#FFFFFF; --surf2:#F0F2F4; --surf3:#E8EBEF; --line:#E3E6EA;
@@ -365,7 +365,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.8';
+const APP_VER='8.9';
 
 /*CORE-START*/
 const CORE = {

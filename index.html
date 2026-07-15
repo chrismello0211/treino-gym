@@ -286,6 +286,11 @@ body.kb #timerbar{transform:translateY(calc(-1 * var(--kb,0px)));transition:tran
 .srow{transition:transform .12s}
 .srow.del{background:rgba(255,70,70,.18);border-radius:10px}
 body.kb .folha .folha-corpo{max-height:38vh}
+
+/* animação do assistente de ficha */
+@keyframes fx-spin{to{transform:rotate(360deg)}}
+.fx-ring{position:absolute;inset:0;border-radius:50%;border:3px solid var(--surf3);border-top-color:var(--brand);animation:fx-spin .9s linear infinite}
+.fx-mini-spin{width:15px;height:15px;border-radius:50%;border:2px solid var(--surf3);border-top-color:var(--brand);display:inline-block;animation:fx-spin .7s linear infinite}
 </style>
 </head>
 <body>
@@ -360,7 +365,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.3';
+const APP_VER='8.6';
 
 /*CORE-START*/
 const CORE = {
@@ -1369,6 +1374,7 @@ TELAS.treino = function(){
       'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
   }
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:4px',onclick:()=>ATIVO.comeca(null)},'＋ Iniciar treino vazio'));
+  m.appendChild(h('button',{class:'btn',style:'margin-bottom:4px;border-color:var(--brand);color:var(--brand2)',onclick:()=>ASSIST.abre()},'🧭 Montar ficha com o assistente'));
 
   m.appendChild(h('div',{class:'linha',style:'margin:18px 0 10px'},
     h('div',{class:'secao',style:'margin:0'},'Rotinas'),
@@ -4009,9 +4015,417 @@ function montaRotinaPack(mod, pastaId){
     ex:mod.ex.map(([exId,ser,reps])=>({ exId, descanso:S.cfg.descanso||90, notas:'',
       series:Array.from({length:ser},()=>({tipo:'N', kg:'', reps:String(reps)})) })) };
 }
+
+/* ============================================================
+   ASSISTENTE DE FICHA  (v8.5) — gera ficha personalizada
+   ============================================================ */
+const ASSIST_POOLS = {"academia":{"peito":["peito__supino","peito__supino-inclinado-com-halteres","peito__supino-na-maquina","peito__voador-no-pec-deck","peito__crossover-na-alavanca"],"costas":["costas__puxada-alta","costas__remada-curvada-com-barra","costas__remada-sentada-com-cabo","costas__puxada-maquina","costas__pulldown-com-corda"],"ombros":["ombros__desenvolvimento-com-halteres","ombros__desenvolvimento-de-ombros-na-maquina","ombros__elevacao-lateral-de-bracos-com-halteres","ombros__elevacao-lateral-na-maquina","ombros__elevacao-frontal-com-halteres"],"triceps":["triceps__triceps-pulley-corda","triceps__triceps-testa-com-barra","triceps__extensao-de-triceps-no-cabo-alto","triceps__mergulho-de-triceps","triceps__triceps-pulley-barra"],"biceps":["biceps__rosca-direta-com-barra","biceps__rosca-alternada-com-barra","biceps__rosca-martelo","biceps__rosca-scott-com-barra-w","biceps__rosca-concentrada"],"quadriceps":["pernas__agachamento-no-smith","pernas__leg-press","pernas__agachamento-na-maquina-hack","pernas__cadeira-extensora"],"posteriores":["pernas__mesa-flexora","pernas__cadeira-flexora","pernas__stiff-com-barra","pernas__stiff-com-halter"],"gluteos":["gluteos__elevacao-pelvica-com-barra","gluteos__agachamento-na-maquina-abdutora","pernas__agachamento-sumo-com-barra","gluteos__gluteo-coice-na-maquina"],"panturrilha":["panturrilha__elevacao-de-panturrilha-em-maquina-em-pe","panturrilha__elevacao-de-panturrilha-sentado-com-alavanca","inferiores__panturrilha-maquina"],"abdomen":["abdomen__abdominal-maquina","abdomen__abdominal-supra","abdomen__prancha","abdomen__elevacao-de-pernas-no-banco"],"trapezio":["trapezio__encolhimento-livre-com-halteres","trapezio__encolhimento-com-cabo","ombros__crucifixo-inverso-no-banco-inclinado","trapezio__voador-na-maquina-para-deltoides-posteriores"]},"basica":{"peito":["peito__supino","peito__supino-inclinado-com-halteres","peito__supino-na-maquina","peito__voador-no-pec-deck","peito__supino-com-halteres"],"costas":["costas__puxada-alta","costas__remada-curvada-com-barra","costas__remada-sentada-com-cabo","costas__puxada-maquina","costas__pulldown-com-corda"],"ombros":["ombros__desenvolvimento-com-halteres","ombros__desenvolvimento-militar-com-barra","ombros__elevacao-lateral-de-bracos-com-halteres","ombros__elevacao-frontal-com-halteres"],"triceps":["triceps__triceps-pulley-corda","triceps__triceps-testa-com-barra","triceps__extensao-de-triceps-no-cabo-alto","triceps__mergulho-de-triceps","triceps__triceps-pulley-barra"],"biceps":["biceps__rosca-direta-com-barra","biceps__rosca-alternada-com-barra","biceps__rosca-martelo","biceps__rosca-scott-com-barra-w","biceps__rosca-concentrada"],"quadriceps":["pernas__agachamento-no-smith","pernas__leg-press","pernas__agachamento-na-maquina-hack","pernas__cadeira-extensora"],"posteriores":["pernas__mesa-flexora","pernas__cadeira-flexora","pernas__stiff-com-barra","pernas__stiff-com-halter"],"gluteos":["gluteos__elevacao-pelvica-com-barra","gluteos__agachamento-na-maquina-abdutora","pernas__agachamento-sumo-com-barra","gluteos__gluteo-coice-na-maquina"],"panturrilha":["panturrilha__elevacao-de-panturrilha-em-maquina-em-pe","panturrilha__elevacao-de-panturrilha-sentado-com-alavanca","inferiores__panturrilha-maquina"],"abdomen":["abdomen__abdominal-maquina","abdomen__abdominal-supra","abdomen__prancha","abdomen__elevacao-de-pernas-no-banco"],"trapezio":["trapezio__encolhimento-livre-com-halteres","trapezio__encolhimento-com-cabo","ombros__crucifixo-inverso-no-banco-inclinado","trapezio__voador-na-maquina-para-deltoides-posteriores"]},"casa":{"peito":["peito__supino-com-halteres","peito__supino-reto-com-halteres","peito__supino-alternado-com-halteres","peito__supino-crucifixo-com-halteres","peito__supino-declinado-com-halteres","peito__supino-inclinado-com-halteres"],"costas":["costas__remada-curvada-com-halteres","funcional__remada-sentada-com-faixa","funcional__remada-unilateral-com-gymstick","costas__remada-livre-com-halteres","costas__remada-renegada-com-halteres","costas__remada-com-halteres-em-posicao-prancha"],"ombros":["ombros__desenvolvimento-com-halteres","ombros__elevacao-lateral-com-halteres-sentado","ombros__elevacao-frontal-com-halteres","ombros__crucifixo-inverso-no-banco-inclinado","ombros__remada-alta-com-halteres"],"triceps":["triceps__triceps-testa-com-halteres","triceps__triceps-frances-com-halteres","triceps__triceps-coice-com-halteres","calistenia__mergulho-de-triceps","calistenia__mergulhos-para-triceps-no-chao","triceps__triceps-tresta-com-halteres"],"biceps":["biceps__rosca-direta-no-banco-scort","biceps__rosca-direta-deitado-no-banco-reto-no-cross","biceps__rosca-alternada-com-halteres-sentado","biceps__rosca-martelo-com-halter-no-colete-scott","biceps__rosca-scott-com-halteres","biceps__rosca-scott-unil-com-halteres"],"quadriceps":["pernas__agachamento-sumo-com-halteres","pernas__agachamento-goblet-com-haltere","pernas__agachamento-frontal-com-haltere","pernas__agachamento-bulgaro-com-halteres","pernas__agachamento-com-salto-e-halteres","pernas__agachamento-em-plie-com-halteres"],"posteriores":["pernas__stiff-com-halter","pernas__stiff-unilateral-com-halteres","funcional__stiff-com-elastico-de-resistencia","pernas__levantamento-terra-romeno-com-halteres"],"gluteos":["gluteos__elevacao-pelvica-com-banda-de-resistencia","funcional__gluteos-coice-com-faixa-elastica","funcional__gluteo-coice-em-pe-com-faixa-elastica","funcional__gluteo-coice-com-pernas-flexionada-com-faixa","funcional__coice-de-burro","funcional__coice-com-perna-flexionada"],"panturrilha":["calistenia__elevacao-de-panturrilha-em-pe","calistenia__agachamento-com-sustentacao-e-elevacao-de-panturrilhas","panturrilha__levantamento-de-panturrilha-com-apoio-de-banco"],"abdomen":["abdomen__abdominal-supra","abdomen__elevacao-de-pernas-no-banco","abdomen__prancha","abdomen__prancha-alta-high-plank","abdomen__hollow-body-hold-prancha-oca","abdomen__abdominal-com-carga"],"trapezio":["trapezio__encolhimento-livre-com-halteres","ombros__crucifixo-inverso-no-banco-inclinado"]},"corpo":{"peito":["funcional__supino-em-pe-com-faixa-elastica","calistenia__crucifixo-com-trx","calistenia__flexao","calistenia__flexao-plus","funcional__flexao-cobra","calistenia__flexao-em-pivo"],"costas":["costas__remada-curvada-com-pegada-invertida-na-barra","funcional__remada-sentada-com-faixa","funcional__remada-unilateral-com-gymstick","calistenia__remada-invertida-na-mesa","calistenia__remada-com-o-peso-do-corpo-na-porta","funcional__remada-afastada-com-banda-de-resistencia"],"ombros":["ombros__desenvolvimento-na-barra","funcional__elevacao-lateral-de-bracos","funcional__elevacao-frontal-lateral-com-elastico"],"triceps":["funcional__triceps-testa-com-faixa-elastica","funcional__triceps-frances-em-pe-com-gymstick","calistenia__mergulho-de-triceps","calistenia__mergulhos-para-triceps-no-chao","calistenia__extensao-de-triceps","triceps__triceps-na-paralela-maquiba"],"biceps":["funcional__rosca-martelo-com-garrafa-de-agua","calistenia__rosca-concentrada-com-perna","funcional__elevacao-de-perna-unica-com-equilibrio-e-rosca-de-biceps","funcional__rosca-biceps-com-faixa-elastica","funcional__rosca-de-biceps-unilateral-com-faixa-de-resistencia"],"quadriceps":["calistenia__agachamento","calistenia__agachamento-skater","calistenia__agachamento-camarao","funcional__agachamento-cossaco","calistenia__agachamento-pistola","calistenia__agachamento-havaiano"],"posteriores":["funcional__stiff-com-elastico-de-resistencia"],"gluteos":["calistenia__elevacao-pelvica-declinado","funcional__coice-de-burro","funcional__gluteo-coice-com-gymstick","funcional__coice-com-perna-flexionada","funcional__gluteos-coice-com-faixa-elastica","funcional__gluteo-coice-em-pe-com-faixa-elastica"],"panturrilha":["calistenia__elevacao-de-panturrilha-em-pe","calistenia__agachamento-com-sustentacao-e-elevacao-de-panturrilhas","calistenia__levantamento-de-panturrilha-com-apoio-e-sobrecarga"],"abdomen":["abdomen__abdominal-supra","abdomen__elevacao-de-pernas-no-banco","abdomen__prancha","abdomen__prancha-alta-high-plank","abdomen__hollow-body-hold-prancha-oca","abdomen__abdominal-com-carga"],"trapezio":["funcional__remada-afastada-com-banda-de-resistencia","trapezio__elevacoes-de-ombros-na-paralela"]}};
+const ASSIST_CARDIO = {"academia":["cardio__esteira-ergometrica","cardio__bike","cardio__eliptico-transport"],"basica":["cardio__esteira-ergometrica","cardio__bike","cardio__eliptico-transport"],"casa":["funcional__corrida-com-joelhos-altos","cardio__polichinelo-jumping-jack","funcional__caminhada-rapida"],"corpo":["funcional__corrida-com-joelhos-altos","cardio__polichinelo-jumping-jack","crossfit__burpees"]};
+
+/* modelos de dia (7 slots; grupo repetido = exercícios diferentes do mesmo grupo).
+   Limites respeitados p/ pools finos: posteriores máx 1/dia, ombros máx 2, peito/costas máx 3, quad máx 2. */
+const ASSIST_DIAS = {
+  fullbody:[
+    {n:'Treino A', g:['quadriceps','peito','costas','ombros','abdomen','biceps','triceps']},
+    {n:'Treino B', g:['posteriores','costas','peito','ombros','abdomen','quadriceps','biceps']},
+    {n:'Treino C', g:['gluteos','quadriceps','costas','ombros','panturrilha','peito','abdomen']}],
+  upperlower:[
+    {n:'Upper A · Superior', g:['peito','costas','ombros','triceps','biceps','peito','costas']},
+    {n:'Lower A · Inferior', g:['quadriceps','posteriores','gluteos','panturrilha','abdomen','quadriceps','gluteos']},
+    {n:'Upper B · Superior', g:['costas','peito','ombros','biceps','triceps','costas','peito']},
+    {n:'Lower B · Inferior', g:['quadriceps','posteriores','gluteos','panturrilha','abdomen','gluteos','quadriceps']}],
+  abc:[
+    {n:'A · Peito e tríceps', g:['peito','peito','ombros','triceps','triceps','peito','ombros']},
+    {n:'B · Costas e bíceps', g:['costas','costas','biceps','biceps','trapezio','costas','biceps']},
+    {n:'C · Pernas e ombros', g:['quadriceps','posteriores','gluteos','panturrilha','quadriceps','gluteos','ombros']}],
+  ppl:[
+    {n:'Push · Empurrar', g:['peito','peito','ombros','ombros','triceps','peito','triceps']},
+    {n:'Pull · Puxar', g:['costas','costas','biceps','biceps','trapezio','costas','biceps']},
+    {n:'Legs · Pernas', g:['quadriceps','posteriores','gluteos','panturrilha','quadriceps','gluteos','abdomen']}]
+};
+const ASSIST_ESQUEMA = {
+  manter:      {comp:[3,12], iso:[3,12], desc:60},
+  hipertrofia: {comp:[4,9],  iso:[3,12], desc:90},
+  gordura:     {comp:[3,15], iso:[3,15], desc:45},
+  forca:       {comp:[5,5],  iso:[3,8],  desc:120}
+};
+const ASSIST_OBJ = {
+  manter:      {t:'Começar / me manter ativo', sub:'Frequência sem complicar a cabeça', ic:'🌱'},
+  hipertrofia: {t:'Ganhar músculo', sub:'Hipertrofia com volume progressivo', ic:'💪'},
+  gordura:     {t:'Perder gordura / trincar', sub:'Mais volume e cardio no fim', ic:'🔥'},
+  forca:       {t:'Ganhar força', sub:'Cargas altas, menos repetição', ic:'🏋️'}
+};
+const ASSIST_LOCAL = {
+  academia: {t:'Academia completa', sub:'Máquinas, cabos, barras e halteres', ic:'🏢'},
+  basica:   {t:'Academia básica', sub:'Barras, halteres e algumas máquinas', ic:'🏬'},
+  casa:     {t:'Em casa (com halteres)', sub:'Halteres, banco e elásticos', ic:'🏠'},
+  corpo:    {t:'Só peso do corpo', sub:'Sem equipamento, calistenia', ic:'🤸'}
+};
+const SPLIT_NOME = {fullbody:'Full Body', upperlower:'Upper / Lower', abc:'ABC', ppl:'Push Pull Legs'};
+const NIVEL_NOME = {iniciante:'Iniciante', intermediario:'Intermediário', avancado:'Avançado'};
+const FOCO_NOME  = {equilibrado:'Equilibrado', peito:'Peito', costas:'Costas', ombros:'Ombros', biceps:'Braços', quadriceps:'Pernas', gluteos:'Glúteos'};
+const GRUPO_NOME = {peito:'Peito', costas:'Costas', ombros:'Ombros', triceps:'Tríceps', biceps:'Bíceps', quadriceps:'Quadríceps', posteriores:'Posteriores', gluteos:'Glúteos', panturrilha:'Panturrilha', abdomen:'Abdômen', trapezio:'Trapézio', cardio:'Cardio'};
+
+const ASSIST = {
+  premium:false, passo:0, resp:null, ficha:null, gerando:false, _genTimers:[],
+  passos:['intro','objetivo','frequencia','foco','cardio','local','duracao','nivel','resultado'],
+
+  _limpaTimers(){ (ASSIST._genTimers||[]).forEach(clearTimeout); ASSIST._genTimers=[]; },
+  reset(){ ASSIST._limpaTimers(); ASSIST.passo=0; ASSIST.ficha=null; ASSIST.gerando=false;
+    ASSIST.resp={objetivo:null, dias:null, foco:'equilibrado', cardio:null, local:null, duracao:null, nivel:'iniciante'}; },
+  abre(){ ASSIST.reset(); UI.vai('assistente'); },
+  prox(){ const at=ASSIST.passos[ASSIST.passo];
+    if(at==='nivel'){ ASSIST.iniciarGeracao(); return; }
+    if(ASSIST.passo<ASSIST.passos.length-1){ ASSIST.passo++; UI.refaz(); window.scrollTo(0,0); } },
+  iniciarGeracao(){ ASSIST.gera(); ASSIST.passo=ASSIST.passos.indexOf('resultado'); ASSIST.gerando=true; UI.refaz(); window.scrollTo(0,0); },
+  volta(){ ASSIST._limpaTimers();
+    if(ASSIST.gerando){ ASSIST.gerando=false; ASSIST.passo=ASSIST.passos.indexOf('nivel'); UI.refaz(); window.scrollTo(0,0); return; }
+    if(ASSIST.passo>0){ ASSIST.passo--; UI.refaz(); window.scrollTo(0,0); } else UI.volta(); },
+
+  split(){ const r=ASSIST.resp;
+    if(r.dias<=3) return 'fullbody';
+    if(r.dias===4) return 'upperlower';
+    return r.objetivo==='manter' ? 'abc' : 'ppl'; },
+
+  _reps(grupo, comp, tipo, obj){
+    const esq=ASSIST_ESQUEMA[obj]||ASSIST_ESQUEMA.hipertrofia;
+    let ser=(comp?esq.comp:esq.iso)[0], val=(comp?esq.comp:esq.iso)[1];
+    if(grupo==='panturrilha'||grupo==='abdomen'){ ser=3; if(tipo!=='tempo') val=15; }
+    if(tipo==='tempo') val=(obj==='forca'?30:40);
+    return {ser, val, desc:esq.desc};
+  },
+
+  gera(){
+    const r=ASSIST.resp;
+    const pool=ASSIST_POOLS[r.local]||ASSIST_POOLS.academia;
+    const split=ASSIST.split();
+    const nDur={30:4, 45:5, 60:6}[r.duracao] || ({iniciante:5, intermediario:6, avancado:7}[r.nivel]||5);
+    const nBase=nDur + (r.nivel==='avancado'?1:0);
+    const modelos=ASSIST_DIAS[split].map(m=>({n:m.n, g:m.g.slice()}));
+    const usarModelos = split==='fullbody' ? modelos : modelos;
+    const cardioFim=(r.cardio==='fim')||r.objetivo==='gordura';
+    const rnd=a=>a[Math.floor(Math.random()*a.length)];
+    const escolhe=(g,usados)=>{
+      let c=(pool[g]||[]).filter(id=>!usados.has(id));
+      if(!c.length) c=(pool[g]||[]).slice();
+      if(!c.length) c=[].concat.apply([],Object.values(pool)).filter(id=>!usados.has(id));
+      return rnd(c);
+    };
+    const rotinas=usarModelos.map(mod=>{
+      let grupos=mod.g.slice(0,nBase);
+      if(r.foco!=='equilibrado' && grupos.includes(r.foco)) grupos.push(r.foco); // reforço = +1 exercício, sem derrubar grupo
+      const usados=new Set();
+      const ex=grupos.map((g,idx)=>{
+        const id=escolhe(g,usados); usados.add(id);
+        const x=BIB.ex(id);
+        const rr=ASSIST._reps(g, idx<2, x.t, r.objetivo);
+        return {exId:id, grupo:g, descanso:rr.desc, notas:'',
+          series:Array.from({length:rr.ser},()=>({tipo:'N', kg:'', reps:String(rr.val)}))};
+      });
+      if(cardioFim){
+        const cid=rnd(ASSIST_CARDIO[r.local]||ASSIST_CARDIO.academia); const cx=BIB.ex(cid);
+        ex.push({exId:cid, grupo:'cardio', descanso:0, notas:'Finalizador',
+          series:[{tipo:'N', kg:'', reps: cx.t==='tempo'? String(r.objetivo==='gordura'?900:600) : '15'}]});
+      }
+      return {titulo:mod.n, ex};
+    });
+    ASSIST.ficha={split, rotinas, resumo:{objetivo:r.objetivo, dias:r.dias, nivel:r.nivel, foco:r.foco, cardio:cardioFim, local:r.local}};
+  },
+
+  trocaExercicio(ri, ei){
+    const f=ASSIST.ficha; if(!f) return; const rot=f.rotinas[ri]; if(!rot) return; const e=rot.ex[ei]; if(!e) return;
+    const r=ASSIST.resp; let cand;
+    if(e.notas==='Finalizador'){ cand=(ASSIST_CARDIO[r.local]||[]).filter(id=>id!==e.exId); }
+    else { const pool=(ASSIST_POOLS[r.local]||{})[e.grupo]||[]; const usados=new Set(rot.ex.map(x=>x.exId));
+      cand=pool.filter(id=>!usados.has(id)); if(!cand.length) cand=pool.filter(id=>id!==e.exId); }
+    if(!cand.length){ UI.toast('Sem outra opção pra esse grupo'); return; }
+    const nid=cand[Math.floor(Math.random()*cand.length)]; const nx=BIB.ex(nid); e.exId=nid;
+    if(e.notas!=='Finalizador'){ const rr=ASSIST._reps(e.grupo, ei<2, nx.t, r.objetivo);
+      e.series=Array.from({length:rr.ser},()=>({tipo:'N', kg:'', reps:String(rr.val)})); }
+    UI.refaz();
+  },
+
+  salvar(){
+    if(ASSIST.premium && !(S.cfg&&S.cfg.assinante)){ UI.toast('Recurso do plano premium (em breve)'); return; }
+    const f=ASSIST.ficha; if(!f) return;
+    const nomePasta='Minha ficha · '+(SPLIT_NOME[f.split]||'');
+    const pasta={id:uid(), nome:nomePasta, ordem:Object.keys(S.pastas).length+1, criado:agora(), atualizado:agora()};
+    S.pastas[pasta.id]=pasta; NET.agenda('pastas/'+pasta.id, pasta);
+    f.rotinas.forEach(mod=>{
+      const rot={id:uid(), titulo:mod.titulo, pasta:pasta.id, criado:agora(), atualizado:agora(),
+        ex:mod.ex.map(e=>({exId:e.exId, descanso:e.descanso, notas:e.notas||'',
+          series:e.series.map(s=>({tipo:s.tipo, kg:s.kg, reps:s.reps}))}))};
+      S.rotinas[rot.id]=rot; NET.agenda('rotinas/'+rot.id, rot); if(typeof ROTPUB!=='undefined') ROTPUB.envia(rot);
+    });
+    salva('pastas'); salva('rotinas');
+    UI.toast(f.rotinas.length+' rotinas criadas em "'+nomePasta+'" ✓', true);
+    UI.pilha=[]; UI.vai('treino',null,false);
+    ASSIST._folhaProgresso(f);
+  },
+
+  _tempoMin(rot){ let s=0; rot.ex.forEach(e=>{ const x=BIB.ex(e.exId);
+    e.series.forEach(se=>{ const trab=x.t==='tempo'?(Number(se.reps)||40):40; s+=trab+(e.descanso||60); }); }); return Math.max(1,Math.round(s/60)); },
+  _racional(f){ const r=f.resumo, sp=f.split;
+    const div={fullbody:'treina o corpo inteiro em cada sessão, que é o ideal pra quem vai '+r.dias+(r.dias>1?' a 3 dias':' dia'),
+      upperlower:'separa superior e inferior, um bom equilíbrio pra 4 dias',
+      abc:'divide em três grupos e roda 3 ou 6 vezes na semana',
+      ppl:'empurrar, puxar e pernas, o clássico pra 5 ou 6 dias'}[sp];
+    const obj={manter:'As séries e repetições ficam moderadas pra você criar o hábito sem se detonar.',
+      hipertrofia:'O volume fica na faixa de hipertrofia, com os compostos puxando mais carga.',
+      gordura:'Mais repetições e um cardio no fim pra aumentar o gasto calórico.',
+      forca:'Cargas altas e poucas repetições nos compostos pra priorizar força.'}[r.objetivo];
+    return 'Montei um '+SPLIT_NOME[sp]+' porque '+div+'. '+obj; }
+};
+
+/* ---------- helpers visuais ---------- */
+function assistVoltar(){ return h('button',{class:'btn btn-mini',style:'width:42px;padding:9px',onclick:()=>ASSIST.volta()},
+  h('span',{html:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>'})); }
+function assistProg(i,total){ const b=[]; for(let k=0;k<total;k++) b.push(h('div',{style:'flex:1;height:4px;border-radius:2px;background:'+(k<=i?'var(--brand)':'var(--surf3)')})); return h('div',{class:'linha',style:'gap:5px;margin-bottom:20px'}, b); }
+function assistOpc(sel, onclick, titulo, sub, ic, badge){
+  return h('button',{style:'display:block;width:100%;text-align:left;margin-bottom:10px;padding:14px;border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;border:1.5px solid '+(sel?'var(--brand)':'var(--line)')+';background:'+(sel?'var(--brand-dim)':'var(--surf)')+';color:var(--tx)',onclick},
+    h('div',{class:'linha'},
+      ic? h('div',{style:'font-size:23px;width:32px;text-align:center;flex-shrink:0'}, ic):null,
+      h('div',{class:'esp'},
+        h('div',{class:'b700',style:'font-size:15.5px'}, titulo, badge? h('span',{style:'color:var(--brand2);font-size:11.5px;font-weight:700;margin-left:8px'}, badge):null),
+        sub? h('div',{class:'f13 mut',style:'margin-top:2px'}, sub):null),
+      h('div',{style:'width:21px;height:21px;border-radius:50%;flex-shrink:0;border:2px solid '+(sel?'var(--brand)':'var(--tx3)')+';'+(sel?'background:var(--brand);box-shadow:inset 0 0 0 3px var(--brand-dim)':'')})));
+}
+function assistBtn(txt, ativo, onclick){
+  return h('button',{class:'btn '+(ativo?'btn-p':''),style:'position:sticky;bottom:14px;margin-top:16px'+(ativo?'':';opacity:.45'),onclick: ativo?onclick:()=>{}}, txt);
+}
+function assistOpcImg(sel, onclick, titulo, sub, imgFile, emoji){
+  const thumb=h('div',{style:'width:48px;height:48px;border-radius:14px;background:var(--surf3);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden'});
+  const img=h('img',{src:'foco/'+imgFile, alt:'', style:'width:100%;height:100%;object-fit:contain', loading:'lazy'});
+  img.addEventListener('error', ()=>{ thumb.innerHTML=''; thumb.appendChild(h('div',{style:'font-size:23px'}, emoji||'💪')); });
+  thumb.appendChild(img);
+  return h('button',{style:'display:block;width:100%;text-align:left;margin-bottom:10px;padding:11px 13px;border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s;border:1.5px solid '+(sel?'var(--brand)':'var(--line)')+';background:'+(sel?'var(--brand-dim)':'var(--surf)')+';color:var(--tx)',onclick},
+    h('div',{class:'linha'}, thumb,
+      h('div',{class:'esp'}, h('div',{class:'b700',style:'font-size:15.5px'}, titulo), sub? h('div',{class:'f13 mut',style:'margin-top:2px'}, sub):null),
+      h('div',{style:'width:21px;height:21px;border-radius:50%;flex-shrink:0;border:2px solid '+(sel?'var(--brand)':'var(--tx3)')+';'+(sel?'background:var(--brand);box-shadow:inset 0 0 0 3px var(--brand-dim)':'')})));
+}
+ASSIST._folhaProgresso = function(f){
+  const tips=[
+    ['📈','Sobrecarga progressiva','Quando o peso atual ficar fácil, soma um pouco de carga ou uma repetição. É isso que faz o músculo evoluir.'],
+    ['✍️','Registre cada treino','Anote suas séries aqui no app. Ver os números subindo é o que mostra que tá dando certo.'],
+    ['⏱️','Respeite o descanso','O tempo de descanso entre as séries faz parte do treino, não pula.'],
+    ['📅','Constância vence','Treinar sempre, mesmo que um pouco menos, rende mais do que pegar pesado e sumir.']];
+  const corpo=[ h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Sua ficha já está salva nas rotinas. Uns pontos rápidos pra tirar o máximo dela:') ];
+  const c=h('div',{});
+  tips.forEach((t,i)=>{ c.append(h('div',{class:'linha',style:'align-items:flex-start;gap:12px;padding:11px 0'+(i?';border-top:1px solid var(--surf2)':'')},
+    h('div',{style:'font-size:22px;width:30px;text-align:center;flex-shrink:0'},t[0]),
+    h('div',{class:'esp'}, h('div',{class:'b700',style:'font-size:14.5px'},t[1]), h('div',{class:'f13 mut',style:'margin-top:2px;line-height:1.55'},t[2])))); });
+  corpo.push(c, h('button',{class:'btn btn-p',style:'margin-top:16px',onclick:()=>UI.fechaFolha()},'Bora treinar 💪'));
+  UI.folha('Como evoluir com sua ficha', corpo);
+};
+
+TELAS.assistente = function(){
+  const passo=ASSIST.passos[ASSIST.passo]; const r=ASSIST.resp;
+  UI.topo(assistVoltar(), h('div',{class:'topo-tit',style:'font-size:18px'},'Assistente de ficha'));
+  const m=$('#main'); m.innerHTML='';
+  const qi=ASSIST.passos.indexOf(passo)-1, qtot=7;
+
+  if(passo==='resultado'){ if(ASSIST.gerando) ASSIST._telaGerando(m); else ASSIST._resultado(m); return; }
+
+  if(passo==='intro'){
+    m.append(
+      h('div',{style:'text-align:center;padding:16px 0 6px'},
+        h('div',{style:'font-size:44px'},'🧭'),
+        h('div',{class:'b800',style:'font-size:24px;margin-top:8px'},'Monte sua ficha ideal'),
+        h('div',{class:'f13 mut',style:'margin:10px auto 0;max-width:310px;line-height:1.6'},'Responda umas perguntas rápidas e o ForgeX monta uma ficha completa, com os exercícios já escolhidos e prontos pra treinar.')));
+    const bl=h('div',{class:'card',style:'margin-top:18px'});
+    [['🎯','Feita pro seu objetivo','Músculo, gordura, força ou só começar'],
+     ['🏋️','Exercícios de verdade','Escolhidos da biblioteca conforme seu equipamento'],
+     ['🔁','Do seu jeito','Gere de novo, troque exercícios e edite tudo depois']].forEach((it,i)=>{
+      bl.append(h('div',{class:'linha',style:'padding:10px 0'+(i?';border-top:1px solid var(--surf2)':'')},
+        h('div',{style:'font-size:21px;width:32px;text-align:center'},it[0]),
+        h('div',{class:'esp'}, h('div',{class:'b700',style:'font-size:14.5px'},it[1]), h('div',{class:'f13 mut',style:'margin-top:1px'},it[2]))));
+    });
+    m.append(bl, assistBtn('Começar', true, ()=>ASSIST.prox()));
+    return;
+  }
+
+  m.append(assistProg(qi, qtot));
+
+  if(passo==='objetivo'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Qual é o seu objetivo?'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'Isso define o tipo de treino e as repetições.'));
+    Object.keys(ASSIST_OBJ).forEach(k=>{ const o=ASSIST_OBJ[k];
+      m.append(assistOpc(r.objetivo===k, ()=>{ r.objetivo=k; UI.refaz(); }, o.t, o.sub, o.ic)); });
+    m.append(assistBtn('Continuar', !!r.objetivo, ()=>ASSIST.prox()));
+    return;
+  }
+  if(passo==='frequencia'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Quantos dias por semana?'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'Seja realista. Constância vale mais que volume.'));
+    const rec = r.objetivo==='manter'?2 : r.objetivo==='forca'?4 : 5;
+    [[2,'2 a 3 dias','Full body, corpo inteiro por treino'],
+     [4,'4 dias','Superior e inferior alternados'],
+     [5,'5 a 6 dias','Push, pull e legs']].forEach(o=>
+      m.append(assistOpc(r.dias===o[0], ()=>{ r.dias=o[0]; UI.refaz(); }, o[1], o[2], null, o[0]===rec?'Recomendado':null)));
+    m.append(assistBtn('Continuar', !!r.dias, ()=>ASSIST.prox()));
+    return;
+  }
+  if(passo==='foco'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Algum foco muscular?'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'A ficha é equilibrada, mas dá pra reforçar um grupo.'));
+    [['equilibrado','Programa equilibrado','Sem reforço, tudo proporcional','equilibrado.webp','⚖️'],
+     ['peito','Peito','','peito.webp','🎽'],['costas','Costas','','costas.webp','🔺'],['ombros','Ombros','','ombros.webp','🏐'],
+     ['biceps','Braços','Bíceps e tríceps','bracos.webp','💪'],['quadriceps','Pernas','','pernas.webp','🦵'],['gluteos','Glúteos','','gluteos.webp','🍑']].forEach(o=>
+      m.append(assistOpcImg(r.foco===o[0], ()=>{ r.foco=o[0]; UI.refaz(); }, o[1], o[2], o[3], o[4])));
+    m.append(assistBtn('Continuar', true, ()=>ASSIST.prox()));
+    return;
+  }
+  if(passo==='cardio'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Quer cardio nos treinos?'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'Um bloquinho no fim ajuda no gasto calórico e no fôlego.'));
+    [['nao','Não, só musculação',''],
+     ['fim','Sim, no fim do treino','10 a 15 min de esteira ou bike']].forEach(o=>
+      m.append(assistOpc(r.cardio===o[0], ()=>{ r.cardio=o[0]; UI.refaz(); }, o[1], o[2])));
+    if(r.objetivo==='gordura') m.append(h('div',{class:'f12 mut2',style:'margin:2px 4px 0;line-height:1.5'},'Como seu objetivo é perder gordura, já colocamos cardio no fim de qualquer forma.'));
+    m.append(assistBtn('Continuar', !!r.cardio, ()=>ASSIST.prox()));
+    return;
+  }
+  if(passo==='local'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Onde você treina?'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'Isso define quais aparelhos entram na ficha.'));
+    Object.keys(ASSIST_LOCAL).forEach(k=>{ const o=ASSIST_LOCAL[k];
+      m.append(assistOpc(r.local===k, ()=>{ r.local=k; UI.refaz(); }, o.t, o.sub, o.ic)); });
+    m.append(assistBtn('Continuar', !!r.local, ()=>ASSIST.prox()));
+    return;
+  }
+  if(passo==='duracao'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Quanto tempo por treino?'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'Isso define quantos exercícios entram em cada dia.'));
+    [[30,'30 minutos','Treino enxuto, direto ao ponto'],
+     [45,'45 minutos','Equilíbrio entre volume e tempo'],
+     [60,'60+ minutos','Treino completo, mais volume']].forEach(o=>
+      m.append(assistOpc(r.duracao===o[0], ()=>{ r.duracao=o[0]; UI.refaz(); }, o[1], o[2], null, o[0]===45?'Recomendado':null)));
+    m.append(assistBtn('Continuar', !!r.duracao, ()=>ASSIST.prox()));
+    return;
+  }
+  if(passo==='nivel'){
+    m.append(h('div',{class:'b800',style:'font-size:21px;margin-bottom:4px'},'Seu nível de experiência'),
+             h('div',{class:'f13 mut',style:'margin-bottom:16px'},'Opcional. Já deixamos no iniciante; mude só se quiser mais volume.'));
+    [['iniciante','Iniciante','Até 1 ano treinando, ou voltando agora'],
+     ['intermediario','Intermediário','1 a 3 anos de treino'],
+     ['avancado','Avançado','3+ anos, aguenta mais volume']].forEach(o=>
+      m.append(assistOpc(r.nivel===o[0], ()=>{ r.nivel=o[0]; UI.refaz(); }, o[1], o[2])));
+    m.append(assistBtn('Gerar minha ficha ✨', true, ()=>ASSIST.prox()));
+    return;
+  }
+};
+
+ASSIST._telaGerando = function(m){
+  const r=ASSIST.resp; const split=ASSIST.split(); const cardioFim=(r.cardio==='fim')||r.objetivo==='gordura';
+  const msgs=[
+    'Analisando seu objetivo: '+ASSIST_OBJ[r.objetivo].t.split(' / ')[0].toLowerCase(),
+    'Escolhendo a divisão ideal: '+SPLIT_NOME[split],
+    'Selecionando exercícios pra '+ASSIST_LOCAL[r.local].t.toLowerCase(),
+    'Ajustando o volume pro nível '+NIVEL_NOME[r.nivel].toLowerCase(),
+    (r.duracao? 'Encaixando no seu tempo de '+r.duracao+' min' : 'Definindo o tempo de cada treino'),
+    (r.foco!=='equilibrado'? 'Reforçando '+(FOCO_NOME[r.foco]||'').toLowerCase() : 'Equilibrando os grupos musculares'),
+    (cardioFim? 'Encaixando o cardio no fim' : 'Definindo séries e repetições'),
+    'Finalizando sua ficha'];
+  const ring=h('div',{style:'position:relative;width:84px;height:84px;margin:26px auto 0'},
+    h('div',{class:'fx-ring'}),
+    h('div',{style:'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:32px'},'🧭'));
+  m.append(ring,
+    h('div',{class:'b800',style:'font-size:22px;text-align:center;margin-top:20px'},'Montando sua ficha'),
+    h('div',{class:'f13 mut',style:'text-align:center;margin-top:4px'},'Personalizando cada treino pra você'));
+  const lista=h('div',{style:'margin:26px auto 0;max-width:330px'});
+  msgs.forEach((t,i)=>{
+    lista.append(h('div',{'data-row':String(i),style:'display:flex;align-items:center;gap:11px;padding:7px 0;opacity:.3;transition:opacity .35s'},
+      h('span',{style:'width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0'},
+        h('span',{'data-spin':String(i),class:'fx-mini-spin'}),
+        h('span',{'data-chk':String(i),style:'display:none;color:var(--brand2);font-weight:800;font-size:15px'},'✓')),
+      h('div',{style:'font-size:13.5px'}, t)));
+  });
+  m.append(lista);
+  const barOut=h('div',{style:'height:5px;background:var(--surf3);border-radius:3px;margin:26px auto 0;max-width:330px;overflow:hidden'});
+  const barIn=h('div',{style:'height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));border-radius:3px'});
+  barOut.append(barIn); m.append(barOut);
+
+  ASSIST._limpaTimers();
+  const dt=380, total=msgs.length*dt+460;
+  try{ requestAnimationFrame(()=>{ barIn.style.transition='width '+total+'ms linear'; barIn.style.width='100%'; }); }catch(e){ barIn.style.width='100%'; }
+  const done=(i)=>{ const s=m.querySelector('[data-spin="'+i+'"]'), c=m.querySelector('[data-chk="'+i+'"]'); if(s)s.style.display='none'; if(c)c.style.display='inline-flex'; };
+  const acende=(i)=>{ const row=m.querySelector('[data-row="'+i+'"]'); if(row)row.style.opacity='1'; };
+  acende(0);
+  msgs.forEach((t,i)=>{
+    if(i>0) ASSIST._genTimers.push(setTimeout(()=>{ acende(i); done(i-1); }, i*dt));
+  });
+  ASSIST._genTimers.push(setTimeout(()=>done(msgs.length-1), (msgs.length-1)*dt+320));
+  ASSIST._genTimers.push(setTimeout(()=>{ ASSIST.gerando=false; if(UI.telaAtual==='assistente'){ UI.refaz(); window.scrollTo(0,0); } }, total));
+};
+
+ASSIST._resultado = function(m){
+  if(!ASSIST.ficha) ASSIST.gera();
+  const f=ASSIST.ficha, s=f.resumo;
+  const nome=(S.perfil && S.perfil.nome && S.perfil.nome!=='Atleta') ? S.perfil.nome : '';
+  m.append(h('div',{style:'text-align:center;padding:4px 0 2px'},
+    h('div',{style:'font-size:38px'},'✅'),
+    h('div',{class:'b800',style:'font-size:23px;margin-top:4px'}, nome? ('Tá pronta, '+nome+'!') : 'Sua ficha está pronta'),
+    h('div',{class:'f13 mut',style:'margin-top:6px'}, SPLIT_NOME[f.split]+' · '+f.rotinas.length+' treinos'+((f.split==='ppl'&&s.dias>=5)?' (roda 2x na semana)':''))));
+  // racional
+  m.append(h('div',{style:'background:var(--brand-dim);border:1px solid var(--brand);border-radius:12px;padding:12px 14px;margin:14px 0;line-height:1.55',class:'f13'},
+    h('span',{style:'color:var(--brand2);font-weight:700'},'Por que essa ficha? '), ASSIST._racional(f)));
+  // resumo grid
+  const chip=(rot,v)=>h('div',{style:'background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:11px 12px'},
+    h('div',{class:'f12 mut2'},rot), h('div',{class:'b700',style:'margin-top:2px;font-size:14px'},v));
+  m.append(h('div',{style:'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px'},
+    chip('Objetivo', ASSIST_OBJ[s.objetivo].t.split(' / ')[0]),
+    chip('Frequência', s.dias+(s.dias===2?' a 3 dias':s.dias===5?' a 6 dias':' dias')),
+    chip('Nível', NIVEL_NOME[s.nivel]),
+    chip('Foco', FOCO_NOME[s.foco]||'Equilibrado'),
+    s.cardio? chip('Cardio','No fim do treino'):null,
+    chip('Local', ASSIST_LOCAL[s.local].t)));
+  // volume por grupo
+  const vol={}; f.rotinas.forEach(rot=>rot.ex.forEach(e=>{ if(e.notas==='Finalizador')return; const g=BIB.ex(e.exId).g; vol[g]=(vol[g]||0)+e.series.length; }));
+  const arr=Object.keys(vol).map(k=>[k,vol[k]]).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  const mx=arr.length?arr[0][1]:1;
+  const cv=h('div',{class:'card'}); cv.append(h('div',{class:'b700',style:'font-size:14px;margin-bottom:10px'},'Volume por grupo ',h('span',{class:'f12 mut2',style:'font-weight:400'},'· séries somando os treinos')));
+  arr.forEach(([g,n])=>{ cv.append(h('div',{style:'display:flex;align-items:center;gap:10px;margin-bottom:7px'},
+    h('div',{class:'f12',style:'width:82px;color:var(--tx2);flex-shrink:0'}, GRUPO_NOME[g]||g),
+    h('div',{style:'flex:1;height:8px;background:var(--surf3);border-radius:4px;overflow:hidden'}, h('div',{style:'height:100%;width:'+Math.round(n/mx*100)+'%;background:linear-gradient(90deg,var(--brand),var(--brand2));border-radius:4px'})),
+    h('div',{class:'f12 b700',style:'width:20px;text-align:right'}, String(n)))); });
+  m.append(cv);
+  // prévia
+  m.append(h('div',{class:'b700',style:'font-size:15px;margin:6px 0 4px'},'Prévia dos treinos'));
+  m.append(h('div',{class:'f12 mut2',style:'margin-bottom:10px;line-height:1.5'},'Toque no ⇄ pra trocar um exercício. Faça 1 ou 2 séries leves de aquecimento no primeiro de cada treino.'));
+  f.rotinas.forEach((rot,ri)=>{
+    const card=h('div',{class:'card'});
+    card.append(h('div',{class:'linha',style:'margin-bottom:6px'},
+      h('div',{class:'b700 esp',style:'font-size:15px;color:var(--brand2)'}, rot.titulo),
+      h('div',{class:'f12 mut2'}, '~'+ASSIST._tempoMin(rot)+' min')));
+    rot.ex.forEach((e,ei)=>{
+      const x=BIB.ex(e.exId), ser=e.series.length, val=e.series[0]?e.series[0].reps:'';
+      const alvo = x.t==='tempo'? (val+'s') : (val+' reps');
+      card.append(h('div',{class:'linha',style:'padding:5px 0'},
+        thumbEl(e.exId),
+        h('div',{class:'esp'},
+          h('div',{style:'font-size:14px'}, x.n, e.notas==='Finalizador'? h('span',{style:'color:var(--brand2);font-size:10.5px;font-weight:700;margin-left:6px;border:1px solid var(--brand);border-radius:8px;padding:1px 6px'},'CARDIO'):null),
+          h('div',{class:'f12 mut',style:'margin-top:1px'}, ser+' × '+alvo)),
+        h('button',{style:'background:none;border:none;color:var(--tx3);font-size:18px;padding:6px;cursor:pointer;flex-shrink:0',title:'Trocar exercício',onclick:()=>ASSIST.trocaExercicio(ri,ei)},'⇄')));
+    });
+    m.append(card);
+  });
+  m.append(
+    h('button',{class:'btn btn-p',style:'margin-top:8px',onclick:()=>ASSIST.salvar()},'Salvar ficha nas minhas rotinas'),
+    h('button',{class:'btn',style:'margin-top:10px',onclick:()=>{ ASSIST.gera(); UI.refaz(); window.scrollTo(0,0); }},'🔁 Gerar tudo de novo'),
+    h('div',{class:'f12 mut2',style:'text-align:center;margin-top:12px;line-height:1.5'},'Ao salvar, os treinos viram uma pasta nas suas rotinas. Depois é só editar cargas, séries e o que quiser.'));
+};
 TELAS.explorar = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Explorar'));
   const m=$('#main'); m.innerHTML='';
+  const cardAssist=h('div',{style:'background:linear-gradient(135deg,var(--brand-dim),var(--surf));border:1.5px solid var(--brand);border-radius:var(--r);padding:16px;margin-bottom:16px;cursor:pointer',onclick:()=>ASSIST.abre()});
+  cardAssist.append(
+    h('div',{class:'linha'},
+      h('div',{style:'font-size:26px;width:36px;text-align:center'},'🧭'),
+      h('div',{class:'esp'},
+        h('div',{class:'b800',style:'font-size:16.5px'},'Não sabe qual escolher?'),
+        h('div',{class:'f13 mut',style:'margin-top:2px;line-height:1.5'},'Responda umas perguntas e o assistente monta uma ficha personalizada pra você.')),
+      h('span',{html:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--brand2)" stroke-width="2.4" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
+  m.appendChild(cardAssist);
   m.appendChild(h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},
     'Programas prontos para começar. Adicione o pacote inteiro (vira uma pasta) ou uma rotina avulsa, e ajuste cargas e séries do seu jeito.'));
   EXPLORAR_PACKS.forEach(p=>{

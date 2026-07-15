@@ -365,7 +365,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.7';
+const APP_VER='8.8';
 
 /*CORE-START*/
 const CORE = {
@@ -954,6 +954,7 @@ const UI = {
   telaAtual:null, args:null, pilha:[],
   toastT:null, syncT:null,
   vai(tela, args, empilha=true){
+    try{ UI.fechaFolha(); }catch(e){}
     if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args]);
     UI.telaAtual = tela; UI.args = args||null;
     TELAS[tela](args||{});
@@ -2503,6 +2504,7 @@ function dragOrdena(container, aoSoltar){
   function limpaDoc(){ document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', solta); document.removeEventListener('pointercancel', solta); }
   function inicia(){
     ativo=true; window.__tgDrag=true;
+    document.removeEventListener('pointermove', move); document.addEventListener('pointermove', move, {passive:false});
     try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
     const r=alvo.getBoundingClientRect();
     clone=alvo.cloneNode(true);
@@ -2551,7 +2553,7 @@ function dragOrdena(container, aoSoltar){
     sx=ev.clientX; sy=ev.clientY;
     document.body.style.userSelect='none';          // trava seleção de texto durante o gesto
     document.body.style.webkitUserSelect='none';
-    document.addEventListener('pointermove', move, {passive:false});
+    document.addEventListener('pointermove', move, {passive:true});
     document.addEventListener('pointerup', solta);
     document.addEventListener('pointercancel', solta);
     timer=setTimeout(inicia, 300);                  // resposta mais rápida (era 420)

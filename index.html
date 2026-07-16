@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.2';
+const APP_VER='9.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -586,7 +586,8 @@ const S = {
   social: LS.get('social', {seguindo:{}}),  // quem eu sigo (cache local)
   ativo: LS.get('ativo', null),             // treino em andamento
   auth: LS.get('auth', null),               // {uid, refreshToken, idToken, exp}
-  exNotas: LS.get('exNotas', {}),        // exId -> {txt, atualizado} nota fixa
+  exNotas: LS.get('exNotas', {}),
+  fotosProg: LS.get('fotosProg', {}),      // id -> {data, atualizado, apagado?} (a foto em si fica na nuvem)        // exId -> {txt, atualizado} nota fixa
   fila: LS.get('fila', [])                  // [{path, val, ts}]
 };
 function salva(campo){ LS.set(campo, S[campo]); }
@@ -723,6 +724,7 @@ const NET = {
       m = fun(S.custom, nuvem.custom, 'custom') || m;
       m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
       m = fun(S.exNotas, nuvem.exNotas, 'exNotas') || m;
+      m = fun(S.fotosProg, nuvem.fotosProg, 'fotosProg') || m;
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
         if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
@@ -2089,6 +2091,171 @@ function diagnostico(){
   else UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)]);
 }
 
+/* ===== FOTOS DE PROGRESSO ===== */
+const FPROG={
+  lista(){ return Object.entries(S.fotosProg||{}).filter(([,mm])=>mm&&!mm.apagado).map(([id,mm])=>({id, data:mm.data||0})).sort((a,b)=>b.data-a.data); },
+  async add(){
+    if(!S.auth){ UI.toast('Crie sua conta pra guardar fotos de progresso'); return; }
+    const f=await IMG.escolhe(); if(!f) return;
+    let b64; try{ b64=await IMG.comprime(f, 900, 0.72); if(b64.length>140000) b64=await IMG.comprime(f, 700, 0.62); }catch(e){ UI.toast('Não consegui ler essa imagem'); return; }
+    const id=uid(); const meta={data:agora(), atualizado:agora()};
+    S.fotosProg[id]=meta; salva('fotosProg');
+    NET.agenda('fotosProg/'+id, meta);
+    NET.agenda('/fotos/'+S.auth.uid+'/prog_'+id, b64);
+    FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid]['prog_'+id]=b64;
+    UI.refaz(); UI.toast('Foto de progresso salva 📸', true);
+  },
+  apaga(id){
+    const mm=S.fotosProg[id]; if(!mm) return;
+    mm.apagado=true; mm.atualizado=agora(); salva('fotosProg');
+    NET.agenda('fotosProg/'+id, mm);
+    if(S.auth){ NET.agenda('/fotos/'+S.auth.uid+'/prog_'+id, null); if(FOTOS.cache[S.auth.uid]) FOTOS.cache[S.auth.uid]['prog_'+id]=null; }
+    UI.fechaFolha(); UI.refaz(); UI.toast('Foto apagada');
+  },
+  thumb(id){
+    const box=h('div',{style:'width:100%;aspect-ratio:3/4;background:var(--surf3);border-radius:12px;overflow:hidden'});
+    if(S.auth) FOTOS.pega(S.auth.uid,'prog_'+id).then(f=>{ if(f && box.isConnected){ box.innerHTML=''; box.appendChild(h('img',{src:f,loading:'lazy',style:'width:100%;height:100%;object-fit:cover;display:block'})); } });
+    return box;
+  },
+  ver(id){
+    const mm=S.fotosProg[id]; const dt=mm? new Date(mm.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}):'';
+    const ph=h('div',{class:'skel',style:'width:100%;aspect-ratio:3/4;border-radius:14px'});
+    if(S.auth) FOTOS.pega(S.auth.uid,'prog_'+id).then(f=>{ if(f && ph.replaceWith) ph.replaceWith(h('img',{src:f,style:'width:100%;border-radius:14px;display:block'})); });
+    UI.folha(dt||'Foto de progresso',[ ph, h('div',{style:'height:12px'}),
+      h('button',{class:'btn btn-err',onclick:()=>FPROG.apaga(id)},'Apagar esta foto')]);
+  },
+  comparar(idA, idB){
+    const mk=(id)=>{ const wrap=h('div',{style:'flex:1;min-width:0'});
+      const ph=h('div',{class:'skel',style:'width:100%;aspect-ratio:3/4;border-radius:12px'});
+      wrap.append(ph, h('div',{class:'f12 mut2',style:'text-align:center;margin-top:6px'},
+        S.fotosProg[id]? new Date(S.fotosProg[id].data).toLocaleDateString('pt-BR'):''));
+      if(S.auth) FOTOS.pega(S.auth.uid,'prog_'+id).then(f=>{ if(f && ph.replaceWith) ph.replaceWith(h('img',{src:f,style:'width:100%;border-radius:12px;display:block'})); });
+      return wrap; };
+    UI.folha('Antes e depois',[ h('div',{style:'display:flex;gap:10px'}, mk(idA), mk(idB)) ]);
+  }
+};
+/* ===== RANKING SEMANAL ENTRE AMIGOS ===== */
+const RANK={
+  met:'n',
+  dados(){
+    const w0=inicioSemana(agora()); const out=[];
+    if(S.auth){
+      const meus=Object.values(S.treinos).filter(t=>!t.apagado&&t.inicio>=w0);
+      out.push({uid:S.auth.uid, eu:true, nome:(S.perfil&&S.perfil.nome)||'Você', foto:S.perfil&&S.perfil.foto,
+        n:meus.length, vol:meus.reduce((a,t)=>a+(t.volume||0),0), rec:meus.reduce((a,t)=>a+(t.recordes||0),0)});
+    }
+    Object.entries(FEED.amigos||{}).forEach(([d,arr])=>{
+      const da=(arr||[]).filter(r=>r&&r.inicio>=w0);
+      const p=(FEED.perfis||{})[d]||{};
+      out.push({uid:d, nome:p.nome||(arr&&arr[0]&&arr[0].nome)||'Atleta', foto:p.foto,
+        n:da.length, vol:da.reduce((a,r)=>a+(r.volume||0),0), rec:da.reduce((a,r)=>a+(r.recordes||0),0)});
+    });
+    return out;
+  },
+  ordena(ls, met){ const k=met||'n'; return ls.slice().sort((a,b)=>(b[k]-a[k]) || (b.vol-a.vol) || (b.n-a.n)); }
+};
+function rankMiniCard(){
+  if(!S.auth || !Object.keys(S.social.seguindo||{}).length) return null;
+  if(!Object.keys(FEED.amigos||{}).length) return null;
+  const ls=RANK.ordena(RANK.dados(),'n').filter(x=>x.n>0);
+  if(ls.length<2) return null;
+  const med=['🥇','🥈','🥉'];
+  const c=h('div',{class:'card',style:'cursor:pointer',onclick:()=>UI.vai('ranking')});
+  c.append(h('div',{class:'linha',style:'margin-bottom:8px'},
+    h('div',{class:'secao',style:'margin:0'},'🏆 Ranking da semana'), h('div',{class:'esp'}),
+    h('span',{class:'f12 mut2'},'ver completo')));
+  ls.slice(0,3).forEach((x,i)=>{
+    c.append(h('div',{class:'linha',style:'padding:5px 0'},
+      h('div',{style:'width:26px;font-size:16px'},med[i]),
+      avatarEl(x.foto, x.nome, 30),
+      h('div',{class:'esp b700',style:'font-size:14px;margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(x.eu?';color:var(--brand2)':'')}, x.eu?'Você':x.nome),
+      h('div',{class:'f13'}, x.n+(x.n===1?' treino':' treinos'))));
+  });
+  return c;
+}
+TELAS.ranking = function(){
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Ranking da semana'));
+  const m=$('#main'); m.innerHTML='';
+  if(!S.auth || !Object.keys(S.social.seguindo||{}).length){ m.appendChild(h('div',{class:'vazio'},'Siga amigos pra disputar o ranking da semana com eles.')); return; }
+  if(!Object.keys(FEED.amigos||{}).length){
+    m.appendChild(skeletonCard());
+    FEED.carrega().then(()=>{ if(UI.telaAtual==='ranking') UI.refaz(); });
+    return;
+  }
+  const chips=h('div',{style:'display:flex;gap:8px;margin-bottom:12px'});
+  [['n','Treinos'],['vol','Volume'],['rec','Recordes']].forEach(par=>chips.append(
+    h('button',{class:'chip'+(RANK.met===par[0]?' on':''),onclick:()=>{RANK.met=par[0]; UI.refaz();}},par[1])));
+  m.appendChild(chips);
+  const fmt=(x)=> RANK.met==='vol'? CORE.fmtKg(x.vol)+' kg' : RANK.met==='rec'? x.rec+' 🏅' : x.n+(x.n===1?' treino':' treinos');
+  const ls=RANK.ordena(RANK.dados(), RANK.met);
+  const med=['🥇','🥈','🥉'];
+  const card=h('div',{class:'card'});
+  ls.forEach((x,i)=>{
+    card.append(h('div',{class:'linha',style:'padding:9px 0'+(i?';border-top:1px solid var(--surf2)':'')},
+      h('div',{style:'width:30px;font-size:16px;text-align:center;flex-shrink:0'},med[i]||(i+1)+'º'),
+      avatarEl(x.foto, x.nome, 34),
+      h('div',{class:'esp',style:'margin-left:10px;min-width:0'},
+        h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(x.eu?';color:var(--brand2)':'')}, x.eu?'Você':x.nome)),
+      h('div',{class:'f13 b700',style:'flex-shrink:0'}, fmt(x))));
+  });
+  m.appendChild(card);
+  m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;margin-top:10px;line-height:1.5'},'Semana de segunda a domingo. Conta o que os amigos publicam no feed.'));
+};
+/* ===== SUGESTÃO DE PROGRESSÃO ===== */
+const PROGSUG={
+  analisa(){
+    const px=proximaRotina(); if(!px||!px.pasta) return null;
+    const pid=px.pasta;
+    const rids=new Set(Object.values(S.rotinas).filter(r=>r.pasta===pid).map(r=>r.id)); if(!rids.size) return null;
+    const ts=Object.values(S.treinos).filter(t=>!t.apagado&&rids.has(t.rid));
+    if(ts.length<8) return null;
+    const primeiro=Math.min.apply(null, ts.map(t=>t.inicio));
+    const semanas=Math.floor((agora()-primeiro)/(7*864e5));
+    if(semanas<4) return null;
+    const sn=(S.cfg.progSnooze||{})[pid]; if(sn && (agora()-sn)<14*864e5) return null;
+    const nomePasta=(S.pastas[pid]&&S.pastas[pid].nome)||'sua ficha';
+    return {pid, semanas, execs:ts.length, nomePasta};
+  },
+  snooze(pid){ S.cfg.progSnooze=S.cfg.progSnooze||{}; S.cfg.progSnooze[pid]=agora(); S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg); },
+  banner(){
+    const a=PROGSUG.analisa(); if(!a) return null;
+    const ban=h('div',{class:'card',style:'border-color:var(--brand)'});
+    ban.append(h('div',{class:'linha'},
+      h('div',{class:'esp'},
+        h('div',{class:'b800',style:'font-size:15.5px'},'Hora de evoluir? 📈'),
+        h('div',{class:'f13 mut',style:'margin-top:3px;line-height:1.5'},'Você roda "'+a.nomePasta+'" há '+a.semanas+' semanas ('+a.execs+' treinos). Seu corpo se adapta, bora subir o estímulo.')),
+      h('button',{class:'sug-x',style:'position:static;padding:6px',onclick:ev=>{ ev.stopPropagation(); PROGSUG.snooze(a.pid); ban.remove(); }},'✕')),
+      h('button',{class:'btn btn-p',style:'margin-top:10px',onclick:()=>PROGSUG.folha(a)},'Ver opções'));
+    return ban;
+  },
+  folha(a){
+    const ar=S.cfg.assistResp;
+    UI.folha('Evoluir a ficha',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Progresso vem de aumentar o estímulo aos poucos. Escolhe como:'),
+      h('button',{class:'menu-op',onclick:()=>PROGSUG.aplica(a.pid)},
+        h('div',{style:'text-align:left'},h('div',{class:'b700'},'＋1 série no exercício principal'),h('div',{class:'f12 mut',style:'margin-top:2px'},'De cada treino da ficha. Simples e eficaz.'))),
+      h('button',{class:'menu-op',onclick:()=>{
+        UI.fechaFolha(); PROGSUG.snooze(a.pid);
+        if(ar && ar.objetivo){ const up={iniciante:'intermediario',intermediario:'avancado',avancado:'avancado'};
+          ASSIST.reset(); Object.assign(ASSIST.resp, ar, {nivel:up[ar.nivel||'iniciante']||'intermediario'});
+          UI.vai('assistente'); ASSIST.iniciarGeracao(); }
+        else ASSIST.abre();
+      }}, h('div',{style:'text-align:left'},h('div',{class:'b700'},'Gerar ficha nova no assistente'),h('div',{class:'f12 mut',style:'margin-top:2px'}, ar? 'Com suas respostas, um nível acima.':'Monta do zero com o assistente.'))),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PROGSUG.snooze(a.pid); UI.toast('Beleza, te lembro daqui a umas semanas'); }},'Agora não')]);
+  },
+  aplica(pid){
+    let n=0;
+    Object.values(S.rotinas).filter(r=>r.pasta===pid).forEach(r=>{
+      const e0=r.ex&&r.ex[0]; if(!e0||!e0.series||!e0.series.length) return;
+      const ult=e0.series[e0.series.length-1];
+      e0.series.push({tipo:'N', kg:ult.kg||'', reps:ult.reps||''});
+      r.atualizado=agora(); NET.agenda('rotinas/'+r.id, r); if(typeof ROTPUB!=='undefined') ROTPUB.envia(r); n++;
+    });
+    salva('rotinas'); PROGSUG.snooze(pid);
+    UI.fechaFolha(); UI.refaz(); UI.toast('+1 série no principal de '+n+' treino'+(n>1?'s':'')+' 💪', true);
+  }
+};
+
 /* ---------- DETALHE DO TREINO ---------- */
 function editaTempoTreino(t){
   const pad=n=>String(n).padStart(2,'0');
@@ -3051,6 +3218,7 @@ TELAS.inicio = function(){
       'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
   }
   m.appendChild(cardSemana());
+  const _pg=PROGSUG.banner(); if(_pg) m.appendChild(_pg);
   const box=h('div',{});
   m.appendChild(box);
   desenhaFeed(box, false); NOTIF.atualizaDot();
@@ -3064,9 +3232,11 @@ function desenhaFeed(box, pronto){
   if(!its.length){
     box.appendChild(h('div',{class:'vazio'},'Seus treinos concluídos aparecem aqui, com volume, séries e recordes. Siga amigos para ver os treinos deles também.'));
     box.appendChild(h('button',{class:'btn btn-p',onclick:()=>UI.vai('treino',null,false)},'Ir para Treino'));
+    const rk0=rankMiniCard(); if(rk0) box.appendChild(rk0);
     if(sug) box.appendChild(sug);
     return;
   }
+  const rk=rankMiniCard(); if(rk) box.appendChild(rk);
   its.forEach((i,ix)=>{ box.appendChild(cartaoFeed(i)); if(ix===0 && sug) box.appendChild(sug); });
   if(!its.length && sug) box.appendChild(sug);
 }
@@ -3593,10 +3763,57 @@ TELAS.meusTreinos = function(){
   const mostra=()=>{ ts.slice(mostrados, mostrados+bloco).forEach(t=>m.insertBefore(cartaoFeed({meu:true, dono:S.auth&&S.auth.uid, t, id:t.id, inicio:t.inicio}), sent)); mostrados+=bloco; if(mostrados>=ts.length) sent.remove(); };
   sent.onclick=mostra; m.appendChild(sent); mostra();
 };
+TELAS.fotosProg = function(){
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Fotos de progresso'),
+    h('button',{class:'btn btn-mini btn-p',style:'width:42px',onclick:()=>FPROG.add()},'＋'));
+  const m=$('#main'); m.innerHTML='';
+  if(!S.auth){ m.appendChild(h('div',{class:'vazio'},'Crie sua conta pra guardar suas fotos de progresso com segurança na nuvem.')); return; }
+  const ls=FPROG.lista();
+  if(!ls.length){
+    m.appendChild(h('div',{class:'vazio'},'Tire uma foto por mês: de frente pro espelho, mesma luz, mesmo ângulo. Em 3 meses você VÊ a diferença que a balança não mostra.'));
+    m.appendChild(h('button',{class:'btn btn-p',onclick:()=>FPROG.add()},'Adicionar primeira foto'));
+    return;
+  }
+  m.appendChild(h('div',{class:'f13 mut',style:'margin-bottom:10px'}, ls.length+' foto'+(ls.length>1?'s':'')+' · toque pra abrir'));
+  let selecionando=false; const sel=[];
+  const btComp=h('button',{class:'btn',style:'margin-bottom:12px'},'🆚 Comparar duas fotos');
+  btComp.onclick=()=>{ selecionando=!selecionando; sel.length=0; btComp.textContent=selecionando?'Toque em 2 fotos… (cancelar)':'🆚 Comparar duas fotos'; };
+  if(ls.length>=2) m.appendChild(btComp);
+  const grid=h('div',{style:'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px'});
+  ls.forEach(it=>{
+    const cel=h('div',{style:'cursor:pointer'});
+    const th=FPROG.thumb(it.id);
+    cel.append(th, h('div',{class:'f11 mut2',style:'text-align:center;margin-top:4px'}, new Date(it.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})));
+    cel.onclick=()=>{
+      if(!selecionando){ FPROG.ver(it.id); return; }
+      if(sel.includes(it.id)) return;
+      sel.push(it.id); th.style.outline='3px solid var(--brand)';
+      if(sel.length===2){
+        selecionando=false; btComp.textContent='🆚 Comparar duas fotos';
+        const A=sel[0], B=sel[1];
+        const antiga=(S.fotosProg[A].data<=S.fotosProg[B].data)?A:B, nova=(antiga===A)?B:A;
+        sel.length=0; FPROG.comparar(antiga, nova);
+        setTimeout(()=>{ if(UI.telaAtual==='fotosProg') UI.refaz(); }, 300);
+      }
+    };
+    grid.appendChild(cel);
+  });
+  m.appendChild(grid);
+};
+
 TELAS.medidas = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Medições'),
     h('button',{class:'btn btn-mini btn-p',onclick:MED.registrar},'Registrar'));
   const m=$('#main'); m.innerHTML='';
+  (function(){
+    const ls=FPROG.lista();
+    m.appendChild(h('div',{class:'card',style:'cursor:pointer',onclick:()=>UI.vai('fotosProg')},
+      h('div',{class:'linha'},
+        h('div',{class:'esp'},
+          h('div',{class:'secao',style:'margin:0 0 3px'},'📸 Fotos de progresso'),
+          h('div',{class:'f13 mut'}, ls.length? (ls.length+' foto'+(ls.length>1?'s':'')+' guardada'+(ls.length>1?'s':'')) : 'O espelho engana, a foto não. Comece hoje.')),
+        h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'}))));
+  })();
   const lst=medLista();
   const pesos=lst.filter(x=>x.peso!=null);
   if(pesos.length){

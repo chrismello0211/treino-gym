@@ -291,6 +291,10 @@ body.kb .folha .folha-corpo{max-height:38vh}
 @keyframes fx-spin{to{transform:rotate(360deg)}}
 .fx-ring{position:absolute;inset:0;border-radius:50%;border:3px solid var(--surf3);border-top-color:var(--brand);animation:fx-spin .9s linear infinite}
 .fx-mini-spin{width:15px;height:15px;border-radius:50%;border:2px solid var(--surf3);border-top-color:var(--brand);display:inline-block;animation:fx-spin .7s linear infinite}
+@keyframes fx-tela{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fx-tela{animation:fx-tela .18s ease-out}
+@keyframes skel-p{0%,100%{opacity:.45}50%{opacity:.9}}
+.skel{background:var(--surf3);animation:skel-p 1.1s ease-in-out infinite}
 </style>
 </head>
 <body>
@@ -365,7 +369,10 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.0';
+const APP_VER='9.1';
+(function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
+  window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
+  window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
 
 /*CORE-START*/
 const CORE = {
@@ -579,6 +586,7 @@ const S = {
   social: LS.get('social', {seguindo:{}}),  // quem eu sigo (cache local)
   ativo: LS.get('ativo', null),             // treino em andamento
   auth: LS.get('auth', null),               // {uid, refreshToken, idToken, exp}
+  exNotas: LS.get('exNotas', {}),        // exId -> {txt, atualizado} nota fixa
   fila: LS.get('fila', [])                  // [{path, val, ts}]
 };
 function salva(campo){ LS.set(campo, S[campo]); }
@@ -714,6 +722,7 @@ const NET = {
       m = fun(S.treinos, nuvem.treinos, 'treinos') || m;
       m = fun(S.custom, nuvem.custom, 'custom') || m;
       m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
+      m = fun(S.exNotas, nuvem.exNotas, 'exNotas') || m;
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
         if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
@@ -958,6 +967,7 @@ const UI = {
     if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args]);
     UI.telaAtual = tela; UI.args = args||null;
     TELAS[tela](args||{});
+    try{ const mm=$('#main'); mm.classList.remove('fx-tela'); void mm.offsetWidth; mm.classList.add('fx-tela'); }catch(e){}
     window.scrollTo(0,0);
     $$('#tabbar .tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===tela));
     $('#tabbar').style.display = ['inicio','treino','perfil'].includes(tela)?'flex':'none';
@@ -1541,7 +1551,7 @@ TELAS.rotinaEditor = function(){
     return h('div',{class:'gtab srow'},
       h('button',{class:'stipo '+s.tipo,onclick:()=>{ s.tipo=proxTipo(s.tipo); UI.refaz(); }}, s.tipo==='N'?String(numerada):s.tipo),
       h('div',{class:'anterior'},'—'),
-      x.t==='peso_reps' ? h('input',{type:'number',inputmode:'decimal',value:s.kg,placeholder:'kg',oninput:ev=>s.kg=ev.target.value}) : h('div',{class:'anterior'},'—'),
+      x.t==='peso_reps' ? h('input',{type:'text',inputmode:'decimal',value:s.kg,placeholder:'kg',oninput:ev=>s.kg=ev.target.value.replace(',','.')}) : h('div',{class:'anterior'},'—'),
       h('input',{type:'number',inputmode:'numeric',value:s.reps,placeholder:x.t==='tempo'?'seg':'reps',oninput:ev=>s.reps=ev.target.value}),
       h('button',{class:'scheck',onclick:()=>{ if(e.series.length>1){ e.series.splice(si,1); UI.refaz(); } }},'✕'));
   }
@@ -1744,8 +1754,7 @@ const ATIVO = {
         if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, resumoTreino(salvo));
         // sugere atualizar rotina com as cargas de hoje
         S.ativo=null; salva('ativo'); DESC.para();
-        UI.fechaFolha(); UI.pilha=[]; UI.vai('inicio',null,false);
-        UI.toast(salvo.recordes?('Treino salvo com '+salvo.recordes+' recorde'+(salvo.recordes>1?'s':'')+' 🏅'):'Treino salvo ✓', !!salvo.recordes);
+        UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
       }},'Concluir e salvar')]);
   }
 };
@@ -1806,6 +1815,7 @@ TELAS.ativo = function(){
           h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g)),
         h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>menuEx(e,ix)},'⋯')),
       h('input',{placeholder:'Notas…',value:e.notas||'',oninput:ev=>{e.notas=ev.target.value;salva('ativo');},style:'margin-bottom:8px;font-size:14px'}),
+      (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
       h('div',{class:'linha f13',style:'color:var(--azul);margin-bottom:6px',onclick:()=>mudaDescanso(e)},'⏱ Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
       (x.e==='peso-corporal' && x.t==='peso_reps') ? h('div',{class:'f12',style:'color:var(--tx2);margin:-2px 0 8px',onclick:()=>MED.registrar()},
         'Peso corporal: '+(pesoCorporalAtual()>0? CORE.fmtKg(pesoCorporalAtual())+' kg' : 'não informado')+' · ', h('span',{style:'text-decoration:underline'},'atualizar')) : h('span',{style:'display:none'}),
@@ -1841,7 +1851,7 @@ TELAS.ativo = function(){
         s.tipo==='N'?String(numerada||1):s.tipo, s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null),
       h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
-        ? h('input',{type:'number',inputmode:'decimal',value:(s.kg==null||s.kg===''?'':fmtPeso(s.kg, unEx(e))),placeholder:phKg,oninput:ev=>{ const raw=ev.target.value; s.kg = raw===''?'':(unEx(e)==='lb'? lbParaKg(raw) : raw); salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        ? h('input',{type:'text',inputmode:'decimal',value:(s.kg==null||s.kg===''?'':fmtPeso(s.kg, unEx(e))),placeholder:phKg,oninput:ev=>{ const raw=ev.target.value.replace(',','.'); s.kg = raw===''?'':(unEx(e)==='lb'? lbParaKg(raw) : raw); salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : h('div',{class:'anterior'},'—'),
       cardioMin
         ? h('input',{type:'text',inputmode:'numeric',value:(s.reps==null||s.reps===''?'':fmtMin(s.reps)),placeholder:phReps,oninput:ev=>{s.reps=parseMin(ev.target.value);salva('ativo');ATIVO.pinta();},disabled:s.ok})
@@ -1883,12 +1893,137 @@ TELAS.ativo = function(){
     UI.folha(BIB.ex(e.exId).n,[
       ix<t.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); trocaRapida(e); }},'⚡ Aparelho ocupado · trocar rápido'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); addAquecimento(e); }},'🔥 Adicionar aquecimento (50% e 70%)'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); const alvo=e.series.find(s=>s.tipo!=='W'&&(s.kg||s._planKg)); PLACAS.folha(alvo?(alvo.kg||alvo._planKg):''); }},'🧮 Calculadora de anilhas'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); notaFixaFolha(e.exId); }},'📌 Nota fixa do exercício'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{ s.ok=false; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; delete s._dtKg; delete s._dtReps; s.kg=''; s.reps=''; delete s.pc; }); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); reordenar(t.ex, ()=>salva('ativo')); }},'Reordenar exercícios'),
       h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover do treino')
     ]);
   }
 };
+
+/* ===== FERRAMENTAS DO TREINO ATIVO ===== */
+const PLACAS={
+  disponiveis:[25,20,15,10,5,2.5,1.25],
+  calc(alvo, barra){ const porLado=(alvo-barra)/2; if(porLado<-1e-9) return null;
+    const out=[]; let resto=Math.max(0,porLado);
+    PLACAS.disponiveis.forEach(p=>{ while(resto>=p-1e-9){ out.push(p); resto-=p; } });
+    return {placas:out, sobra:Math.round(resto*200)/200, total:barra+2*(Math.max(0,porLado)-resto)};
+  },
+  folha(kgSug){
+    const inp=h('input',{type:'text',inputmode:'decimal',value:kgSug?String(kgSug):'',placeholder:'Peso alvo (kg)'});
+    const selBarra=h('div',{style:'display:flex;gap:8px;margin:12px 0 0;flex-wrap:wrap'});
+    const res=h('div',{style:'margin-top:14px'});
+    const pinta=()=>{
+      const b=S.cfg.barraKg||20;
+      selBarra.innerHTML=''; [20,15,10].forEach(bb=>selBarra.append(h('button',{class:'chip'+(b===bb?' on':''),onclick:()=>{S.cfg.barraKg=bb;salva('cfg');pinta();}},'Barra '+bb+' kg')));
+      res.innerHTML='';
+      const alvo=Number(String(inp.value).replace(',','.'))||0;
+      if(!alvo){ res.append(h('div',{class:'f13 mut'},'Digite o peso alvo pra eu montar as anilhas.')); return; }
+      const r=PLACAS.calc(alvo,b);
+      if(!r){ res.append(h('div',{class:'f13 mut'},'O alvo é menor que o peso da barra ('+b+' kg).')); return; }
+      const cont={}; r.placas.forEach(p=>cont[p]=(cont[p]||0)+1);
+      const linha=h('div',{style:'display:flex;flex-wrap:wrap;gap:8px'});
+      Object.keys(cont).map(Number).sort((a,c)=>c-a).forEach(p=>linha.append(h('div',{style:'background:var(--surf3);border-radius:10px;padding:9px 13px;font-weight:700;font-size:14px'}, cont[p]+'× '+p+' kg')));
+      res.append(h('div',{class:'f13 mut',style:'margin-bottom:8px'},'Anilhas por lado:'),
+        r.placas.length? linha : h('div',{class:'f13'},'Só a barra, sem anilhas.'),
+        h('div',{class:'f13',style:'margin-top:12px'}, 'Total montado: '+CORE.fmtKg(r.total)+' kg'+(r.sobra>0.01? ' · faltam '+r.sobra+' kg (não fecha com as anilhas padrão)':'')));
+    };
+    inp.oninput=pinta;
+    UI.folha('Calculadora de anilhas',[inp, selBarra, res]); pinta();
+  }
+};
+function addAquecimento(e){
+  const x=BIB.ex(e.exId);
+  if(x.t!=='peso_reps'){ UI.toast('Aquecimento automático é só pra exercícios com carga'); return; }
+  if(e.series.some(s=>s.tipo==='W')){ UI.toast('Esse exercício já tem séries de aquecimento'); return; }
+  let base=0;
+  const alvo=e.series.find(s=>s.tipo!=='W' && (s._planKg||s.kg));
+  if(alvo) base=Number(alvo._planKg||alvo.kg)||0;
+  if(!base && S.prs[e.exId] && S.prs[e.exId].kg) base=Number(S.prs[e.exId].kg.v)||0;
+  if(!base){ UI.toast('Preencha a carga da primeira série pra eu calcular o aquecimento'); return; }
+  const arr=v=>Math.max(0,Math.round(v/2.5)*2.5);
+  e.series.unshift({tipo:'W', kg:String(arr(base*0.7)), reps:'4', ok:false});
+  e.series.unshift({tipo:'W', kg:String(arr(base*0.5)), reps:'8', ok:false});
+  salva('ativo'); UI.refaz(); UI.toast('Aquecimento: '+arr(base*0.5)+' kg × 8 e '+arr(base*0.7)+' kg × 4', true);
+}
+function trocaRapida(e){
+  const x=BIB.ex(e.exId);
+  const noTreino=new Set((S.ativo?S.ativo.ex:[]).map(q=>q.exId));
+  const cls=new Set(); if(typeof ASSIST_POOLS!=='undefined') Object.values(ASSIST_POOLS).forEach(tier=>{ (tier[x.g]||[]).forEach(id=>cls.add(id)); });
+  const cand=BIB.lista.filter(q=>q.g===x.g && q.t===x.t && q.id!==e.exId && !noTreino.has(q.id) && !q.oc);
+  cand.sort((a,b)=>{
+    const ca=cls.has(a.id)?0:1, cb=cls.has(b.id)?0:1; if(ca!==cb) return ca-cb;
+    const ea=a.e===x.e?0:1, eb=b.e===x.e?0:1; if(ea!==eb) return ea-eb;
+    return a.n.length-b.n.length;
+  });
+  const corpo=[h('div',{class:'f13 mut',style:'margin-bottom:8px'},'Alternativas rápidas de '+(GRUPOS[x.g]||x.g)+', mais parecidas primeiro:')];
+  cand.slice(0,8).forEach(q=>corpo.push(h('button',{class:'menu-op',style:'gap:10px',onclick:()=>{
+    e.exId=q.id; e.series.forEach(s=>{ if(!s.ok){ s.kg=''; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; } });
+    salva('ativo'); UI.fechaFolha(); UI.refaz(); UI.toast('Trocado: '+q.n, true);
+  }}, thumbEl(q.id), h('div',{class:'esp',style:'text-align:left;min-width:0'},
+      h('div',{style:'font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},q.n),
+      h('div',{class:'f12 mut'},String(q.e||'').replace(/-/g,' '))))));
+  if(!cand.length) corpo.push(h('div',{class:'vazio'},'Sem alternativa direta desse grupo. Use "Substituir exercício".'));
+  UI.folha('Aparelho ocupado?', corpo);
+}
+function notaFixaFolha(exId){
+  const x=BIB.ex(exId); const at=(S.exNotas[exId]&&S.exNotas[exId].txt)||'';
+  const inp=h('textarea',{rows:'3',placeholder:'Ex.: banco no furo 4, pegada fechada…'},at);
+  UI.folha('Nota fixa · '+x.n,[
+    h('div',{class:'f13 mut',style:'margin-bottom:8px;line-height:1.5'},'Essa nota fica salva no exercício e aparece em todo treino, diferente das notas do treino.'),
+    inp, h('div',{style:'height:12px'}),
+    h('button',{class:'btn btn-p',onclick:()=>{
+      const txt=(inp.value||'').trim();
+      if(txt){ S.exNotas[exId]={txt, atualizado:agora()}; } else { delete S.exNotas[exId]; }
+      salva('exNotas'); NET.agenda('exNotas/'+exId, txt?S.exNotas[exId]:null);
+      UI.fechaFolha(); UI.refaz(); UI.toast(txt?'Nota fixa salva 📌':'Nota fixa removida');
+    }},'Salvar')]);
+}
+const EXPORTA={
+  async arquivo(nome, conteudo, mime){
+    try{
+      const file=new File([conteudo], nome, {type:mime});
+      if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); return; }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    const url=URL.createObjectURL(new Blob([conteudo],{type:mime}));
+    const a=h('a',{href:url, download:nome, style:'display:none'}); document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 4000);
+  },
+  csv(){
+    const linhas=['data;treino;exercicio;serie;tipo;kg;reps;recorde'];
+    Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>a.inicio-b.inicio).forEach(t=>{
+      const d=new Date(t.inicio).toLocaleDateString('pt-BR');
+      (t.ex||[]).forEach(e=>{ const x=BIB.ex(e.exId);
+        (e.series||[]).forEach((s,i)=>{ linhas.push([d, '"'+String(t.titulo||'').replace(/"/g,"'")+'"', '"'+String(x.n||'').replace(/"/g,"'")+'"', i+1, s.tipo||'N', String(s.kg||'').replace('.',','), s.reps||'', (s.pr&&s.pr.length)?'sim':''].join(';')); });
+      });
+    });
+    EXPORTA.arquivo('forgex-treinos.csv', '\uFEFF'+linhas.join('\n'), 'text/csv');
+  },
+  json(){
+    const cfg={...S.cfg}; delete cfg.pushTok;
+    const dump={app:'ForgeX', versao:APP_VER, exportado:new Date().toISOString(),
+      perfil:S.perfil?{nome:S.perfil.nome,user:S.perfil.user,bio:S.perfil.bio}:null,
+      cfg, pastas:S.pastas, rotinas:S.rotinas, treinos:S.treinos, prs:S.prs, medidas:S.medidas, exNotas:S.exNotas,
+      custom:Object.fromEntries(Object.entries(S.custom).map(([k,v])=>{ const c={...v}; delete c.foto; return [k,c]; }))};
+    EXPORTA.arquivo('forgex-backup.json', JSON.stringify(dump,null,1), 'application/json');
+  }
+};
+function skeletonCard(){
+  const b=(w,hh)=>h('div',{class:'skel',style:'width:'+w+';height:'+hh+'px;border-radius:8px'});
+  return h('div',{class:'card'},
+    h('div',{class:'linha',style:'gap:10px;margin-bottom:12px'}, h('div',{class:'skel',style:'width:40px;height:40px;border-radius:50%'}),
+      h('div',{class:'esp'}, b('55%',13), h('div',{style:'height:6px'}), b('35%',11))),
+    b('100%',12), h('div',{style:'height:8px'}), b('80%',12));
+}
+function diagnostico(){
+  let log=[]; try{ log=JSON.parse(localStorage.getItem('tg_errlog')||'[]'); }catch(e){}
+  const tx=['ForgeX v'+APP_VER, navigator.userAgent, 'Data: '+new Date().toISOString(), 'Treinos: '+Object.keys(S.treinos).length+' · Rotinas: '+Object.keys(S.rotinas).length, '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']).join('\n');
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tx).then(()=>UI.toast('Diagnóstico copiado ✓', true)).catch(()=>UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)])); }
+  else UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)]);
+}
 
 /* ---------- DETALHE DO TREINO ---------- */
 function editaTempoTreino(t){
@@ -1910,11 +2045,57 @@ function editaTempoTreino(t){
       let dur=parseInt(inpDur.value,10); if(isNaN(dur)||dur<0) dur=durMin;
       t.inicio=ini; t.fim=ini+dur*60000; t.atualizado=agora();
       salva('treinos'); NET.agenda('treinos/'+t.id, t);
-      if(t.temFoto && S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
-      else if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+      if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
       UI.fechaFolha(); UI.refaz(); UI.toast('Tempo ajustado');
     }},'Salvar')]);
 }
+TELAS.concluido = function({id}){
+  const t=S.treinos[id]; if(!t){ UI.vai('inicio',null,false); return; }
+  UI.topo(h('div',{class:'topo-tit'},'Treino concluído'));
+  const m=$('#main'); m.innerHTML='';
+  const cv=h('canvas',{style:'position:fixed;inset:0;pointer-events:none;z-index:80'});
+  document.body.appendChild(cv);
+  try{
+    const ctx=cv.getContext('2d'); const W=cv.width=window.innerWidth, H=cv.height=window.innerHeight;
+    const cores=['#FF5A00','#FF7A2E','#FFD166','#4CC3FF','#7BE495'];
+    const P=Array.from({length:46},()=>({x:Math.random()*W,y:-20-Math.random()*H*0.5,v:2.4+Math.random()*3.4,w:5+Math.random()*6,a:Math.random()*Math.PI,va:(Math.random()-.5)*.25,c:cores[Math.floor(Math.random()*cores.length)]}));
+    const t0=performance.now();
+    (function tick(now){ if(!cv.isConnected) return; ctx.clearRect(0,0,W,H);
+      P.forEach(p=>{ p.y+=p.v; p.a+=p.va; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.a); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.w/2,p.w,p.w*0.62); ctx.restore(); });
+      if(now-t0<1900) requestAnimationFrame(tick); else cv.remove(); })(t0);
+  }catch(e){ cv.remove(); }
+  const durS=Math.round((t.fim-t.inicio)/1000);
+  m.append(
+    h('div',{style:'text-align:center;padding:18px 0 6px'},
+      h('div',{style:'font-size:52px'},'🎉'),
+      h('div',{class:'b800',style:'font-size:24px;margin-top:6px'},'Mandou bem!'),
+      h('div',{class:'f13 mut',style:'margin-top:4px'}, t.titulo)),
+    h('div',{class:'card'}, h('div',{class:'stats3'},
+      h('div',{},h('div',{class:'k'},'Duração'),h('div',{class:'v'},CORE.fmtDur(durS))),
+      h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume||0)+' kg')),
+      h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v'},String(t.series||0))))));
+  const prs=[]; (t.ex||[]).forEach(e=>{ (e.series||[]).forEach(s=>{ if(s.pr&&s.pr.length) prs.push({e,s}); }); });
+  if(prs.length){
+    const c=h('div',{class:'card',style:'border-color:var(--brand)'},
+      h('div',{class:'secao',style:'margin:0 0 8px'},'🏅 Recordes de hoje ('+prs.length+')'));
+    prs.slice(0,8).forEach(pp=>{ const x=BIB.ex(pp.e.exId);
+      c.append(h('div',{class:'linha',style:'padding:6px 0'}, thumbEl(pp.e.exId),
+        h('div',{class:'esp'}, h('div',{style:'font-size:14px'},x.n),
+          h('div',{class:'f12 mut'}, (pp.s.kg?CORE.fmtKg(pp.s.kg)+' kg × ':'')+pp.s.reps+(x.t==='tempo'?'s':' reps'))))); });
+    m.append(c);
+  }
+  const meta=S.cfg.metaSem||0;
+  if(meta){ const n=treinosNaSemana(inicioSemana(agora()));
+    const a=anelSVG(n/meta,52); a.appendChild(h('div',{style:'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px'},n+'/'+meta));
+    m.append(h('div',{class:'card'}, h('div',{class:'linha',style:'gap:12px'}, a,
+      h('div',{class:'esp f13'}, n>=meta? 'Meta da semana batida! 🔥' : ('Faltam '+(meta-n)+' pra bater sua meta da semana.')))));
+  }
+  m.append(
+    h('button',{class:'btn btn-p',style:'margin-top:4px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'),
+    h('button',{class:'btn',style:'margin-top:10px',onclick:()=>UI.vai('treinoDet',{id:t.id})},'Ver detalhes'),
+    h('button',{class:'btn',style:'margin-top:10px',onclick:()=>UI.vai('inicio',null,false)},'Fechar'));
+};
+
 TELAS.treinoDet = function({id}){
   const t=S.treinos[id]; if(!t){ UI.volta(); return; }
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},t.titulo,h('small',{},dataLonga(t.inicio))),
@@ -1927,6 +2108,13 @@ TELAS.treinoDet = function({id}){
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
     corpoSVG(gruposDoTreino(t), 92))));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'));
+  m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>{
+    if(S.ativo){ UI.toast('Você já tem um treino em andamento'); return; }
+    S.ativo={ id:uid(), rid:t.rid||null, titulo:t.titulo, inicio:agora(),
+      ex:(t.ex||[]).map(e=>({exId:e.exId, descanso:e.descanso, notas:e.notas||'', ss:e.ss||null,
+        series:e.series.map(s=>({tipo:s.tipo, kg:'', reps:'', ok:false, _planKg:(s.kg!==''&&s.kg!=null?s.kg:null), _planReps:(s.reps!==''&&s.reps!=null?s.reps:null)}))}))};
+    salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
+  }},'🔁 Repetir este treino'));
   if(t.temFoto && S.auth) m.appendChild(FOTOS.lazy(S.auth.uid, t.id));
   const divg=gruposDoTreino(t);
   if(divg.size){
@@ -2041,6 +2229,9 @@ TELAS.exercicio = function({id}){
     ...(x.gs||[]).map(g=>h('span',{class:'chip'},GRUPOS[g]||g)),
     h('span',{class:'chip'},EQUIPS[x.e]||x.e)));
 
+  if(S.exNotas[id]&&S.exNotas[id].txt) m.appendChild(h('div',{class:'card',style:'cursor:pointer',onclick:()=>notaFixaFolha(id)},
+    h('div',{class:'f13',style:'line-height:1.5'},'📌 '+S.exNotas[id].txt),
+    h('div',{class:'f12 mut2',style:'margin-top:4px'},'Nota fixa · toque pra editar')));
   const p=S.prs[id];
   if(p && p.resetEm && !(p.kg||p.vol||p.rm||p.reps)){
     m.appendChild(h('div',{class:'card'},
@@ -2168,6 +2359,13 @@ TELAS.config = function(){
       h('button',{class:'chip'+(S.cfg.tema!=='claro'?' on':''),onclick:()=>{ S.cfg.tema='escuro'; salvaCfg(); aplicaTema('escuro'); UI.refaz(); }},'Escuro'),
       h('button',{class:'chip'+(S.cfg.tema==='claro'?' on':''),onclick:()=>{ S.cfg.tema='claro'; salvaCfg(); aplicaTema('claro'); UI.refaz(); }},'Claro')),
     h('div',{class:'f12 mut2',style:'margin-top:8px'},'O escuro é o padrão do app.')));
+
+  m.appendChild(h('div',{class:'card'},
+    h('div',{class:'secao',style:'margin:0 0 10px'},'Seus dados'),
+    h('button',{class:'menu-op',onclick:()=>EXPORTA.csv()},'Exportar treinos (CSV)'),
+    h('button',{class:'menu-op',onclick:()=>EXPORTA.json()},'Backup completo (JSON)'),
+    h('button',{class:'menu-op',onclick:()=>diagnostico()},'Copiar diagnóstico técnico'),
+    h('div',{class:'f12 mut2',style:'margin-top:8px;line-height:1.5'},'Seus dados são seus. O CSV abre no Excel; o JSON é um backup de tudo.')));
   const salvaPerfil=()=>{ S.perfil.atualizado=agora(); salva('perfil'); NET.agenda('app/perfil',S.perfil);
     if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); };
 
@@ -2309,7 +2507,7 @@ const IMG = {
 };
 function avatarEl(foto, letra, px, radius){
   const extra=(px?('width:'+px+'px;height:'+px+'px;'):'')+(radius?('border-radius:'+radius+';'):'');
-  if(foto) return h('img',{src:foto, class:'avatar', style:extra});
+  if(foto) return h('img',{src:foto, class:'avatar', style:extra, loading:'lazy'});
   return h('div',{class:'avatar', style:extra+(px?('font-size:'+Math.round(px*0.38)+'px;'):'')},(letra||'?')[0].toUpperCase());
 }
 const SHARE = {
@@ -2454,7 +2652,7 @@ const FOTOS = {
       const el=en.target;
       FOTOS.pega(el.dataset.dono, el.dataset.tid).then(f=>{
         if(!f){ el.remove(); return; }
-        const img=h('img',{class:'foto-post', src:f, alt:'Foto do treino'});
+        const img=h('img',{class:'foto-post', src:f, alt:'Foto do treino', loading:'lazy'});
         el.replaceWith(img);
       });
     });
@@ -2463,7 +2661,7 @@ const FOTOS = {
     const ph=h('div',{class:'foto-esq'},'Carregando foto…');
     ph.dataset.dono=dono; ph.dataset.tid=tid;
     if(FOTOS.obs) FOTOS.obs.observe(ph);
-    else FOTOS.pega(dono,tid).then(f=>{ if(f){ ph.replaceWith(h('img',{class:'foto-post',src:f})); } else ph.remove(); });
+    else FOTOS.pega(dono,tid).then(f=>{ if(f){ ph.replaceWith(h('img',{class:'foto-post',src:f,loading:'lazy'})); } else ph.remove(); });
     return ph;
   }
 };
@@ -2680,6 +2878,75 @@ function dataRelativa(ts){
 }
 
 /* ---------- INÍCIO (feed) ---------- */
+/* ===== HÁBITO: semana, meta, streak e próximo treino ===== */
+function inicioSemana(ts){ const d=new Date(ts); d.setHours(0,0,0,0); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d.getTime(); }
+function treinosNaSemana(wIni){ const fim=wIni+7*864e5; return Object.values(S.treinos).filter(t=>!t.apagado && t.inicio>=wIni && t.inicio<fim).length; }
+function calcStreak(meta){
+  if(!meta) return 0;
+  let streak=0; const w=inicioSemana(agora());
+  if(treinosNaSemana(w)>=meta) streak++;
+  for(let i=1;i<520;i++){ if(treinosNaSemana(w-i*7*864e5)>=meta) streak++; else break; }
+  return streak;
+}
+function proximaRotina(){
+  const rots=Object.values(S.rotinas||{}); if(!rots.length) return null;
+  const ultimaExec={};
+  Object.values(S.treinos).forEach(t=>{ if(t.apagado||!t.rid) return; if(!ultimaExec[t.rid]||t.inicio>ultimaExec[t.rid]) ultimaExec[t.rid]=t.inicio; });
+  const ts=Object.values(S.treinos).filter(t=>!t.apagado&&t.rid&&S.rotinas[t.rid]).sort((a,b)=>b.inicio-a.inicio);
+  const pastaId = ts.length? S.rotinas[ts[0].rid].pasta : (rots[0].pasta||null);
+  let cand=rots.filter(r=>r.pasta===pastaId);
+  if(!cand.length) cand=rots;
+  cand.sort((a,b)=>(ultimaExec[a.id]||0)-(ultimaExec[b.id]||0) || (a.criado||0)-(b.criado||0));
+  return cand[0];
+}
+const METAUI={
+  folha(){ const at=S.cfg.metaSem||0;
+    const ops=[2,3,4,5,6,7].map(n=>h('button',{class:'chip'+(at===n?' on':''),style:'margin:4px 6px 4px 0',onclick:()=>METAUI.def(n)},n+'x por semana'));
+    UI.folha('Meta semanal de treinos',[
+      h('div',{class:'f13 mut',style:'margin-bottom:10px;line-height:1.6'},'Quantos treinos você quer fazer por semana? A semana conta de segunda a domingo, e cada semana batida aumenta sua sequência.'),
+      h('div',{style:'display:flex;flex-wrap:wrap'},ops),
+      at? h('button',{class:'btn',style:'margin-top:14px',onclick:()=>METAUI.def(0)},'Desligar meta'):null]);
+  },
+  def(n){ S.cfg.metaSem=n; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg',S.cfg); UI.fechaFolha(); UI.refaz(); if(n) UI.toast('Meta definida: '+n+' treinos por semana 🔥', true); }
+};
+function anelSVG(pct, tam){
+  const r=(tam-8)/2, c=2*Math.PI*r, off=c*(1-Math.min(1,pct||0));
+  return h('div',{style:'position:relative;width:'+tam+'px;height:'+tam+'px;flex-shrink:0',html:
+    '<svg width="'+tam+'" height="'+tam+'"><circle cx="'+tam/2+'" cy="'+tam/2+'" r="'+r+'" fill="none" stroke="var(--surf3)" stroke-width="7"/>'+
+    '<circle cx="'+tam/2+'" cy="'+tam/2+'" r="'+r+'" fill="none" stroke="var(--brand)" stroke-width="7" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+tam/2+' '+tam/2+')"/></svg>'});
+}
+function cardSemana(){
+  const meta=S.cfg.metaSem||0;
+  const n=treinosNaSemana(inicioSemana(agora()));
+  const px=proximaRotina();
+  const card=h('div',{class:'card'});
+  const topo=h('div',{class:'linha',style:'gap:14px'});
+  if(meta){
+    const anel=anelSVG(n/meta, 62);
+    anel.appendChild(h('div',{style:'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px'}, n+'/'+meta));
+    const st=calcStreak(meta);
+    topo.append(anel, h('div',{class:'esp',style:'min-width:0'},
+      h('div',{class:'b800',style:'font-size:15.5px'}, n>=meta? 'Meta da semana batida! 💪' : (meta-n)+(meta-n===1?' treino':' treinos')+' pra bater a meta'),
+      h('div',{class:'f13 mut',style:'margin-top:3px'}, st>0? ('🔥 '+st+(st===1?' semana seguida':' semanas seguidas')) : 'Comece sua sequência esta semana'),
+      h('button',{class:'f12',style:'background:none;border:none;color:var(--tx3);padding:2px 0;text-align:left;cursor:pointer',onclick:()=>METAUI.folha()},'ajustar meta')));
+  } else {
+    topo.append(h('div',{style:'font-size:30px'},'🎯'), h('div',{class:'esp'},
+      h('div',{class:'b800',style:'font-size:15.5px'},'Defina uma meta semanal'),
+      h('div',{class:'f13 mut',style:'margin-top:2px'},'Anel de progresso e sequência de semanas.')),
+      h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:9px 14px',onclick:()=>METAUI.folha()},'Definir'));
+  }
+  card.append(topo);
+  if(px && !S.ativo){
+    card.append(h('div',{style:'border-top:1px solid var(--surf2);margin:12px 0 10px'}));
+    card.append(h('div',{class:'linha'},
+      h('div',{class:'esp',style:'min-width:0'},
+        h('div',{class:'f12 mut2'},'Próximo treino'),
+        h('div',{class:'b700',style:'font-size:15px;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, px.titulo)),
+      h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:10px 16px;flex-shrink:0',onclick:()=>ATIVO.comeca(px.id)},'Começar')));
+  }
+  return card;
+}
+
 TELAS.inicio = function(){
   UI.topo(h('div',{class:'topo-tit'},'Início'),
     h('button',{class:'btn btn-mini',style:'width:46px;height:44px;position:relative',onclick:()=>NOTIF.folha(),
@@ -2710,15 +2977,17 @@ TELAS.inicio = function(){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
       'Retomar treino em andamento · '+CORE.fmtDur((agora()-S.ativo.inicio)/1000)));
   }
+  m.appendChild(cardSemana());
   const box=h('div',{});
   m.appendChild(box);
-  desenhaFeed(box); NOTIF.atualizaDot();
-  FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio' && box.isConnected){ desenhaFeed(box); NOTIF.atualizaDot(); } });
+  desenhaFeed(box, false); NOTIF.atualizaDot();
+  FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio' && box.isConnected){ desenhaFeed(box, true); NOTIF.atualizaDot(); } });
 };
-function desenhaFeed(box){
+function desenhaFeed(box, pronto){
   box.innerHTML='';
   const its=FEED.itens();
   const sug=sugeridosCard();
+  if(!its.length && !pronto && S.auth){ box.append(skeletonCard(), skeletonCard()); return; }
   if(!its.length){
     box.appendChild(h('div',{class:'vazio'},'Seus treinos concluídos aparecem aqui, com volume, séries e recordes. Siga amigos para ver os treinos deles também.'));
     box.appendChild(h('button',{class:'btn btn-p',onclick:()=>UI.vai('treino',null,false)},'Ir para Treino'));
@@ -3246,7 +3515,10 @@ TELAS.meusTreinos = function(){
   const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio);
   if(!ts.length){ m.appendChild(h('div',{class:'vazio'},'Nenhum treino registrado ainda.')); return; }
   m.appendChild(h('div',{class:'f13 mut',style:'margin-bottom:10px'}, ts.length+' treinos no total'));
-  ts.forEach(t=>m.appendChild(cartaoFeed({meu:true, dono:S.auth&&S.auth.uid, t, id:t.id, inicio:t.inicio})));
+  const bloco=25; let mostrados=0;
+  const sent=h('button',{class:'btn',style:'margin-top:4px'},'Mostrar mais');
+  const mostra=()=>{ ts.slice(mostrados, mostrados+bloco).forEach(t=>m.insertBefore(cartaoFeed({meu:true, dono:S.auth&&S.auth.uid, t, id:t.id, inicio:t.inicio}), sent)); mostrados+=bloco; if(mostrados>=ts.length) sent.remove(); };
+  sent.onclick=mostra; m.appendChild(sent); mostra();
 };
 TELAS.medidas = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Medições'),
@@ -3365,7 +3637,7 @@ const MED = {
     const campos={};
     const grid=h('div',{class:'grade2'});
     Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
-      const inp=h('input',{type:'number',inputmode:'decimal',placeholder:un});
+      const inp=h('input',{type:'text',inputmode:'decimal',placeholder:un});
       campos[campo]=inp;
       grid.append(h('div',{},h('div',{class:'f12 mut',style:'margin-bottom:4px'},rot),inp));
     });
@@ -3375,7 +3647,7 @@ const MED = {
       h('button',{class:'btn btn-p',onclick:()=>{
         const reg={id:uid(), data:new Date(dataInp.value+'T12:00:00').getTime(), atualizado:agora()};
         let tem=false;
-        Object.entries(campos).forEach(([campo,inp])=>{ if(inp.value!==''){ reg[campo]=Number(inp.value); tem=true; } });
+        Object.entries(campos).forEach(([campo,inp])=>{ const v=String(inp.value).replace(',','.'); if(v!==''){ reg[campo]=Number(v)||0; tem=true; } });
         if(!tem){ UI.toast('Preencha pelo menos um campo'); return; }
         S.medidas[reg.id]=reg; salva('medidas'); NET.agenda('medidas/'+reg.id,reg);
         UI.fechaFolha(); UI.refaz(); UI.toast('Medidas registradas');
@@ -3431,6 +3703,30 @@ TELAS.stats = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Estatísticas'));
   const m=$('#main'); m.innerHTML='';
   const ts=Object.values(S.treinos).filter(t=>!t.apagado);
+
+  // mês atual vs mesmo período do mês anterior
+  (function(){
+    const ag=new Date(); const dia=ag.getDate();
+    const iniAtu=new Date(ag.getFullYear(), ag.getMonth(), 1).getTime();
+    const iniAnt=new Date(ag.getFullYear(), ag.getMonth()-1, 1).getTime();
+    const fimAntPeriodo=new Date(ag.getFullYear(), ag.getMonth()-1, dia, 23,59,59).getTime();
+    const atu=ts.filter(t=>t.inicio>=iniAtu);
+    const ant=ts.filter(t=>t.inicio>=iniAnt && t.inicio<=Math.min(fimAntPeriodo, iniAtu-1));
+    if(!atu.length && !ant.length) return;
+    const soma=(arr,f)=>arr.reduce((a,t)=>a+(f(t)||0),0);
+    const d=(a,b)=>{ const dd=a-b; if(!b) return a?'novo':''; const p=Math.round(100*dd/b); return (dd>=0?'▲ ':'▼ ')+Math.abs(p)+'%'; };
+    const cor=(a,b)=>a>=b?'var(--ok, #7BE495)':'var(--tx3)';
+    const item=(rot,va,vb,fmt)=>h('div',{},h('div',{class:'k'},rot),
+      h('div',{class:'v'},fmt(va)), h('div',{class:'f11',style:'margin-top:2px;color:'+cor(va,vb)}, d(va,vb)));
+    const c=h('div',{class:'card'},
+      h('div',{class:'secao',style:'margin:0 0 4px'},'Este mês vs anterior'),
+      h('div',{class:'f12 mut2',style:'margin-bottom:10px'},'Comparando os primeiros '+dia+' dias de cada mês.'),
+      h('div',{class:'stats3'},
+        item('Treinos', atu.length, ant.length, v=>String(v)),
+        item('Volume', soma(atu,t=>t.volume), soma(ant,t=>t.volume), v=>CORE.fmtKg(v)+' kg'),
+        item('Recordes', soma(atu,t=>t.recordes), soma(ant,t=>t.recordes), v=>String(v))));
+    m.appendChild(c);
+  })();
 
   // última semana: um marcador por dia + mapa de calor dos grupos
   const hoje=new Date(); hoje.setHours(0,0,0,0);
@@ -3676,7 +3972,7 @@ const EXSVIEW = {
         EXSVIEW.copia(x); this.textContent='Copiado ✓'; this.disabled=true; this.className='btn btn-mini';
       }}, jaTenho? 'No acervo' : 'Copiar');
       return h('div',{class:'med-row'},
-        (x.foto? h('img',{src:x.foto,style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0'})
+        (x.foto? h('img',{src:x.foto,loading:'lazy',style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0'})
                : h('div',{style:'width:40px;height:40px;border-radius:9px;background:var(--surf3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px'},'🏋️')),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
@@ -4133,6 +4429,7 @@ const ASSIST = {
       return {titulo:mod.n, ex};
     });
     ASSIST.ficha={split, rotinas, resumo:{objetivo:r.objetivo, dias:r.dias, nivel:r.nivel, foco:r.foco, cardio:cardioFim, local:r.local}};
+    try{ S.cfg.assistResp={objetivo:r.objetivo,dias:r.dias,foco:r.foco,cardio:r.cardio,local:r.local,duracao:r.duracao,nivel:r.nivel}; S.cfg.atualizado=agora(); salva('cfg'); }catch(e){}
   },
 
   trocaExercicio(ri, ei){
@@ -4244,6 +4541,11 @@ TELAS.assistente = function(){
         h('div',{class:'esp'}, h('div',{class:'b700',style:'font-size:14.5px'},it[1]), h('div',{class:'f13 mut',style:'margin-top:1px'},it[2]))));
     });
     m.append(bl, assistBtn('Começar', true, ()=>ASSIST.prox()));
+    const ar=S.cfg.assistResp;
+    if(ar && ar.objetivo && ar.dias && ar.local){
+      m.append(h('button',{class:'btn',style:'margin-top:10px',onclick:()=>{ Object.assign(ASSIST.resp, ar); ASSIST.iniciarGeracao(); }},
+        '⚡ Gerar de novo com minhas respostas ('+(ASSIST_OBJ[ar.objetivo]?ASSIST_OBJ[ar.objetivo].t.split(' / ')[0]:'')+' · '+ar.dias+' dias)'));
+    }
     return;
   }
 
@@ -4431,13 +4733,18 @@ TELAS.explorar = function(){
   m.appendChild(cardAssist);
   m.appendChild(h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},
     'Programas prontos para começar. Adicione o pacote inteiro (vira uma pasta) ou uma rotina avulsa, e ajuste cargas e séries do seu jeito.'));
+  const PACK_META={ppl:['Intermediário','Hipertrofia'],'upper-lower':['Intermediário','Hipertrofia'],abc:['Todos os níveis','Hipertrofia'],fullbody:['Iniciante','Começar bem']};
   EXPLORAR_PACKS.forEach(p=>{
     const card=h('div',{class:'card'});
     card.append(
       h('div',{class:'linha'},
         h('div',{class:'esp'},
           h('div',{class:'b800',style:'font-size:16.5px'},p.nome),
-          h('div',{class:'f13 mut',style:'margin-top:2px'},p.desc)),
+          h('div',{class:'f13 mut',style:'margin-top:2px'},p.desc),
+          PACK_META[p.id]? h('div',{style:'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap'},
+            h('span',{class:'chip',style:'font-size:11.5px;padding:4px 10px'},PACK_META[p.id][0]),
+            h('span',{class:'chip',style:'font-size:11.5px;padding:4px 10px'},PACK_META[p.id][1]),
+            h('span',{class:'chip',style:'font-size:11.5px;padding:4px 10px'},p.rotinas.length+' rotinas')):null),
         h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:8px 12px',onclick:()=>{
           const pasta={id:uid(), nome:p.nome, ordem:Object.keys(S.pastas).length+1, criado:agora(), atualizado:agora()};
           S.pastas[pasta.id]=pasta; NET.agenda('pastas/'+pasta.id, pasta);

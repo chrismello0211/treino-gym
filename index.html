@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.3';
+const APP_VER='9.4';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2147,7 +2147,12 @@ const RANK={
     Object.entries(FEED.amigos||{}).forEach(([d,arr])=>{
       const da=(arr||[]).filter(r=>r&&r.inicio>=w0);
       const p=(FEED.perfis||{})[d]||{};
-      out.push({uid:d, nome:p.nome||(arr&&arr[0]&&arr[0].nome)||'Atleta', foto:p.foto,
+      const loc=(S.social&&S.social.seguindo&&S.social.seguindo[d])||{};
+      const r0=(arr&&arr[0])||{};
+      const bom=v=>v && v!=='Atleta';
+      const nome = bom(p.nome)? p.nome : bom(r0.nome)? r0.nome : bom(loc.nome)? loc.nome :
+        ((p.user||loc.user||r0.user)? '@'+(p.user||loc.user||r0.user) : 'Atleta');
+      out.push({uid:d, nome, foto:p.foto||loc.foto,
         n:da.length, vol:da.reduce((a,r)=>a+(r.volume||0),0), rec:da.reduce((a,r)=>a+(r.recordes||0),0)});
     });
     return out;

@@ -365,7 +365,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='8.9';
+const APP_VER='9.0';
 
 /*CORE-START*/
 const CORE = {
@@ -4111,7 +4111,8 @@ const ASSIST = {
       let c=(pool[g]||[]).filter(id=>!usados.has(id));
       if(!c.length) c=(pool[g]||[]).slice();
       if(!c.length) c=[].concat.apply([],Object.values(pool)).filter(id=>!usados.has(id));
-      return rnd(c);
+      const vies = r.nivel==='iniciante'?2.6 : r.nivel==='intermediario'?1.8 : 1.3; // favorece exercícios clássicos (frente do pool)
+      return c[Math.floor(Math.pow(Math.random(), vies)*c.length)] || c[0];
     };
     const rotinas=usarModelos.map(mod=>{
       let grupos=mod.g.slice(0,nBase);
@@ -4401,7 +4402,7 @@ ASSIST._resultado = function(m){
       h('div',{class:'f12 mut2'}, '~'+ASSIST._tempoMin(rot)+' min')));
     rot.ex.forEach((e,ei)=>{
       const x=BIB.ex(e.exId), ser=e.series.length, val=e.series[0]?e.series[0].reps:'';
-      const alvo = x.t==='tempo'? (val+'s') : (val+' reps');
+      const alvo = x.t==='tempo' ? (Number(val)>=120 ? Math.round(Number(val)/60)+' min' : val+'s') : (val+' reps');
       card.append(h('div',{class:'linha',style:'padding:5px 0'},
         thumbEl(e.exId),
         h('div',{class:'esp'},

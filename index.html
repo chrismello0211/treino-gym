@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.6';
+const APP_VER='9.7';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3442,11 +3442,12 @@ function desenhaAmigo(r, dono, tid){
   }
   (r.ex||[]).forEach(e=>{
     const card=h('div',{class:'card'});
+    const xb=(e.id&&BIB.porId[e.id])||null;      // resolve nome/tipo pela biblioteca ATUAL (corrige snapshots antigos)
     card.append(h('div',{class:'linha',style:'margin-bottom:8px'}, (e.id? thumbEl(e.id) : thumbNome(e.n)),
-      h('div',{class:'esp b700'},e.n)));
+      h('div',{class:'esp b700'}, xb? xb.n : e.n)));
     if(e.sr && e.sr.length){
       card.append(h('div',{class:'gtab cab'},h('div',{},'Série'),h('div'),
-        h('div',{style:'text-align:center'},'KG'),h('div',{style:'text-align:center'},'REPS'),h('div')));
+        h('div',{style:'text-align:center'},'KG'),h('div',{style:'text-align:center'},(xb&&xb.t==='tempo')?'TEMPO':'REPS'),h('div')));
       let num=0;
       e.sr.forEach((s,si)=>{
         if(s.t!=='W') num++;
@@ -3454,7 +3455,7 @@ function desenhaAmigo(r, dono, tid){
           h('div',{class:'stipo '+(s.t||'N')},(s.t==='N'||!s.t)?String(num):s.t),
           h('div'),
           h('div',{style:'text-align:center;font-weight:700'}, s.k!==''&&s.k!=null? CORE.fmtKg(s.k):'—'),
-          h('div',{style:'text-align:center;font-weight:700'}, s.r!=null? String(s.r):'—',
+          h('div',{style:'text-align:center;font-weight:700'}, s.r!=null? ((xb&&xb.t==='tempo')? fmtTempoEx(s.r) : String(s.r)):'—',
             s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
           h('div',{style:'text-align:center'}, s.p?'🏅':'')));
         if(s.p && s.p.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
@@ -3650,7 +3651,7 @@ TELAS.comparaEx = function({uid:alvo, nome}){
   const semPeso = !(meus.kg||dele.kg);
   const card=h('div',{class:'card'});
   if(semPeso){
-    card.append(barraCmp('Mais repetições', meus.reps?meus.reps.r:0, dele.reps?dele.reps.r:0, v=>v+' reps'));
+    card.append(barraCmp((x&&x.t==='tempo')?'Mais tempo':'Mais repetições', meus.reps?meus.reps.r:0, dele.reps?dele.reps.r:0, v=> (x&&x.t==='tempo')? fmtTempoEx(v) : v+' reps'));
   } else {
     card.append(
       barraCmp('1RM estimado', meus.rm?meus.rm.v:0, dele.rm?dele.rm.v:0, v=>CORE.fmtKg(v)+' kg'),

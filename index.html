@@ -262,7 +262,7 @@ img.avatar{object-fit:cover}
 }
 .fpg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .fpg img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:pointer}
-.drag-cab{touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
+.drag-cab{touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 [data-dix]{transition:transform .18s cubic-bezier(.2,.8,.3,1)}
 body.claro{
   --bg:#F4F5F7; --surf:#FFFFFF; --surf2:#F0F2F4; --surf3:#E8EBEF; --line:#E3E6EA;
@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.5';
+const APP_VER='9.6';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1061,7 +1061,10 @@ function prDetalhe(exId, tipo){
     }
   }
   const data=p.data? ' · '+new Date(p.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
-  UI.toast(NOM[tipo]+': '+(tipo==='reps'? Math.round(p.v)+' reps' : CORE.fmtKg(p.v)+' kg')+extra+data, true);
+  const _x=BIB.ex(id);
+  const _rot=(tipo==='reps'&&_x.t==='tempo')?'Mais tempo':NOM[tipo];
+  const _val=(tipo==='reps')? (_x.t==='tempo'? fmtTempoEx(p.v) : Math.round(p.v)+' reps') : CORE.fmtKg(p.v)+' kg';
+  UI.toast(_rot+': '+_val+extra+data, true);
 }
 const LB_POR_KG = 2.2046226218;
 function kgParaLb(kg){ return (Number(kg)||0)*LB_POR_KG; }
@@ -1632,7 +1635,9 @@ const ATIVO = {
         const NOM={kg:'Maior carga', vol:'Melhor série', rm:'1RM estimado', reps:'Mais repetições'};
         // uma notificação por tipo de PR (não um textão)
         prs.forEach(([t,v],i)=>{
-          const txt='Recorde · '+x.n+': '+NOM[t]+' '+(t==='reps'? Math.round(v)+' reps' : CORE.fmtKg(v)+' kg')+' 🏅';
+          const rotPr=(t==='reps'&&x.t==='tempo')?'Mais tempo':NOM[t];
+          const valPr=(t==='reps')? (x.t==='tempo'? fmtTempoEx(v) : Math.round(v)+' reps') : CORE.fmtKg(v)+' kg';
+          const txt='Recorde · '+x.n+': '+rotPr+' '+valPr+' 🏅';
           setTimeout(()=>UI.toast(txt, true), i*1400);
         });
         SOM.pr(); VIB.v([40,60,40]);
@@ -2317,7 +2322,7 @@ TELAS.concluido = function({id}){
     prs.slice(0,8).forEach(pp=>{ const x=BIB.ex(pp.e.exId);
       c.append(h('div',{class:'linha',style:'padding:6px 0'}, thumbEl(pp.e.exId),
         h('div',{class:'esp'}, h('div',{style:'font-size:14px'},x.n),
-          h('div',{class:'f12 mut'}, (pp.s.kg?CORE.fmtKg(pp.s.kg)+' kg × ':'')+pp.s.reps+(x.t==='tempo'?'s':' reps'))))); });
+          h('div',{class:'f12 mut'}, (pp.s.kg?CORE.fmtKg(pp.s.kg)+' kg × ':'')+(x.t==='tempo'? fmtTempoEx(pp.s.reps) : pp.s.reps+' reps'))))); });
     m.append(c);
   }
   const meta=S.cfg.metaSem||0;
@@ -2380,7 +2385,7 @@ TELAS.treinoDet = function({id}){
         h('div',{class:'stipo '+s.tipo},s.tipo==='N'?String(num||1):s.tipo),
         h('div'),
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? CORE.fmtKg(s.kg)+' kg':'—'),
-        h('div',{style:'text-align:center;font-weight:700'}, s.reps+(x.t==='tempo'?' s':''), s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
+        h('div',{style:'text-align:center;font-weight:700'}, x.t==='tempo'? fmtTempoEx(s.reps) : String(s.reps), s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
         h('div',{style:'text-align:center'}, s.pr?'🏅':'')));
       if(s.pr && s.pr.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
         '🏅 '+s.pr.map(p=>PR_ROT[p]||p).join(' · ')));
@@ -2396,6 +2401,22 @@ TELAS.treinoDet = function({id}){
             series:e.series.map(s=>({tipo:s.tipo,kg:s.kg,reps:s.reps,ok:false}))})) };
         salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
       }},'Repetir este treino'),
+      h('button',{class:'menu-op',onclick:async ()=>{
+        if(!S.auth){ UI.toast('Crie sua conta pra anexar fotos'); return; }
+        const f=await IMG.escolhe(); if(!f) return;
+        let b64; try{ b64=await IMG.comprime(f, 1000, 0.72); if(b64.length>140000) b64=await IMG.comprime(f, 800, 0.62); }catch(err){ UI.toast('Não consegui ler essa imagem'); return; }
+        t.temFoto=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
+        NET.agenda('/fotos/'+S.auth.uid+'/'+t.id, b64);
+        FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid][t.id]=b64;
+        if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+        UI.fechaFolha(); UI.refaz(); UI.toast('Foto do treino salva 📸', true);
+      }}, t.temFoto? 'Trocar foto do treino' : 'Adicionar foto do treino'),
+      t.temFoto? h('button',{class:'menu-op',onclick:()=>{
+        t.temFoto=false; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
+        if(S.auth){ NET.agenda('/fotos/'+S.auth.uid+'/'+t.id, null); if(FOTOS.cache[S.auth.uid]) delete FOTOS.cache[S.auth.uid][t.id]; }
+        if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+        UI.fechaFolha(); UI.refaz(); UI.toast('Foto removida');
+      }},'Remover foto do treino') : h('span',{style:'display:none'}),
       h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); if(S.perfil?.user) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, null); if(t.temFoto && S.auth) NET.agenda('/fotos/'+S.auth.uid+'/'+t.id, null); UI.fechaFolha(); UI.volta(); }},'Excluir do histórico')
     ]);
   }
@@ -2482,7 +2503,7 @@ TELAS.exercicio = function({id}){
         p.kg? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'kg')},h('div',{class:'k'},'Maior carga'),h('div',{class:'v'},CORE.fmtKg(p.kg.v)+' kg')):null,
         p.rm? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'rm')},h('div',{class:'k'},'1RM estimado'),h('div',{class:'v'},CORE.fmtKg(p.rm.v)+' kg')):null,
         p.vol? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'vol')},h('div',{class:'k'},'Melhor série'),h('div',{class:'v'},CORE.fmtKg(p.vol.v)+' kg')):
-        p.reps? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'reps')},h('div',{class:'k'},'Mais reps'),h('div',{class:'v'},p.reps.v)):null)));
+        p.reps? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'reps')},h('div',{class:'k'},BIB.ex(id).t==='tempo'?'Mais tempo':'Mais reps'),h('div',{class:'v'},BIB.ex(id).t==='tempo'? fmtTempoEx(p.reps.v) : p.reps.v)):null)));
   }
 
   (function(){
@@ -2750,6 +2771,7 @@ const IMG = {
     r.readAsDataURL(file);
   }); }
 };
+function fmtTempoEx(v){ v=Number(v)||0; return v>=120? (Math.round(v/60)+' min') : (v+'s'); }
 function avatarEl(foto, letra, px, radius){
   const extra=(px?('width:'+px+'px;height:'+px+'px;'):'')+(radius?('border-radius:'+radius+';'):'');
   if(foto) return h('img',{src:foto, class:'avatar', style:extra, loading:'lazy'});
@@ -2944,7 +2966,12 @@ const SS = {
 function dragOrdena(container, aoSoltar){
   let alvo=null, clone=null, sx=0, sy=0, timer=null, ativo=false;
   const cards=()=>[...container.children].filter(el=>el.dataset && el.dataset.dix!=null);
-  function limpaDoc(){ document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', solta); document.removeEventListener('pointercancel', solta); }
+  function tmove(ev){
+    if(ativo){ ev.preventDefault(); return; }
+    if(timer){ const p=(ev.touches&&ev.touches[0])||ev;
+      if(Math.abs(p.clientX-sx)<=12 && Math.abs(p.clientY-sy)<=12) ev.preventDefault(); }
+  }
+  function limpaDoc(){ document.removeEventListener('pointermove', move); document.removeEventListener('touchmove', tmove); document.removeEventListener('pointerup', solta); document.removeEventListener('pointercancel', solta); }
   function inicia(){
     ativo=true; window.__tgDrag=true;
     document.removeEventListener('pointermove', move); document.addEventListener('pointermove', move, {passive:false});
@@ -2997,6 +3024,7 @@ function dragOrdena(container, aoSoltar){
     document.body.style.userSelect='none';          // trava seleção de texto durante o gesto
     document.body.style.webkitUserSelect='none';
     document.addEventListener('pointermove', move, {passive:true});
+    document.addEventListener('touchmove', tmove, {passive:false});
     document.addEventListener('pointerup', solta);
     document.addEventListener('pointercancel', solta);
     timer=setTimeout(inicia, 300);                  // resposta mais rápida (era 420)

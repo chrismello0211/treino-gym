@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.7';
+const APP_VER='9.8';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3311,7 +3311,8 @@ function cartaoFeed(i){
   const t=i.meu? i.t : i.r;
   const nome=i.meu? (S.perfil?.nome||'Você') : (t.nome||'Atleta');
   const user=i.meu? S.perfil?.user : t.user;
-  const exs=i.meu? (t.ex||[]).map(e=>({n:BIB.ex(e.exId).n, s:e.series.length, id:e.exId})) : (t.ex||[]);
+  const exs=i.meu? (t.ex||[]).map(e=>({n:BIB.ex(e.exId).n, s:e.series.length, id:e.exId}))
+              : (t.ex||[]).map(e=> (e.id&&BIB.porId[e.id])? Object.assign({}, e, {n:BIB.porId[e.id].n}) : e);
   const card=h('div',{class:'card'});
   const fotoCab=i.meu? S.perfil?.foto : (((FEED.perfis||{})[i.dono])||{}).foto;
   const linhaEx=e=>h('div',{class:'feed-ex'}, e.id? thumbEl(e.id) : thumbNome(e.n),

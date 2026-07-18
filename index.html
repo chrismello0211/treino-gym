@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='9.8';
+const APP_VER='9.9';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1897,15 +1897,19 @@ TELAS.ativo = function(){
     ]);
   }
   function menuEx(e,ix){
+    const sec=(rot,primeiro)=>h('div',{class:'f11 mut2',style:'text-transform:uppercase;letter-spacing:.7px;font-weight:800;margin:'+(primeiro?'2px':'16px')+' 2px 6px'},rot);
     UI.folha(BIB.ex(e.exId).n,[
+      sec('Ferramentas', true),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); trocaRapida(e); }},'⚡ Aparelho ocupado · trocar rápido'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); addAquecimento(e); }},'🔥 Aquecimento automático (50% e 70%)'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); const alvo=e.series.find(s=>s.tipo!=='W'&&(s.kg||s._planKg)); PLACAS.folha(alvo?(alvo.kg||alvo._planKg):''); }},'🧮 Calculadora de anilhas'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PROJ.folha(e.exId); }},'📈 E se eu subir o peso?'),
+      sec('Este exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); notaFixaFolha(e.exId); }},'📌 Nota fixa'),
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{ s.ok=false; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; delete s._dtKg; delete s._dtReps; s.kg=''; s.reps=''; delete s.pc; }); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
       ix<t.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); trocaRapida(e); }},'⚡ Aparelho ocupado · trocar rápido'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); addAquecimento(e); }},'🔥 Adicionar aquecimento (50% e 70%)'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); const alvo=e.series.find(s=>s.tipo!=='W'&&(s.kg||s._planKg)); PLACAS.folha(alvo?(alvo.kg||alvo._planKg):''); }},'🧮 Calculadora de anilhas'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); notaFixaFolha(e.exId); }},'📌 Nota fixa do exercício'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PROJ.folha(e.exId); }},'📈 E se eu subir o peso?'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{ s.ok=false; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; delete s._dtKg; delete s._dtReps; s.kg=''; s.reps=''; delete s.pc; }); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
+      sec('Treino'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); reordenar(t.ex, ()=>salva('ativo')); }},'Reordenar exercícios'),
       h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover do treino')
     ]);
@@ -2965,6 +2969,7 @@ const SS = {
 /* ---------- reordenar arrastando ---------- */
 function dragOrdena(container, aoSoltar){
   let alvo=null, clone=null, sx=0, sy=0, timer=null, ativo=false;
+  let slots=null, iOrig=0, iDest=0, altAlvo=0, lastCY=0, cy0=0;
   const cards=()=>[...container.children].filter(el=>el.dataset && el.dataset.dix!=null);
   function tmove(ev){
     if(ativo){ ev.preventDefault(); return; }
@@ -2978,10 +2983,37 @@ function dragOrdena(container, aoSoltar){
     try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
     const r=alvo.getBoundingClientRect();
     clone=alvo.cloneNode(true);
-    clone.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;z-index:9999;pointer-events:none;opacity:.97;margin:0;transform:scale(1.02);box-shadow:0 18px 44px rgba(0,0,0,.55)';
+    clone.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;z-index:9999;pointer-events:none;opacity:.97;margin:0;transform:translate3d(0,0,0) scale(1.02);box-shadow:0 18px 44px rgba(0,0,0,.55);will-change:transform';
     document.body.appendChild(clone);
     alvo.style.opacity='.25';
-    document.body.style.userSelect='none';
+    cy0=r.top+r.height/2;                      // centro do card no viewport ao pegar
+    const ls=cards();
+    iOrig=ls.indexOf(alvo); iDest=iOrig;
+    altAlvo=r.height+(parseFloat(getComputedStyle(alvo).marginBottom)||0);
+    slots=ls.map(c=>{ const rc=c.getBoundingClientRect(); return {el:c, cy:rc.top+rc.height/2+window.scrollY}; });
+    slots.forEach(s=>{ if(s.el!==alvo){ s.el.style.transition='transform .16s ease'; s.el.style.willChange='transform'; } });
+    lastCY=sy; requestAnimationFrame(passo);
+  }
+  function aplicaShifts(){
+    let j=0;
+    for(let q=0;q<slots.length;q++){
+      if(q===iOrig) continue;
+      let ty=0;
+      if(iDest<iOrig && j>=iDest && j<iOrig) ty=altAlvo;
+      else if(iDest>iOrig && j>=iOrig && j<iDest) ty=-altAlvo;
+      slots[q].el.style.transform= ty? ('translate3d(0,'+ty+'px,0)') : '';
+      j++;
+    }
+  }
+  function passo(){
+    if(!ativo || !clone) return;
+    clone.style.transform='translate3d(0,'+(lastCY-sy)+'px,0) scale(1.02)';
+    const py=cy0+(lastCY-sy)+window.scrollY;   // decide pelo CENTRO do card fantasma, não pelo dedo
+    let d=0;
+    for(let q=0;q<slots.length;q++){ if(q===iOrig) continue; if(py>slots[q].cy) d++; }
+    if(d!==iDest){ iDest=d; aplicaShifts(); }
+    if(lastCY<100) scrollBy(0,-13); else if(lastCY>innerHeight-100) scrollBy(0,13);
+    requestAnimationFrame(passo);
   }
   function move(ev){
     if(timer && !ativo){
@@ -2990,29 +3022,25 @@ function dragOrdena(container, aoSoltar){
     }
     if(!ativo || !alvo) return;
     ev.preventDefault();
-    clone.style.transform='translateY('+(ev.clientY-sy)+'px) scale(1.02)';
-    const cy=ev.clientY;
-    for(const c of cards()){
-      if(c===alvo) continue;
-      const r=c.getBoundingClientRect();
-      if(cy>r.top && cy<r.bottom){
-        const antes = cy < r.top + r.height/2;
-        const ref = antes? c : c.nextSibling;
-        if(ref!==alvo) container.insertBefore(alvo, ref);
-        break;
-      }
-    }
-    if(cy<100) scrollBy(0,-13); else if(cy>innerHeight-100) scrollBy(0,13);
+    lastCY=ev.clientY;
   }
   function solta(){
     clearTimeout(timer); timer=null; limpaDoc();
-    if(!ativo){ alvo=null; return; }
+    if(!ativo){ alvo=null; document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; return; }
     ativo=false; window.__tgDrag=false;
     if(clone){ clone.remove(); clone=null; }
+    (slots||[]).forEach(s=>{ s.el.style.transform=''; s.el.style.transition=''; s.el.style.willChange=''; });
     document.body.style.userSelect=''; document.body.style.webkitUserSelect='';
-    if(alvo) alvo.style.opacity='';
+    if(alvo){
+      alvo.style.opacity='';
+      if(slots && iDest!==iOrig){
+        const outros=slots.map(s=>s.el).filter(el=>el!==alvo);
+        const ref=(iDest>=outros.length)? null : outros[iDest];
+        container.insertBefore(alvo, ref);
+      }
+    }
     const ordem=cards().map(c=>+c.dataset.dix);
-    alvo=null;
+    alvo=null; slots=null;
     if(ordem.some((v,i)=>v!==i)) aoSoltar(ordem);
   }
   container.addEventListener('pointerdown', ev=>{
@@ -3021,13 +3049,13 @@ function dragOrdena(container, aoSoltar){
     if(ev.target.closest('button,input,select,textarea')) return;
     alvo=cab.closest('[data-dix]'); if(!alvo) return;
     sx=ev.clientX; sy=ev.clientY;
-    document.body.style.userSelect='none';          // trava seleção de texto durante o gesto
+    document.body.style.userSelect='none';
     document.body.style.webkitUserSelect='none';
     document.addEventListener('pointermove', move, {passive:true});
     document.addEventListener('touchmove', tmove, {passive:false});
     document.addEventListener('pointerup', solta);
     document.addEventListener('pointercancel', solta);
-    timer=setTimeout(inicia, 300);                  // resposta mais rápida (era 420)
+    timer=setTimeout(inicia, 300);
   });
 }
 function reordenar(lista, aoCommit){

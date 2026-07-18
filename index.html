@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='10.0';
+const APP_VER='10.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -913,7 +913,8 @@ const BIB = {
 const GRUPOS = {peito:'Peito', costas:'Costas', ombros:'Ombros', biceps:'Bíceps', triceps:'Tríceps',
   antebraco:'Antebraço', trapezio:'Trapézio', abdomen:'Abdômen', lombar:'Lombar', gluteos:'Glúteos',
   quadriceps:'Quadríceps', posteriores:'Posteriores', panturrilha:'Panturrilha', adutores:'Adutores',
-  abdutores:'Abdutores', cardio:'Cardio', 'corpo-inteiro':'Corpo inteiro', mobilidade:'Mobilidade'};
+  abdutores:'Abdutores', cardio:'Cardio', 'corpo-inteiro':'Corpo inteiro', mobilidade:'Mobilidade',
+  'costas-sup':'Costas superiores', dorsais:'Dorsais', pescoco:'Pescoço'};
 const EQUIPS = {barra:'Barra', halter:'Halteres', maquina:'Máquina', cabo:'Cabo/Polia', kettlebell:'Kettlebell',
   elastico:'Elástico', 'peso-corporal':'Peso corporal', banco:'Banco', bola:'Bola', anilha:'Anilha',
   caixa:'Caixa', suspensao:'Suspensão/TRX', corda:'Corda', 'corda-de-pular':'Corda de pular', outro:'Outro'};
@@ -1223,7 +1224,8 @@ const PICKER = {
     const cont=h('div');
     ops.forEach(([v,rot])=>{
       const filhos=[];
-      if(campo==='g') filhos.push(h('span',{style:'flex-shrink:0;margin-right:2px'}, corpoSVG(v? new Map([[v,1]]) : new Map(), 54)));
+      if(campo==='g'){ const alias={dorsais:'costas','costas-sup':'trapezio',pescoco:'trapezio'};
+        filhos.push(h('span',{style:'flex-shrink:0;margin-right:2px'}, corpoSVG(v? new Map([[alias[v]||v,1]]) : new Map(), 54))); }
       filhos.push(rot);
       cont.appendChild(h('button',{class:'menu-op',style:campo==='g'?'gap:12px':'',onclick:()=>{
         PICKER.filtros[campo]=v; botao.textContent=v?rot:padrao; botao.classList.toggle('on',!!v);
@@ -3289,6 +3291,7 @@ function corpoSVG(pesos, larg){
 }
 
 /* ---------- data relativa ---------- */
+function horaFmt(ts){ try{ return new Date(ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
 function dataRelativa(ts){
   const d=new Date(ts), hoje=new Date(); d.setHours(0,0,0,0);
   const h0=new Date(); h0.setHours(0,0,0,0);
@@ -3486,7 +3489,7 @@ function cartaoFeed(i){
       avatarEl(fotoCab, nome, 44),
       h('div',{style:'min-width:0'},
         h('div',{class:'b700',style:'font-size:15px'},nome),
-        h('div',{class:'f12 mut2'}, (user? '@'+user+' · ':'')+dataRelativa(t.inicio))),
+        h('div',{class:'f12 mut2'}, (user? '@'+user+' · ':'')+dataRelativa(t.inicio)+' às '+horaFmt(t.inicio))),
       h('div',{class:'esp'}),
       i.meu? h('button',{class:'feed-mais',onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
@@ -3566,7 +3569,7 @@ function desenhaAmigo(r, dono, tid){
     avatarEl((((FEED.perfis||{})[dono])||{}).foto, r.nome||r.user, 42),
     h('div',{},h('div',{class:'b700',style:'font-size:14.5px'},r.nome||'Atleta',
       r.user? h('span',{class:'f12 mut2',style:'font-weight:600'},' · @'+r.user):null),
-      h('div',{class:'f12 mut2'},dataRelativa(r.inicio))))));
+      h('div',{class:'f12 mut2'},dataRelativa(r.inicio)+' às '+horaFmt(r.inicio))))));
   if(r.f) m.appendChild(FOTOS.lazy(dono, tid));
   const gmap=new Map();
   (r.ex||[]).forEach(e=>{

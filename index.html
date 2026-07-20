@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='10.4';
+const APP_VER='10.5';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1624,7 +1624,8 @@ const ATIVO = {
       if(pcEx){ const pc=pesoCorporalAtual(); if(pc>0) s.pc=pc; if(!s.kg) s.kg=''; }
       delete s._sugKg; delete s._sugReps;
       s.ok=true; SOM.check(); VIB.v(12);
-      const estreia = !S.prs[e.exId];
+      const _prReg=S.prs[e.exId];
+      const estreia = !_prReg || Object.values(_prReg).every(p=> p && p.tid===S.ativo.id); // 1ª sessão inteira sem medalha
       const prs=CORE.detectaPR(S.prs, e.exId, {...s});
       if(prs.length && estreia){
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
@@ -1875,7 +1876,10 @@ TELAS.ativo = function(){
       row.addEventListener('touchend',()=>{
         if(mov && dx<-64){
           if(e.series.length<=1){ UI.toast('Última série: use ⋯ para remover o exercício'); row.style.transform=''; row.classList.remove('del'); }
-          else { VIB.v(10); e.series.splice(si,1); salva('ativo'); UI.refaz(); }
+          else { VIB.v(10);
+            const sRem=e.series[si];
+            if(sRem && sRem._prBackup){ sRem._prBackup.forEach(([t,va])=>{ if(!S.prs[e.exId])return; if(va) S.prs[e.exId][t]=va; else delete S.prs[e.exId][t]; NET.agenda('prs/'+e.exId+'/'+t, va||null); }); salva('prs'); }
+            e.series.splice(si,1); salva('ativo'); UI.refaz(); }
         } else { row.style.transform=''; row.classList.remove('del'); }
       });
     })();
@@ -3094,7 +3098,7 @@ const SS = {
 /* ---------- reordenar arrastando ---------- */
 function dragOrdena(container, aoSoltar){
   let alvo=null, clone=null, sx=0, sy=0, timer=null, ativo=false;
-  let slots=null, iOrig=0, iDest=0, altAlvo=0, lastCY=0, cy0=0;
+  let slots=null, iOrig=0, iDest=0, altAlvo=0, lastCY=0, cy0=0, scrollY0=0;
   const cards=()=>[...container.children].filter(el=>el.dataset && el.dataset.dix!=null);
   function tmove(ev){
     if(ativo){ ev.preventDefault(); return; }
@@ -3103,6 +3107,7 @@ function dragOrdena(container, aoSoltar){
   }
   function limpaDoc(){ document.removeEventListener('pointermove', move); document.removeEventListener('touchmove', tmove); document.removeEventListener('pointerup', solta); document.removeEventListener('pointercancel', solta); }
   function inicia(){
+    if(!alvo || ativo) return;
     ativo=true; window.__tgDrag=true;
     document.removeEventListener('pointermove', move); document.addEventListener('pointermove', move, {passive:false});
     try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
@@ -3111,11 +3116,11 @@ function dragOrdena(container, aoSoltar){
     clone.style.cssText='position:fixed;left:'+r.left+'px;top:'+r.top+'px;width:'+r.width+'px;z-index:9999;pointer-events:none;opacity:.97;margin:0;transform:translate3d(0,0,0) scale(1.02);box-shadow:0 18px 44px rgba(0,0,0,.55);will-change:transform';
     document.body.appendChild(clone);
     alvo.style.opacity='.25';
-    cy0=r.top+r.height/2;                      // centro do card no viewport ao pegar
+    cy0=r.top+r.height/2; scrollY0=window.scrollY;
     const ls=cards();
     iOrig=ls.indexOf(alvo); iDest=iOrig;
     altAlvo=r.height+(parseFloat(getComputedStyle(alvo).marginBottom)||0);
-    slots=ls.map(c=>{ const rc=c.getBoundingClientRect(); return {el:c, cy:rc.top+rc.height/2+window.scrollY}; });
+    slots=ls.map(c=>{ const rc=c.getBoundingClientRect(); return {el:c, cy:rc.top+rc.height/2}; }); // viewport-relativo
     slots.forEach(s=>{ if(s.el!==alvo){ s.el.style.transition='transform .16s ease'; s.el.style.willChange='transform'; } });
     lastCY=sy; requestAnimationFrame(passo);
   }
@@ -3133,11 +3138,11 @@ function dragOrdena(container, aoSoltar){
   function passo(){
     if(!ativo || !clone) return;
     clone.style.transform='translate3d(0,'+(lastCY-sy)+'px,0) scale(1.02)';
-    const py=cy0+(lastCY-sy)+window.scrollY;   // decide pelo CENTRO do card fantasma, não pelo dedo
+    const py=cy0+(lastCY-sy)+(window.scrollY-scrollY0);
     let d=0;
     for(let q=0;q<slots.length;q++){ if(q===iOrig) continue; if(py>slots[q].cy) d++; }
     if(d!==iDest){ iDest=d; aplicaShifts(); }
-    if(lastCY<100) scrollBy(0,-13); else if(lastCY>innerHeight-100) scrollBy(0,13);
+    if(lastCY<90) scrollBy(0,-12); else if(lastCY>innerHeight-90) scrollBy(0,12);
     requestAnimationFrame(passo);
   }
   function move(ev){
@@ -3145,43 +3150,42 @@ function dragOrdena(container, aoSoltar){
       if(Math.abs(ev.clientX-sx)>12 || Math.abs(ev.clientY-sy)>12){ clearTimeout(timer); timer=null; limpaDoc(); alvo=null; document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; }
       return;
     }
-    if(!ativo || !alvo) return;
+    if(!ativo) return;
     ev.preventDefault();
     lastCY=ev.clientY;
   }
   function solta(){
     clearTimeout(timer); timer=null; limpaDoc();
-    if(!ativo){ alvo=null; document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; return; }
+    const eraAtivo=ativo, sSlots=slots, io=iOrig, id=iDest;
     ativo=false; window.__tgDrag=false;
     if(clone){ clone.remove(); clone=null; }
-    (slots||[]).forEach(s=>{ s.el.style.transform=''; s.el.style.transition=''; s.el.style.willChange=''; });
-    document.body.style.userSelect=''; document.body.style.webkitUserSelect='';
-    if(alvo){
-      alvo.style.opacity='';
-      if(slots && iDest!==iOrig){
-        const outros=slots.map(s=>s.el).filter(el=>el!==alvo);
-        const ref=(iDest>=outros.length)? null : outros[iDest];
-        container.insertBefore(alvo, ref);
-      }
-    }
-    const ordem=cards().map(c=>+c.dataset.dix);
+    if(sSlots) sSlots.forEach(s=>{ s.el.style.transform=''; s.el.style.transition=''; s.el.style.willChange=''; if(s.el) s.el.style.opacity=''; });
+    if(alvo) alvo.style.opacity='';
     alvo=null; slots=null;
-    if(ordem.some((v,i)=>v!==i)) aoSoltar(ordem);
+    document.body.style.userSelect=''; document.body.style.webkitUserSelect='';
+    if(!eraAtivo || !sSlots || id===io) return;
+    const n=sSlots.length; const ordem=[]; for(let k=0;k<n;k++) ordem.push(k);
+    ordem.splice(io,1); ordem.splice(id,0,io);   // dix na nova ordem; callback reordena os dados + refaz
+    aoSoltar(ordem);
   }
-  container.addEventListener('pointerdown', ev=>{
+  function onDown(ev){
+    if(ativo) return;
     const cab=ev.target.closest('.drag-cab');
     if(!cab || !container.contains(cab)) return;
     if(ev.target.closest('button,input,select,textarea')) return;
     alvo=cab.closest('[data-dix]'); if(!alvo) return;
     sx=ev.clientX; sy=ev.clientY;
-    document.body.style.userSelect='none';
-    document.body.style.webkitUserSelect='none';
+    document.body.style.userSelect='none'; document.body.style.webkitUserSelect='none';
     document.addEventListener('pointermove', move, {passive:true});
     document.addEventListener('touchmove', tmove, {passive:false});
     document.addEventListener('pointerup', solta);
     document.addEventListener('pointercancel', solta);
     timer=setTimeout(inicia, 300);
-  });
+  }
+  // CRÍTICO: um único ouvinte por container (o #main é reusado entre re-renders).
+  if(container.__dragPD) container.removeEventListener('pointerdown', container.__dragPD);
+  container.__dragPD=onDown;
+  container.addEventListener('pointerdown', onDown);
 }
 function reordenar(lista, aoCommit){
   const H=60;

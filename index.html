@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='10.2';
+const APP_VER='10.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2633,6 +2633,13 @@ TELAS.config = function(){
     h('div',{class:'f12 mut2',style:'margin-top:8px'},'O escuro é o padrão do app.')));
 
   m.appendChild(h('div',{class:'card'},
+    h('div',{class:'secao',style:'margin:0 0 10px'},'Treino'),
+    h('button',{class:'menu-op',style:'display:flex;justify-content:space-between;align-items:center;gap:10px',onclick:()=>METAUI.folha()},
+      h('span',{},'Meta semanal de treinos'),
+      h('span',{class:'f13',style:'color:var(--brand2);font-weight:700'}, (S.cfg.metaSem||0)? (S.cfg.metaSem+'x por semana') : 'definir')),
+    h('div',{class:'f12 mut2',style:'margin-top:8px;line-height:1.5'},'Também dá pra ajustar pelo card no topo da tela Início.')));
+
+  m.appendChild(h('div',{class:'card'},
     h('div',{class:'secao',style:'margin:0 0 10px'},'Seus dados'),
     h('button',{class:'menu-op',onclick:()=>EXPORTA.csv()},'Exportar treinos (CSV)'),
     h('button',{class:'menu-op',onclick:()=>EXPORTA.json()},'Backup completo (JSON)'),
@@ -3354,7 +3361,7 @@ function cardSemana(){
     topo.append(anel, h('div',{class:'esp',style:'min-width:0'},
       h('div',{class:'b800',style:'font-size:15.5px'}, n>=meta? 'Meta da semana batida! 💪' : (meta-n)+(meta-n===1?' treino':' treinos')+' pra bater a meta'),
       h('div',{class:'f13 mut',style:'margin-top:3px'}, st>0? ('🔥 '+st+(st===1?' semana seguida':' semanas seguidas')) : 'Comece sua sequência esta semana'),
-      h('button',{class:'f12',style:'background:none;border:none;color:var(--tx3);padding:2px 0;text-align:left;cursor:pointer',onclick:()=>METAUI.folha()},'ajustar meta')));
+      h('button',{class:'f12',style:'background:none;border:1px solid var(--line);border-radius:8px;color:var(--tx2);padding:4px 10px;margin-top:4px;text-align:left;cursor:pointer;display:inline-flex;align-items:center;gap:5px',onclick:()=>METAUI.folha()},'✎ ajustar meta')));
   } else {
     topo.append(h('div',{style:'font-size:30px'},'🎯'), h('div',{class:'esp'},
       h('div',{class:'b800',style:'font-size:15.5px'},'Defina uma meta semanal'),

@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='10.6';
+const APP_VER='10.7';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1823,7 +1823,8 @@ TELAS.ativo = function(){
         thumbEl(e.exId),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'color:var(--brand2);font-size:15.5px',onclick:()=>UI.vai('exercicio',{id:e.exId})}, x.n),
-          h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g)),
+          h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g),
+          (function(){ const rr=recordeResumo(e.exId); return rr? h('div',{class:'f12',style:'color:#E8B84B;margin-top:2px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',onclick:()=>UI.vai('exercicio',{id:e.exId})}, '🏅 '+rr) : h('span',{style:'display:none'}); })()),
         h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>menuEx(e,ix)},'⋯')),
       h('input',{placeholder:'Notas…',value:e.notas||'',oninput:ev=>{e.notas=ev.target.value;salva('ativo');},style:'margin-bottom:8px;font-size:14px'}),
       (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
@@ -2906,6 +2907,17 @@ document.addEventListener('click', ev=>{
   if(im && im.src){ ev.preventDefault(); FOTOVIEW.abre(im.src); }
 });
 function fmtTempoEx(v){ v=Number(v)||0; return v>=120? (Math.round(v/60)+' min') : (v+'s'); }
+function recordeResumo(exId){
+  const p=S.prs[exId]; if(!p) return null;
+  const x=BIB.ex(exId);
+  if(x.t==='tempo'){ if(!p.reps) return null; return 'Recorde: '+fmtTempoEx(p.reps.v); }
+  if(x.t==='reps'){ if(!p.reps) return null; return 'Recorde: '+p.reps.v+' reps'; }
+  // peso_reps: mostra a maior carga (com reps daquele PR, se houver) e o 1RM estimado
+  if(p.kg){ const d=p.kg.data; let txt='Recorde: '+CORE.fmtKg(p.kg.v)+' kg'; if(p.kg.reps) txt+=' × '+p.kg.reps; if(p.rm) txt+=' · 1RM '+CORE.fmtKg(p.rm.v)+' kg'; return txt; }
+  if(p.rm) return 'Recorde: 1RM '+CORE.fmtKg(p.rm.v)+' kg';
+  if(p.reps) return 'Recorde: '+p.reps.v+' reps';
+  return null;
+}
 function avatarEl(foto, letra, px, radius){
   const extra=(px?('width:'+px+'px;height:'+px+'px;'):'')+(radius?('border-radius:'+radius+';'):'');
   if(foto) return h('img',{src:foto, class:'avatar', style:extra, loading:'lazy'});

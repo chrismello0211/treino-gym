@@ -369,7 +369,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='10.7';
+const APP_VER='10.8';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1798,7 +1798,8 @@ TELAS.ativo = function(){
   dragOrdena(m, ordem=>{ t.ex = ordem.map(i2=>t.ex[i2]); salva('ativo'); UI.refaz(); });
   m.appendChild(h('button',{class:'btn',onclick:()=>PICKER.abre(id=>{
     const x=BIB.ex(id);
-    t.ex.push({exId:id, descanso: x.g==='cardio'?0:S.cfg.descanso, notas:'', series:[{tipo:'N',kg:'',reps:x.t==='tempo'?'40':'',ok:false}]});
+    const s0={tipo:'N',kg:'',reps:x.t==='tempo'?'40':'',ok:false};
+    t.ex.push({exId:id, descanso: x.g==='cardio'?0:S.cfg.descanso, notas:'', series: x.g==='cardio'? [s0] : [s0,{...s0},{...s0}]});
     salva('ativo'); UI.refaz();
   })},'＋ Adicionar exercício'));
 

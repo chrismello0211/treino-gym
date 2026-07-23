@@ -293,6 +293,8 @@ body.kb .folha .folha-corpo{max-height:38vh}
 .fx-mini-spin{width:15px;height:15px;border-radius:50%;border:2px solid var(--surf3);border-top-color:var(--brand);display:inline-block;animation:fx-spin .7s linear infinite}
 @keyframes fx-tela{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .fx-tela{animation:fx-tela .18s ease-out}
+.cab-ta{gap:4px}
+.cab-ta .v{font-size:16px}
 @keyframes skel-p{0%,100%{opacity:.45}50%{opacity:.9}}
 .skel{background:var(--surf3);animation:skel-p 1.1s ease-in-out infinite}
 </style>
@@ -369,7 +371,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='10.8';
+const APP_VER='11.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -412,7 +414,9 @@ const CORE = {
   },
   fmtDur(seg){ seg=Math.max(0,Math.round(seg)); const h=Math.floor(seg/3600), m=Math.floor(seg%3600/60), s=seg%60;
     if(h>0) return h+'h '+String(m).padStart(2,'0')+'min'; if(m>0) return m+'min '+String(s).padStart(2,'0')+'s'; return s+'s'; },
-  fmtRelogio(seg){ seg=Math.max(0,Math.round(seg)); const m=Math.floor(seg/60), s=seg%60; return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); },
+  fmtRelogio(seg){ seg=Math.max(0,Math.round(seg)); const hh=Math.floor(seg/3600), m=Math.floor(seg%3600/60), s=seg%60;
+    if(hh>0) return hh+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); },
   fmtKg(v){ v=Math.round((Number(v)||0)*10)/10; return v.toLocaleString('pt-BR',{maximumFractionDigits:1}); },
   fmtKgCurto(v){ v=Number(v)||0; if(v>=10000) return Math.round(v/1000)+'k'; if(v>=1000) return (Math.round(v/100)/10).toLocaleString('pt-BR',{maximumFractionDigits:1})+'k'; return CORE.fmtKg(v); },
   semanaKey(ts){ const d=new Date(ts); const dia=(d.getDay()+6)%7; d.setDate(d.getDate()-dia); d.setHours(0,0,0,0); return d.getTime(); },
@@ -1524,7 +1528,7 @@ TELAS.rotinaEditor = function(){
     h('input',{value:r.titulo, placeholder:'Ex.: Push, Peito e tríceps…', oninput:e=>{r.titulo=e.target.value; $('.topo-tit').textContent=r.titulo||'Nova rotina';}})));
 
   r.ex.forEach((e,ix)=>m.appendChild(cartaoEx(e,ix)));
-  dragOrdena(m, ordem=>{ r.ex = ordem.map(i2=>r.ex[i2]); UI.refaz(); });
+  holdReordenar(m, ()=>reordenar(r.ex, ()=>{}));
   m.appendChild(h('button',{class:'btn',style:'margin-top:4px',onclick:()=>PICKER.abre(id=>{ r.ex.push(novoExRotina(id)); UI.refaz(); })},'＋ Adicionar exercício'));
 
   function novoExRotina(id){
@@ -1675,7 +1679,7 @@ const ATIVO = {
     const tot=(S.ativo.ex||[]).reduce((a,e)=>a+e.series.length,0);
     const el=$('#ta-vol'); if(el){
       el.textContent=CORE.fmtKgCurto(vol)+' kg';
-      $('#ta-ser').textContent=ser+(tot?' / '+tot:'');
+      $('#ta-ser').textContent=ser+(tot?'/'+tot:'');
       const pct = tot? Math.round(100*ser/tot) : 0;
       const sk=$('#ta-serk'); if(sk) sk.textContent = tot? ('Séries · '+pct+'%') : 'Séries';
       const rc=$('#ta-rec'); if(rc){
@@ -1787,15 +1791,15 @@ TELAS.ativo = function(){
 
   m.appendChild(h('div',{class:'card',style:'position:sticky;top:calc(var(--sat) + 58px);z-index:30'},
     h('div',{class:'linha',style:'align-items:flex-start;gap:8px'},
-      h('div',{class:'stats3',style:'flex:1;min-width:0'},
+      h('div',{class:'stats3 cab-ta',style:'flex:1;min-width:0'},
         h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k'},'Duração ✎'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0:00')),
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol',style:'white-space:nowrap'},'0 kg')),
         h('div',{},h('div',{class:'k',id:'ta-serk'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0')),
         h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',id:'ta-rec'},'0'))),
-      h('div',{id:'ta-musc',style:'flex-shrink:0;width:84px;overflow:hidden;display:flex;justify-content:flex-end'}))));
+      h('div',{id:'ta-musc',style:'flex-shrink:0;width:76px;overflow:hidden;display:flex;justify-content:flex-end'}))));
 
   t.ex.forEach((e,ix)=>m.appendChild(cartao(e,ix)));
-  dragOrdena(m, ordem=>{ t.ex = ordem.map(i2=>t.ex[i2]); salva('ativo'); UI.refaz(); });
+  holdReordenar(m, ()=>reordenar(t.ex, ()=>salva('ativo')));
   m.appendChild(h('button',{class:'btn',onclick:()=>PICKER.abre(id=>{
     const x=BIB.ex(id);
     const s0={tipo:'N',kg:'',reps:x.t==='tempo'?'40':'',ok:false};
@@ -3201,6 +3205,23 @@ function dragOrdena(container, aoSoltar){
   container.__dragPD=onDown;
   container.addEventListener('pointerdown', onDown);
 }
+function holdReordenar(container, abrir){
+  function onDown(ev){
+    const cab=ev.target.closest('.drag-cab');
+    if(!cab || !container.contains(cab)) return;
+    if(ev.target.closest('button,input,select,textarea')) return;
+    const sx=ev.clientX, sy=ev.clientY;
+    const limpar=()=>{ clearTimeout(t); document.removeEventListener('pointermove',mv); document.removeEventListener('pointerup',limpar); document.removeEventListener('pointercancel',limpar); };
+    const mv=e2=>{ if(Math.abs(e2.clientX-sx)>12 || Math.abs(e2.clientY-sy)>12) limpar(); };
+    const t=setTimeout(()=>{ limpar(); try{ navigator.vibrate && navigator.vibrate(12); }catch(e){} abrir(); }, 300);
+    document.addEventListener('pointermove',mv,{passive:true});
+    document.addEventListener('pointerup',limpar);
+    document.addEventListener('pointercancel',limpar);
+  }
+  if(container.__reoPD) container.removeEventListener('pointerdown', container.__reoPD);
+  container.__reoPD=onDown;
+  container.addEventListener('pointerdown', onDown);
+}
 function reordenar(lista, aoCommit){
   const H=60;
   const wrap=h('div',{});
@@ -3256,7 +3277,7 @@ function reordenar(lista, aoCommit){
   }
   draw();
   UI.folha('Reordenar exercícios',[
-    h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Arraste pelo ≡ para mudar a ordem.'),
+    h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Arraste pelo ≡ para mudar a ordem. Dica: segurar um exercício no treino abre esta tela.'),
     wrap, h('div',{style:'height:8px'}),
     h('button',{class:'btn btn-p',onclick:()=>{ UI.fechaFolha(); UI.refaz(); }},'Concluir')]);
 }

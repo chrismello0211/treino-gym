@@ -371,7 +371,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.0';
+const APP_VER='11.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1230,7 +1230,13 @@ const PICKER = {
     ops.forEach(([v,rot])=>{
       const filhos=[];
       if(campo==='g'){ const alias={dorsais:'costas','costas-sup':'trapezio',pescoco:'trapezio'};
-        filhos.push(h('span',{style:'flex-shrink:0;margin-right:2px'}, corpoSVG(v? new Map([[alias[v]||v,1]]) : new Map(), 54))); }
+        const tile=h('span',{style:'flex-shrink:0;margin-right:2px;width:54px;height:54px;display:inline-flex;align-items:center;justify-content:center'});
+        if(v){
+          const img=h('img',{src:'grupos/'+v+'.webp', loading:'lazy', alt:'', style:'width:46px;height:46px;border-radius:50%;object-fit:cover;background:#fff'});
+          img.onerror=()=>{ try{ img.replaceWith(corpoSVG(new Map([[alias[v]||v,1]]),54)); }catch(e){} };
+          tile.appendChild(img);
+        } else tile.appendChild(corpoSVG(new Map(),54));
+        filhos.push(tile); }
       filhos.push(rot);
       cont.appendChild(h('button',{class:'menu-op',style:campo==='g'?'gap:12px':'',onclick:()=>{
         PICKER.filtros[campo]=v; botao.textContent=v?rot:padrao; botao.classList.toggle('on',!!v);
@@ -1796,7 +1802,7 @@ TELAS.ativo = function(){
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol',style:'white-space:nowrap'},'0 kg')),
         h('div',{},h('div',{class:'k',id:'ta-serk'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0')),
         h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',id:'ta-rec'},'0'))),
-      h('div',{id:'ta-musc',style:'flex-shrink:0;width:76px;overflow:hidden;display:flex;justify-content:flex-end'}))));
+      h('div',{id:'ta-musc',style:'flex-shrink:0;width:76px;overflow:hidden;display:flex;justify-content:flex-end;cursor:pointer',onclick:()=>{ if(S.ativo) distMuscularFolha(S.ativo); }}))));
 
   t.ex.forEach((e,ix)=>m.appendChild(cartao(e,ix)));
   holdReordenar(m, ()=>reordenar(t.ex, ()=>salva('ativo')));
@@ -2364,7 +2370,7 @@ TELAS.treinoDet = function({id}){
       h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>editaTempoTreino(t)},h('div',{class:'k'},'Tempo ✎'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
-    corpoSVG(gruposDoTreino(t), 92))));
+    h('span',{style:'cursor:pointer',onclick:()=>distMuscularFolha(t)}, corpoSVG(gruposDoTreino(t), 92)))));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>{
     if(S.ativo){ UI.toast('Você já tem um treino em andamento'); return; }
@@ -3290,6 +3296,30 @@ const REGIOES = {
   quadriceps:['qd1','qd2'], adutores:['qd1','qd2'], abdutores:['qd1','qd2'],
   posteriores:['ps1','ps2'], panturrilha:['pt1','pt2','ptf1','ptf2']
 };
+/* ===== DISTRIBUIÇÃO MUSCULAR DO TREINO ===== */
+function distMuscularFolha(t){
+  const mapa=gruposDoTreino(t);
+  // grupos presentes no treino (mesmo com 0 séries feitas ainda)
+  const presentes=new Map();
+  (t.ex||[]).forEach(e=>{ const x=BIB.ex(e.exId); [x.g].concat(x.gs||[]).forEach(g=>{ if(!presentes.has(g)) presentes.set(g,0); }); });
+  mapa.forEach((v,g)=>presentes.set(g,v));
+  const linhas=[...presentes.entries()].sort((a,b)=>b[1]-a[1]);
+  const max=Math.max(1,...linhas.map(l=>l[1]));
+  const corpo=h('div',{style:'display:flex;justify-content:center;margin:4px 0 16px'}, corpoSVG(mapa.size?mapa:new Map(), 300));
+  const tab=h('div',{});
+  tab.appendChild(h('div',{class:'linha f12 mut2',style:'margin-bottom:8px'},
+    h('div',{class:'esp'},'Músculo'), h('div',{},'Séries concluídas')));
+  linhas.forEach(par=>{
+    const g=par[0], n=par[1];
+    tab.appendChild(h('div',{class:'linha',style:'padding:7px 0;gap:10px'},
+      h('div',{style:'width:118px;flex-shrink:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, GRUPOS[g]||g),
+      h('div',{class:'esp',style:'height:14px;background:var(--surf3);border-radius:7px;overflow:hidden'},
+        h('div',{style:'height:100%;width:'+Math.round(100*n/max)+'%;background:var(--brand);border-radius:7px;transition:width .3s'})),
+      h('div',{class:'b700',style:'width:26px;text-align:right;font-size:14px'}, String(n))));
+  });
+  UI.folha('Distribuição muscular',[corpo, tab,
+    h('div',{class:'f12 mut2',style:'margin-top:14px;line-height:1.5'},'Conta as séries válidas concluídas (aquecimento fica de fora). Os músculos acendem conforme o volume.')]);
+}
 function gruposDoTreino(t){
   const m=new Map();
   (t.ex||[]).forEach(e=>{

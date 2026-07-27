@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.4';
+const APP_VER='11.4.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2727,6 +2727,7 @@ TELAS.config = function(){
     h('button',{class:'menu-op',onclick:()=>EXPORTA.csv()},'Exportar treinos (CSV)'),
     h('button',{class:'menu-op',onclick:()=>EXPORTA.json()},'Backup completo (JSON)'),
     h('button',{class:'menu-op',onclick:()=>diagnostico()},'Copiar diagnóstico técnico'),
+    h('button',{class:'menu-op',onclick:()=>FALA.envia()},'Enviar sugestão ou relatar problema'),
     h('button',{class:'menu-op',onclick:()=>MOD.folhaBloqueados()},'Pessoas bloqueadas',
       h('span',{class:'esp'}), h('span',{class:'f12 mut2'}, String(Object.keys(MOD.lista()).length))),
     h('div',{class:'f12 mut2',style:'margin-top:8px;line-height:1.5'},'Seus dados são seus. O CSV abre no Excel; o JSON é um backup de tudo.')));
@@ -2790,10 +2791,16 @@ TELAS.config = function(){
       }},'Sincronizar agora', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'enviar tudo')),
       h('button',{class:'btn',style:'margin-bottom:8px',onclick:CONTA.sair},'Sair da conta'),
       h('button',{class:'menu-op perigo',onclick:()=>CONTA.apagar()},'Apagar minha conta'));
-  if(S.perfil.user==='chris_mello') cardConta.insertBefore(
-    h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
-      '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')),
-    cardConta.lastChild);
+  if(S.perfil.user==='chris_mello'){
+    cardConta.insertBefore(
+      h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
+        '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')),
+      cardConta.lastChild);
+    cardConta.insertBefore(
+      h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>FALA.caixa()},
+        '📥 Caixa de entrada', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')),
+      cardConta.lastChild);
+  }
   } else {
     cardConta.append(
       h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:10px'},'Sua conta anônima vive só neste aparelho. Com e-mail, você entra de qualquer lugar, não perde nada se trocar de celular e libera o feed com amigos.'),
@@ -4943,6 +4950,61 @@ const ROTFIM = {
       h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>{
         ROTFIM.aplica(rot, t); UI.fechaFolha(); UI.toast('Ficha atualizada \u2713', true); }},'Atualizar ficha'),
       h('button',{class:'btn',onclick:()=>UI.fechaFolha()},'Manter como estava')]);
+  }
+};
+
+
+/* --- sugestao e bug: qualquer um envia, so o dono le --- */
+const FALA = {
+  envia(){
+    const tipo={v:'sugestao'};
+    const chip=(k,rot)=>h('button',{class:'chip'+(tipo.v===k?' on':''),onclick:function(){
+      tipo.v=k;
+      Array.prototype.forEach.call(this.parentNode.children, b=>b.classList.remove('on'));
+      this.classList.add('on');
+    }}, rot);
+    const linha=h('div',{style:'display:flex;gap:8px;margin-bottom:12px'},
+      chip('sugestao','Sugest\u00e3o'), chip('bug','Problema'), chip('outro','Outro'));
+    const txt=h('textarea',{rows:'5',maxlength:'1000',style:'resize:none',
+      placeholder:'Escreva do seu jeito. Se for problema, conta o que voc\u00ea estava fazendo quando aconteceu.'});
+    UI.folha('Enviar sugest\u00e3o ou relatar problema',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},
+        'Vai direto pra quem faz o app. Leio tudo.'),
+      linha, txt, h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:async function(){
+        const t=(txt.value||'').trim();
+        if(t.length<5){ UI.toast('Escreve um pouquinho mais'); return; }
+        if(!S.auth){ UI.toast('Sem conex\u00e3o agora'); return; }
+        this.disabled=true; this.textContent='Enviando\u2026';
+        try{
+          await NET.putD('/feedback/'+uid(), {txt:t.slice(0,1000), ts:agora(), tipo:tipo.v,
+            de:S.auth.uid, user:(S.perfil&&S.perfil.user)||'', ver:APP_VER,
+            ua:(navigator.userAgent||'').slice(0,90)});
+          UI.fechaFolha(); UI.toast('Recebido, valeu! \ud83d\ude4c', true);
+        }catch(e){ this.disabled=false; this.textContent='Enviar'; UI.toast('Sem conex\u00e3o agora'); }
+      }},'Enviar')]);
+  },
+  async caixa(){
+    UI.folha('Caixa de entrada',[h('div',{class:'f13 mut',style:'padding:10px 2px'},'Carregando\u2026')]);
+    let v=null; try{ v=await NET.get('/feedback'); }catch(e){}
+    const arr=Object.entries(v||{}).map(([id,f])=>Object.assign({id},f)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const ROT={sugestao:'Sugest\u00e3o', bug:'Problema', outro:'Outro'};
+    const COR={sugestao:'var(--azul)', bug:'var(--err)', outro:'var(--tx3)'};
+    const linhas=arr.map(f=>h('div',{class:'card',style:'margin-bottom:8px'},
+      h('div',{class:'linha',style:'margin-bottom:6px'},
+        h('span',{class:'f12 b800',style:'color:'+(COR[f.tipo]||'var(--tx3)')}, (ROT[f.tipo]||'Outro').toUpperCase()),
+        h('span',{class:'esp'}),
+        h('span',{class:'f12 mut2'}, dataRelativa(f.ts||0)+' \u00b7 v'+(f.ver||'?'))),
+      h('div',{class:'f14',style:'line-height:1.5;word-break:break-word'}, f.txt||''),
+      h('div',{class:'linha',style:'margin-top:8px'},
+        h('span',{class:'f12 mut2'}, f.user? '@'+f.user : 'an\u00f4nimo'),
+        h('span',{class:'esp'}),
+        h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 12px',onclick:async function(){
+          this.disabled=true;
+          try{ await NET.putD('/feedback/'+f.id, null); FALA.caixa(); }catch(e){ this.disabled=false; UI.toast('Sem conex\u00e3o'); }
+        }},'Arquivar'))));
+    UI.folha('Caixa de entrada ('+arr.length+')', linhas.length? linhas
+      : [h('div',{class:'f14 mut',style:'padding:12px 2px;line-height:1.6'},'Nada por aqui ainda.')]);
   }
 };
 

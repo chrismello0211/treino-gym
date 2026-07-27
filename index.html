@@ -371,7 +371,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.1';
+const APP_VER='11.1.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4596,7 +4596,7 @@ const RESTAURA = {
       // 6) fotos de progresso (medições) — essas ficam locais em MED._fotos
       try{
         if(MED._fotos && Object.keys(MED._fotos).length){
-          for(const [id,f] of Object.entries(MED._fotos)){ if(f){ try{ await NET.putD('/fotosProg/'+id, f); n++; }catch(e){} } }
+          for(const [id,f] of Object.entries(MED._fotos)){ if(f){ try{ await NET.putD('fotosProg/'+id, f); n++; }catch(e){} } }
         }
       }catch(e){}
       // 7) rotinas públicas
@@ -5388,8 +5388,12 @@ const CONTA = {
   sair(){
     UI.folha('Sair da conta?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},'Os dados continuam salvos na conta e voltam quando você entrar de novo. Este aparelho recomeça zerado.'),
-      h('button',{class:'btn btn-err',onclick:()=>{
-        if(S.cfg.pushTok && S.auth){ try{ fetch(FB.db+'/usuarios/'+S.auth.uid+'/fcm/'+S.cfg.pushTok+'.json?auth='+(S.auth.tk||''),{method:'DELETE'}); }catch(e){} }
+      h('button',{class:'btn btn-err',onclick:async function(){
+        this.disabled=true; this.textContent='Saindo...';
+        if(S.cfg.pushTok && S.auth){
+          try{ await Promise.race([ NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+S.cfg.pushTok, null),
+                                    new Promise(r=>setTimeout(r,4000)) ]); }catch(e){}
+        }
         Object.keys(localStorage).filter(k=>k.startsWith('tg_')).forEach(k=>localStorage.removeItem(k));
         location.reload();
       }},'Sair e limpar este aparelho')]);

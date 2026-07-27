@@ -227,6 +227,8 @@ body.claro .musc .m{fill:#D9DEE5}
 .ss-tag{font-size:10px;font-weight:800;letter-spacing:.6px;padding:2px 7px;border-radius:6px;margin-bottom:6px;display:inline-block}
 .stipo{position:relative}
 .stipo .rpe{position:absolute;top:-5px;right:-7px;font-size:9px;font-weight:800;color:var(--brand2);background:var(--surf);padding:0 2px;border-radius:4px}
+.stipo .prm{position:absolute;top:-7px;left:-7px;font-size:11px;line-height:1}
+.srow.feita .stipo{background:rgba(255,255,255,.10)}
 .rpe-tag{font-size:11px;font-weight:800;color:var(--brand2);margin-left:6px}
 .heart{display:flex;align-items:center;gap:7px;background:none;border:none;color:var(--tx3);font-size:14px;font-weight:800;padding:0}
 .heart svg{width:21px;height:21px}
@@ -371,7 +373,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.1.1';
+const APP_VER='11.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -406,6 +408,22 @@ const CORE = {
     if(rm>0 && rm > (p.rm?p.rm.v:0)) bate.push(['rm',rm]);
     if(kg===0 && reps>0 && reps > (p.reps?p.reps.v:0)) bate.push(['reps',reps]);
     return bate;
+  },
+  // conta recorde: tipos UNICOS por exercicio (carga, volume, 1RM e reps
+  // contam separado, mas a mesma marca batida em 2 series conta 1 vez so)
+  contaRecordes(t){
+    let n=0;
+    ((t && t.ex) || []).forEach(e=>{
+      const tipos=new Set();
+      (e.series||[]).forEach(s=>{ if(s.ok && Array.isArray(s.pr)) s.pr.forEach(tp=>tipos.add(tp)); });
+      n += tipos.size;
+    });
+    return n;
+  },
+  // marcas reais de um exercicio (ignora resetEm e controle interno)
+  marcasDe(reg){
+    if(!reg) return [];
+    return ['kg','vol','rm','reps'].map(tp=>reg[tp]).filter(Boolean);
   },
   aplicaPR(prs, exId, tipos, tid, data){
     const p = prs[exId] = prs[exId]||{};
@@ -456,13 +474,18 @@ CORE.recomputaPRs = function(lista, resets){
         });
       });
       // 2) para cada tipo, conta PR só se a melhor série do treino superar a marca anterior — UMA vez
+      //    ESTREIA: se nao havia marca anterior nenhuma (exercicio novo ou recem-zerado),
+      //    este treino so DEFINE a marca. Medalha vale a partir do proximo.
+      const estreiaEx = !CORE.marcasDe(base).length;
       Object.entries(melhor).forEach(([tp,info])=>{
         const marcaAnt = base[tp] ? base[tp].v : 0;
         if(info.v > marcaAnt){
-          (info.s.pr = info.s.pr || []).push(tp);
           prs[e.exId]=prs[e.exId]||{};
           prs[e.exId][tp]={v:info.v, tid:t.id, data:t.inicio};
-          t.recordes += 1;                              // 1 recorde por tipo, por treino
+          if(!estreiaEx){
+            (info.s.pr = info.s.pr || []).push(tp);
+            t.recordes += 1;                            // 1 recorde por tipo, por treino
+          }
         }
       });
     });
@@ -1072,6 +1095,7 @@ function prDetalhe(exId, tipo){
   const _val=(tipo==='reps')? (_x.t==='tempo'? fmtTempoEx(p.v) : Math.round(p.v)+' reps') : CORE.fmtKg(p.v)+' kg';
   UI.toast(_rot+': '+_val+extra+data, true);
 }
+const MEDALHA='🏅';
 const LB_POR_KG = 2.2046226218;
 function kgParaLb(kg){ return (Number(kg)||0)*LB_POR_KG; }
 function lbParaKg(lb){ return (Number(lb)||0)/LB_POR_KG; }
@@ -1635,8 +1659,8 @@ const ATIVO = {
       if(pcEx){ const pc=pesoCorporalAtual(); if(pc>0) s.pc=pc; if(!s.kg) s.kg=''; }
       delete s._sugKg; delete s._sugReps;
       s.ok=true; SOM.check(); VIB.v(12);
-      const _prReg=S.prs[e.exId];
-      const estreia = !_prReg || Object.values(_prReg).every(p=> p && p.tid===S.ativo.id); // 1ª sessão inteira sem medalha
+      const _marcas=CORE.marcasDe(S.prs[e.exId]);
+      const estreia = !_marcas.length || _marcas.every(p=> p && p.tid===S.ativo.id); // 1ª sessão (ou 1ª depois de zerar) sem medalha
       const prs=CORE.detectaPR(S.prs, e.exId, {...s});
       if(prs.length && estreia){
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
@@ -1675,7 +1699,11 @@ const ATIVO = {
     }
     salva('ativo');
     if(row){ row.classList.toggle('feita', !!(s.ok||s.pr));
-      const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.pr?'🏅':(s.ok?'✓':'○');
+      const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.ok?'✓':'○';
+      const stp=row.querySelector('.stipo');
+      if(stp){ const tem=stp.querySelector('.prm');
+        if(s.pr && s.pr.length && !tem) stp.appendChild(h('sup',{class:'prm'},MEDALHA));
+        else if((!s.pr || !s.pr.length) && tem) tem.remove(); }
       row.querySelectorAll('input').forEach(inp=>{ inp.disabled=!!s.ok; if(s.ok) inp.classList.remove('sugerido'); }); }
     ATIVO.pinta();
   },
@@ -1689,12 +1717,7 @@ const ATIVO = {
       const pct = tot? Math.round(100*ser/tot) : 0;
       const sk=$('#ta-serk'); if(sk) sk.textContent = tot? ('Séries · '+pct+'%') : 'Séries';
       const rc=$('#ta-rec'); if(rc){
-        let n=0;
-        (S.ativo.ex||[]).forEach(e2=>{
-          const tipos=new Set();
-          e2.series.forEach(s2=>{ if(s2.ok && Array.isArray(s2.pr)) s2.pr.forEach(tp=>tipos.add(tp)); });
-          n += tipos.size;                       // tipos únicos por exercício (1 peso, 1 vol, 1 rm, 1 reps no máx)
-        });
+        const n=CORE.contaRecordes(S.ativo);
         rc.textContent = n? n+' 🏅' : '0';
       }
     }
@@ -1757,22 +1780,32 @@ const ATIVO = {
       }
     };
     pintaFoto();
+    let pubAgora = (S.cfg.feedPub!==false);
+    const pubArea = (S.perfil && S.perfil.user)
+      ? h('button',{class:'menu-op',style:'margin-bottom:14px',onclick:function(){
+          pubAgora=!pubAgora;
+          const c=this.querySelector('.chip');
+          c.textContent=pubAgora?'Sim':'Nao'; c.classList.toggle('on',pubAgora);
+        }}, 'Publicar no feed', h('span',{class:'esp'}),
+        h('span',{class:'chip'+(pubAgora?' on':'')}, pubAgora?'Sim':'Nao'))
+      : h('span',{style:'display:none'});
     UI.folha('Concluir treino?',[
       h('div',{class:'stats3',style:'padding:6px 2px 16px'},
         h('div',{},h('div',{class:'k'},'Duração'),h('div',{class:'v'},CORE.fmtDur((agora()-t.inicio)/1000))),
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(CORE.volumeTreino(t))+' kg')),
         h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v'},CORE.seriesFeitas(t)))),
       fotoArea,
+      pubArea,
       h('button',{class:'btn btn-p',onclick:()=>{
         const fim=agora();
         const salvo={ id:t.id, rid:t.rid, titulo:t.titulo, inicio:t.inicio, fim,
           ex:feitos, volume:CORE.volumeTreino(t), series:CORE.seriesFeitas(t),
-          recordes:feitos.reduce((a,e)=>a+e.series.filter(s=>s.pr).length,0), atualizado:fim };
+          recordes:CORE.contaRecordes({ex:feitos}), atualizado:fim };
         if(foto) salvo.temFoto=true;
         S.treinos[salvo.id]=salvo; salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo);
         if(foto && S.auth){ NET.agenda('/fotos/'+S.auth.uid+'/'+salvo.id, foto);
           FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid][salvo.id]=foto; }
-        if(S.perfil?.user && S.cfg.feedPub) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, resumoTreino(salvo));
+        if(S.perfil?.user && pubAgora) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, resumoTreino(salvo));
         // sugere atualizar rotina com as cargas de hoje
         S.ativo=null; salva('ativo'); DESC.para();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
@@ -1854,7 +1887,11 @@ TELAS.ativo = function(){
   }
   function atualizaLinha(row, e, s){
     row.classList.toggle('feita', !!(s.ok||s.pr));
-    const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.pr?'🏅':(s.ok?'✓':'○');
+    const chk=row.querySelector('.scheck'); if(chk) chk.textContent = s.ok?'✓':'○';
+      const stp=row.querySelector('.stipo');
+      if(stp){ const tem=stp.querySelector('.prm');
+        if(s.pr && s.pr.length && !tem) stp.appendChild(h('sup',{class:'prm'},MEDALHA));
+        else if((!s.pr || !s.pr.length) && tem) tem.remove(); }
     row.querySelectorAll('input').forEach(inp=>inp.disabled=!!s.ok);
   }
   function linha(e,s,si,x){
@@ -1870,8 +1907,10 @@ TELAS.ativo = function(){
     const phReps = refReps!=null ? (cardioMin?fmtMin(refReps):String(refReps)) : (cardioMin?'min':(x.t==='tempo'?'seg':'reps'));
     const antTxt = ant ? (x.t==='peso_reps' ? fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
-      h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(!s.ok) tipoRpe(s); }},
-        s.tipo==='N'?String(numerada||1):s.tipo, s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null),
+      h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(s.pr && s.pr.length) folhaPRSerie(x,s,e); else if(!s.ok) tipoRpe(s); }},
+        s.tipo==='N'?String(numerada||1):s.tipo,
+        s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null,
+        (s.pr && s.pr.length)? h('sup',{class:'prm'},MEDALHA):null),
       h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
         ? h('input',{type:'text',inputmode:'decimal',value:(s.kg==null||s.kg===''?'':fmtPeso(s.kg, unEx(e))),placeholder:phKg,oninput:ev=>{ const raw=ev.target.value.replace(',','.'); s.kg = raw===''?'':(unEx(e)==='lb'? lbParaKg(raw) : raw); salva('ativo');ATIVO.pinta();},disabled:s.ok})
@@ -1879,7 +1918,7 @@ TELAS.ativo = function(){
       cardioMin
         ? h('input',{type:'text',inputmode:'numeric',value:(s.reps==null||s.reps===''?'':fmtMin(s.reps)),placeholder:phReps,oninput:ev=>{s.reps=parseMin(ev.target.value);salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : h('input',{type:'number',inputmode:'numeric',value:(s.reps==null?'':s.reps),placeholder:phReps,oninput:ev=>{s.reps=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok}),
-      h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s,row)}, s.pr?'🏅':(s.ok?'✓':'○')));
+      h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s,row)}, s.ok?'✓':'○'));
     if(s.pr) row.classList.add('feita');
     (function(){
       let sx=0, sy=0, dx=0, mov=false;
@@ -1936,6 +1975,25 @@ TELAS.ativo = function(){
 };
 
 /* ===== FERRAMENTAS DO TREINO ATIVO ===== */
+function folhaPRSerie(x, s, e){
+  const NOMPR={kg:'Maior carga', vol:'Melhor série', rm:'1RM estimado', reps:'Mais repetições'};
+  const un=unEx(e), kg=Number(s.kg)||0, reps=Number(s.reps)||0;
+  const valor=(tp)=>{
+    if(tp==='kg')  return fmtPeso(kg, un)+' '+un;
+    if(tp==='vol') return fmtPeso(CORE.volumeSerie(s), un)+' '+un;
+    if(tp==='rm')  return fmtPeso(CORE.est1RM(kg,reps), un)+' '+un;
+    return x.t==='tempo' ? fmtTempoEx(reps) : Math.round(reps)+' reps';
+  };
+  const linhas=(s.pr||[]).map(tp=>h('div',{class:'med-row'},
+    h('div',{class:'esp'}, h('div',{class:'b700',style:'font-size:14.5px'},
+      (tp==='reps' && x.t==='tempo') ? 'Mais tempo' : (NOMPR[tp]||tp))),
+    h('div',{class:'b800',style:'color:#E8B84B;font-size:15px'}, valor(tp))));
+  UI.folha('Recorde nesta série '+MEDALHA,[
+    h('div',{class:'f13 mut',style:'margin-bottom:10px;line-height:1.6'}, x.n),
+    ...linhas,
+    h('div',{class:'f12 mut2',style:'margin-top:12px;line-height:1.5'},
+      'Marca batida nesta série. O histórico completo fica na tela do exercício.')]);
+}
 const PLACAS={
   disponiveis:[25,20,15,10,5,2.5,1.25],
   calc(alvo, barra){ const porLado=(alvo-barra)/2; if(porLado<-1e-9) return null;
@@ -3847,15 +3905,26 @@ function abreRotinaPub(alvo, r){
       const nova={ id:uid(), titulo:r.titulo, pasta:'', criado:agora(), atualizado:agora(),
         ex:(r.ex||[]).map(e=>{
           let exId = (e.exId && BIB.porId[e.exId])? e.exId : null;
-          if(!exId){ const x=exPorNome(e.n); if(x) exId=x.id; }
+          // exercicio criado pela pessoa: NUNCA casa por nome parecido, senao
+          // o app troca em silencio por outro exercicio da biblioteca
+          const ehCustom = e.cst===1 || (typeof e.exId==='string' && e.exId.indexOf('custom__')===0);
+          if(!exId && !ehCustom){ const x=exPorNome(e.n); if(x) exId=x.id; }
+          if(!exId && ehCustom){
+            const alvo=(e.n||'').trim().toLowerCase();
+            const ja=Object.values(S.custom||{}).find(c=>c && !c.oc && (c.n||'').trim().toLowerCase()===alvo);
+            if(ja) exId=ja.id;                       // ja copiou antes, nao duplica
+          }
           if(!exId){
             exId='custom__'+uid();
             const ent={id:exId, n:e.n||'Exercício', g:e.g||'corpo-inteiro', e:e.e||'outro', t:e.t||'peso_reps', custom:true, atualizado:agora()};
             S.custom[exId]=ent; salva('custom'); NET.agenda('custom/'+exId, ent);
             BIB.lista.push(ent); BIB.indexa();
           }
-          return { exId, descanso:e.descanso||S.cfg.descanso||90, notas:'',
-            series:Array.from({length:e.ser||3},()=>({tipo:'N',kg:'',reps:String(e.reps||'10')})) };
+          const molde = Array.isArray(e.sr) && e.sr.length
+            ? e.sr.map(sv=>({tipo:sv.t||'N', kg:'', reps:String(sv.r==null?(e.reps||'10'):sv.r)}))
+            : Array.from({length:e.ser||3},()=>({tipo:'N',kg:'',reps:String(e.reps||'10')}));
+          return { exId, descanso:e.descanso||S.cfg.descanso||90, notas:e.notas||'',
+            series:molde };
         }) };
       S.rotinas[nova.id]=nova; salva('rotinas'); NET.agenda('rotinas/'+nova.id, nova); ROTPUB.envia(nova);
       UI.fechaFolha(); UI.toast('Rotina copiada para as suas ✓', true);
@@ -4484,7 +4553,9 @@ TELAS.relatorioMensal = function(){
 function pubRotina(r){
   return { titulo:r.titulo, atualizado:agora(),
     ex:(r.ex||[]).map(e=>{ const x=BIB.ex(e.exId);
-      return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t,
+      return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t, cst:x.custom?1:0,
+        notas:(e.notas||'').slice(0,300)||null,
+        sr:(e.series||[]).map(s=>({t:s.tipo||'N', r:(s.reps==null?'':String(s.reps))})),
         ser:(e.series||[]).length||3, reps:(e.series&&e.series[0]&&e.series[0].reps)||'10', descanso:e.descanso||90 }; }) };
 }
 (function(){

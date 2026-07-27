@@ -228,6 +228,12 @@ body.claro .musc .m{fill:#D9DEE5}
 .stipo{position:relative}
 .stipo .rpe{position:absolute;top:-5px;right:-7px;font-size:9px;font-weight:800;color:var(--brand2);background:var(--surf);padding:0 2px;border-radius:4px}
 .stipo .prm{position:absolute;top:-7px;left:-7px;font-size:11px;line-height:1}
+.corpoIm{display:flex;justify-content:center;align-items:flex-start;isolation:isolate;line-height:0}
+.corpoIm .cLado{position:relative;width:54%;margin:0 -4%;aspect-ratio:1/1;flex-shrink:0}
+.corpoIm .cLado img{width:100%;height:100%;display:block}
+.corpoIm .cGlow{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-size:100% 100%;mask-size:100% 100%}
 .srow.feita .stipo{background:rgba(255,255,255,.10)}
 .rpe-tag{font-size:11px;font-weight:800;color:var(--brand2);margin-left:6px}
 .heart{display:flex;align-items:center;gap:7px;background:none;border:none;color:var(--tx3);font-size:14px;font-weight:800;padding:0}
@@ -373,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.2';
+const APP_VER='11.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3388,7 +3394,7 @@ function gruposDoTreino(t){
   });
   return m;
 }
-function corpoSVG(pesos, larg){
+function corpoBlocos(pesos, larg){
   const max=Math.max(1,...pesos.values());
   const cls={}, op={};
   pesos.forEach((v,g)=>(REGIOES[g]||[]).forEach(id=>{ cls[id]='m on'; op[id]=(0.4+0.6*v/max).toFixed(2); }));
@@ -3416,6 +3422,66 @@ function corpoSVG(pesos, larg){
   ${P('pt1','<rect x="131.5" y="94" width="8.5" height="18" rx="4" %C%/>')}${P('pt2','<rect x="144" y="94" width="8.5" height="18" rx="4" %C%/>')}
   </svg>`;
   return h('div',{html:svg});
+}
+
+/* ===== ILUSTRACAO ANATOMICA QUE ACENDE (v11.3) ===== */
+const ZONAS_F = {
+  pescoco:[[50,16,3.4,3]],
+  trapezio:[[45.5,18.5,3.2,2.6],[54.5,18.5,3.2,2.6]],
+  ombros:[[40,23.5,5,4.3],[60,23.5,5,4.3]],
+  peito:[[45,26,7,5],[55,26,7,5]],
+  biceps:[[36.5,38,3.6,6],[63.5,38,3.6,6]],
+  antebraco:[[33.5,47,2.8,5.5],[66.5,47,2.8,5.5]],
+  abdomen:[[50,40,6.5,7.5]],
+  abdutores:[[41.5,58,3.2,5],[58.5,58,3.2,5]],
+  adutores:[[47.6,60,2.4,6],[52.4,60,2.4,6]],
+  quadriceps:[[44.5,63,5,8],[55.5,63,5,8]],
+  panturrilha:[[42.5,81,3,5],[57.5,81,3,5]]
+};
+const ZONAS_C = {
+  pescoco:[[50,16,3.4,3]],
+  trapezio:[[50,23,8,5]],
+  ombros:[[39.5,23.5,5,4.3],[60.5,23.5,5,4.3]],
+  'costas-sup':[[47,26,6,4],[53,26,6,4]],
+  costas:[[44,32,6,6],[56,32,6,6]],
+  dorsais:[[44.5,34,6,6],[55.5,34,6,6]],
+  triceps:[[36,38,3.4,6],[64,38,3.4,6]],
+  antebraco:[[31.5,47,2.8,5.5],[68.5,47,2.8,5.5]],
+  lombar:[[50,43,5,4]],
+  gluteos:[[45,50,5,4.5],[55,50,5,4.5]],
+  posteriores:[[44,63,5,8],[56,63,5,8]],
+  panturrilha:[[42,81,3.2,5.5],[58,81,3.2,5.5]]
+};
+function corpoSVG(pesos, larg){
+  const max=Math.max(1,...pesos.values());
+  const wrap=h('div',{class:'corpoIm',style:'width:'+larg+'px'});
+  const cai=()=>{
+    if(wrap.__caiu) return; wrap.__caiu=1;
+    const alt=corpoBlocos(pesos,larg);
+    if(wrap.isConnected) wrap.replaceWith(alt);
+    else setTimeout(()=>{ if(wrap.isConnected) wrap.replaceWith(alt); },60);
+  };
+  const lado=(arq, zonas)=>{
+    const cam=[];
+    pesos.forEach((v,g)=>{
+      (zonas[g]||[]).forEach(z=>{
+        const o=Math.min(0.9, 0.40+0.50*(v/max));
+        cam.push('radial-gradient(ellipse '+z[2]+'% '+z[3]+'% at '+z[0]+'% '+z[1]+'%,'
+          +'rgba(255,90,0,'+o.toFixed(2)+') 0%,'
+          +'rgba(255,90,0,'+(o*0.55).toFixed(2)+') 52%,'
+          +'rgba(255,90,0,0) 78%)');
+      });
+    });
+    const img=h('img',{src:'grupos/'+arq, alt:'', loading:'lazy'});
+    img.onerror=cai;
+    const box=h('div',{class:'cLado'}, img);
+    if(cam.length) box.appendChild(h('div',{class:'cGlow',
+      style:'background-image:'+cam.join(',')
+        +';-webkit-mask-image:url(grupos/'+arq+');mask-image:url(grupos/'+arq+')'}));
+    return box;
+  };
+  wrap.append(lado('corpo-frente.webp', ZONAS_F), lado('corpo-costas.webp', ZONAS_C));
+  return wrap;
 }
 
 /* ---------- data relativa ---------- */

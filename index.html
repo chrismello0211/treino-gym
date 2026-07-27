@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.3.1';
+const APP_VER='11.4';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -759,6 +759,7 @@ const NET = {
       m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
       m = fun(S.exNotas, nuvem.exNotas, 'exNotas') || m;
       m = fun(S.fotosProg, nuvem.fotosProg, 'fotosProg') || m;
+      if(nuvem.bloq){ S.social.bloq=Object.assign(S.social.bloq||{}, nuvem.bloq); salva('social'); }
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
         if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
@@ -1815,6 +1816,7 @@ const ATIVO = {
         // sugere atualizar rotina com as cargas de hoje
         S.ativo=null; salva('ativo'); DESC.para();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
+        setTimeout(()=>{ try{ ROTFIM.oferece(salvo); }catch(e){} }, 900);
       }},'Concluir e salvar')]);
   }
 };
@@ -2725,6 +2727,8 @@ TELAS.config = function(){
     h('button',{class:'menu-op',onclick:()=>EXPORTA.csv()},'Exportar treinos (CSV)'),
     h('button',{class:'menu-op',onclick:()=>EXPORTA.json()},'Backup completo (JSON)'),
     h('button',{class:'menu-op',onclick:()=>diagnostico()},'Copiar diagnóstico técnico'),
+    h('button',{class:'menu-op',onclick:()=>MOD.folhaBloqueados()},'Pessoas bloqueadas',
+      h('span',{class:'esp'}), h('span',{class:'f12 mut2'}, String(Object.keys(MOD.lista()).length))),
     h('div',{class:'f12 mut2',style:'margin-top:8px;line-height:1.5'},'Seus dados são seus. O CSV abre no Excel; o JSON é um backup de tudo.')));
   const salvaPerfil=()=>{ S.perfil.atualizado=agora(); salva('perfil'); NET.agenda('app/perfil',S.perfil);
     if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); };
@@ -2784,7 +2788,8 @@ TELAS.config = function(){
       h('button',{class:'menu-op',onclick:async function(){
         await RESTAURA.tudo(this, {silencioso:false});
       }},'Sincronizar agora', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'enviar tudo')),
-      h('button',{class:'btn',onclick:CONTA.sair},'Sair da conta'));
+      h('button',{class:'btn',style:'margin-bottom:8px',onclick:CONTA.sair},'Sair da conta'),
+      h('button',{class:'menu-op perigo',onclick:()=>CONTA.apagar()},'Apagar minha conta'));
   if(S.perfil.user==='chris_mello') cardConta.insertBefore(
     h('button',{class:'menu-op',style:'border:1px solid var(--brand-dim)',onclick:()=>ADMIN.broadcast()},
       '📣 Enviar aviso para todos', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'admin')),
@@ -2793,7 +2798,8 @@ TELAS.config = function(){
     cardConta.append(
       h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:10px'},'Sua conta anônima vive só neste aparelho. Com e-mail, você entra de qualquer lugar, não perde nada se trocar de celular e libera o feed com amigos.'),
       h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:CONTA.folhaCriar},'Criar conta com e-mail'),
-      h('button',{class:'btn',onclick:CONTA.folhaEntrar},'Entrar em uma conta'));
+      h('button',{class:'btn',style:'margin-bottom:8px',onclick:CONTA.folhaEntrar},'Entrar em uma conta'),
+      h('button',{class:'menu-op perigo',onclick:()=>CONTA.apagar()},'Apagar meus dados e esta conta'));
   }
   m.appendChild(cardConta);
 
@@ -2824,6 +2830,8 @@ TELAS.config = function(){
 
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;padding:8px 0 20px;line-height:1.7'},
     'ForgeX v'+APP_VER, h('br'),
+    h('a',{href:'termos.html',style:'color:var(--tx3)'},'Termos de uso'),
+    ' \u00b7 ',
     h('a',{href:'privacidade.html',style:'color:var(--tx3)'},'Política de privacidade')));
 
 };
@@ -3760,7 +3768,11 @@ TELAS.treinoAmigo = function({dono, tid}){
 };
 function desenhaAmigo(r, dono, tid){
   UI.topo(UI.btVoltar(),
-    h('div',{class:'topo-tit',style:'font-size:19px'}, r.titulo, h('small',{},dataLonga(r.inicio))));
+    h('div',{class:'topo-tit',style:'font-size:19px'}, r.titulo, h('small',{},dataLonga(r.inicio))),
+    h('div',{class:'esp'}),
+    h('button',{class:'btn btn-mini',style:'width:42px;padding:9px',onclick:()=>{
+      UI.folha('Op\u00e7\u00f5es', MOD.menuPessoa(dono, r.nome||(r.user? '@'+r.user : 'Atleta'), tid));
+    }},'\u22ef'));
   const m=$('#main'); m.innerHTML='';
   m.appendChild(h('div',{class:'card'},h('div',{class:'feed-cab',style:'margin:0;cursor:pointer',onclick:()=>UI.vai('perfilAmigo',{uid:dono})},
     avatarEl((((FEED.perfis||{})[dono])||{}).foto, r.nome||r.user, 42),
@@ -3887,7 +3899,12 @@ function radarSVG(eixos, A, B){
   return h('div',{style:'display:flex;justify-content:center',html:s});
 }
 TELAS.perfilAmigo = function({uid:alvo}){
-  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Perfil'));
+  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Perfil'),
+    h('div',{class:'esp'}),
+    h('button',{class:'btn btn-mini',style:'width:42px;padding:9px',onclick:()=>{
+      const p=(FEED.perfis||{})[alvo]||{};
+      UI.folha('Op\u00e7\u00f5es', MOD.menuPessoa(alvo, p.nome||(p.user? '@'+p.user : 'Atleta')));
+    }},'\u22ef'));
   const m=$('#main'); m.innerHTML='';
   const desenha=(p)=>{
     m.innerHTML='';
@@ -4754,6 +4771,181 @@ const RESTAURA = {
       h('button',{class:'btn btn-p',onclick:function(){ RESTAURA.tudo(this); }},'Restaurar agora')]);
   }
 };
+
+/* ===================================================================
+   MODERACAO, TERMOS E CONTA (v11.4)
+   Exigencias de loja: filtro de conteudo, denuncia, bloqueio,
+   termos com aceite e exclusao de conta pelo proprio app.
+   =================================================================== */
+const TERMOS_V = 1;
+
+/* --- filtro de linguagem: barra o comentario ANTES de publicar --- */
+const FILTRO = {
+  termos:['viado','viadinho','bicha','traveco','macaco','macaca','preto imundo','nazi',
+          'puta','putinha','vagabunda','vadia','piranha','corno','arrombado','fdp',
+          'buceta','xoxota','pentelho','caralho','porra','punheta','pau no cu','cu de',
+          'retardado','mongoloide','aleijado','gordo nojento','gorda nojenta',
+          'se mata','vai morrer','te mato','morre logo','suicida'],
+  normaliza(t){
+    return String(t||'').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[0@]/g,'o').replace(/[1!|]/g,'i').replace(/[3]/g,'e')
+      .replace(/[4]/g,'a').replace(/[5$]/g,'s').replace(/[7]/g,'t')
+      .replace(/(.)\1+/g,'$1')
+      .replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim();
+  },
+  passa(txt){
+    const n=FILTRO.normaliza(txt);
+    const colado=n.replace(/ /g,'');
+    return !FILTRO.termos.some(t=>{
+      const tn=FILTRO.normaliza(t);
+      return tn.indexOf(' ')>=0 ? n.indexOf(tn)>=0 : colado.indexOf(tn)>=0;
+    });
+  }
+};
+
+const MOD = {
+  lista(){ if(!S.social.bloq) S.social.bloq={}; return S.social.bloq; },
+  bloqueado(uid){ return !!MOD.lista()[uid]; },
+  async bloqueia(alvo, nome){
+    if(!alvo || !S.auth) return;
+    MOD.lista()[alvo]={nome:nome||'', ts:agora()}; salva('social');
+    NET.agenda('bloq/'+alvo, MOD.lista()[alvo]);
+    if(S.social.seguindo && S.social.seguindo[alvo]){
+      delete S.social.seguindo[alvo]; salva('social');
+      try{ await NET.putD('/seguindo/'+S.auth.uid+'/'+alvo, null); }catch(e){}
+      try{ await NET.putD('/seguidores/'+alvo+'/'+S.auth.uid, null); }catch(e){}
+    }
+    delete FEED.amigos[alvo]; FEED.salvaCache();
+  },
+  async desbloqueia(alvo){
+    delete MOD.lista()[alvo]; salva('social');
+    NET.agenda('bloq/'+alvo, null);
+  },
+  MOTIVOS:[['ofensivo','Conteudo ofensivo ou discurso de odio'],
+           ['assedio','Assedio ou bullying'],
+           ['sexual','Nudez ou conteudo sexual'],
+           ['spam','Spam ou golpe'],
+           ['outro','Outro motivo']],
+  folhaDenuncia(tipo, alvoUid, ref, rotulo){
+    if(!S.auth){ UI.toast('Entre na sua conta para denunciar'); return; }
+    const obs=h('textarea',{rows:'2',maxlength:'300',style:'resize:none',placeholder:'Conte o que aconteceu (opcional)'});
+    const bts=MOD.MOTIVOS.map(([k,rot])=>h('button',{class:'menu-op',onclick:async function(){
+      this.disabled=true;
+      try{
+        await NET.putD('/denuncias/'+uid(), {tipo, alvo:alvoUid||'', ref:ref||'',
+          motivo:k, obs:(obs.value||'').slice(0,300), de:S.auth.uid, quando:agora()});
+        UI.fechaFolha();
+        UI.folha('Denuncia enviada',[h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.7'},
+          'Recebemos. Analisamos denuncias em ate 24 horas e removemos o conteudo, alem de suspender quem publicou, quando for o caso.'),
+          alvoUid? h('button',{class:'btn btn-err',onclick:async ()=>{
+            await MOD.bloqueia(alvoUid, rotulo); UI.fechaFolha(); UI.refaz();
+            UI.toast('Denunciado e bloqueado', true);
+          }},'Bloquear tambem esta pessoa') : null,
+          h('div',{style:'height:8px'}),
+          h('button',{class:'btn',onclick:()=>UI.fechaFolha()},'Fechar')]);
+      }catch(e){ this.disabled=false; UI.toast('Sem conexao agora'); }
+    }}, rot));
+    UI.folha('Denunciar'+(rotulo?(' \u00b7 '+rotulo):''),
+      [h('div',{class:'f13 mut',style:'margin-bottom:10px;line-height:1.6'},'Qual o motivo?'),
+       ...bts, h('div',{style:'height:10px'}), obs]);
+  },
+  menuPessoa(alvoUid, rotulo, ref){
+    const bloq=MOD.bloqueado(alvoUid);
+    return [
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); MOD.folhaDenuncia(ref?'treino':'perfil', alvoUid, ref||'', rotulo); }},'\u26a0\ufe0f Denunciar'),
+      h('button',{class:'menu-op perigo',onclick:async ()=>{
+        if(bloq){ await MOD.desbloqueia(alvoUid); UI.fechaFolha(); UI.refaz(); UI.toast('Desbloqueado'); return; }
+        UI.fechaFolha();
+        UI.folha('Bloquear '+(rotulo||'esta pessoa')+'?',[
+          h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.7'},
+            'Voces param de se seguir, os treinos e comentarios dela somem do seu app e ela nao consegue mais interagir com voce.'),
+          h('button',{class:'btn btn-err',onclick:async function(){
+            this.disabled=true; await MOD.bloqueia(alvoUid, rotulo);
+            UI.fechaFolha(); UI.pilha=[]; UI.vai('inicio',null,false); UI.toast('Pessoa bloqueada', true);
+          }},'Bloquear')]);
+      }}, bloq? '\u2713 Desbloquear pessoa' : '\ud83d\udeab Bloquear pessoa')];
+  },
+  folhaBloqueados(){
+    const l=Object.entries(MOD.lista());
+    UI.folha('Pessoas bloqueadas', l.length? l.map(([u,d])=>h('div',{class:'med-row'},
+      h('div',{class:'esp'}, h('div',{class:'b700',style:'font-size:14px'}, d.nome||('@'+u.slice(0,8)))),
+      h('button',{class:'btn btn-mini',style:'width:auto;padding:8px 14px',onclick:async function(){
+        await MOD.desbloqueia(u); UI.fechaFolha(); MOD.folhaBloqueados();
+      }},'Desbloquear')))
+      : [h('div',{class:'f14 mut',style:'padding:10px 2px;line-height:1.6'},'Voce nao bloqueou ninguem.')]);
+  }
+};
+
+/* --- termos de uso: aceite obrigatorio, com tolerancia zero --- */
+const TERMOS = {
+  aceitou(){ return (S.cfg.termos||0) >= TERMOS_V; },
+  marca(){ S.cfg.termos=TERMOS_V; S.cfg.termosEm=agora(); S.cfg.atualizado=agora();
+           salva('cfg'); NET.agenda('app/cfg', S.cfg); },
+  linhaAceite(){
+    return h('div',{class:'f12 mut2',style:'line-height:1.6;margin:10px 2px 0;text-align:center'},
+      'Ao continuar voc\u00ea concorda com os ',
+      h('a',{href:'termos.html',target:'_blank',style:'color:var(--brand2)'},'Termos de uso'),
+      ' e a ',
+      h('a',{href:'privacidade.html',target:'_blank',style:'color:var(--brand2)'},'Pol\u00edtica de privacidade'),
+      '. N\u00e3o toleramos conte\u00fado ofensivo nem usu\u00e1rios abusivos.');
+  },
+  folhaObrigatoria(){
+    UI.folha('Termos de uso',[
+      h('div',{class:'f14 mut',style:'padding:2px 2px 14px;line-height:1.7'},
+        'Atualizamos os termos do ForgeX. O resumo: o app tem feed e coment\u00e1rios, e n\u00e3o toleramos conte\u00fado ofensivo, ass\u00e9dio, nudez nem discurso de \u00f3dio. Quem publicar esse tipo de coisa tem o conte\u00fado removido e a conta suspensa. Voc\u00ea pode denunciar e bloquear qualquer pessoa a qualquer momento.'),
+      h('div',{style:'display:flex;gap:10px;margin-bottom:14px'},
+        h('a',{href:'termos.html',target:'_blank',class:'btn btn-mini',style:'flex:1;text-align:center;padding:10px;text-decoration:none'},'Ler os termos'),
+        h('a',{href:'privacidade.html',target:'_blank',class:'btn btn-mini',style:'flex:1;text-align:center;padding:10px;text-decoration:none'},'Privacidade')),
+      h('button',{class:'btn btn-p',onclick:()=>{ TERMOS.marca(); UI.fechaFolha(); }},'Li e concordo')]);
+  }
+};
+
+/* --- atualizar a ficha com o que foi feito hoje (estilo Hevy) --- */
+const ROTFIM = {
+  diff(rot, t){
+    const antes=(rot.ex||[]).map(e=>({id:e.exId, n:(e.series||[]).length}));
+    const dep=(t.ex||[]).map(e=>({id:e.exId, n:(e.series||[]).length}));
+    const idsA=antes.map(x=>x.id), idsD=dep.map(x=>x.id);
+    const novos=dep.filter(x=>idsA.indexOf(x.id)<0);
+    const fora=antes.filter(x=>idsD.indexOf(x.id)<0);
+    const series=dep.filter(d=>{ const a=antes.find(x=>x.id===d.id); return a && a.n!==d.n; });
+    const ordem = idsA.length===idsD.length && idsA.some((v,i)=>v!==idsD[i]);
+    return {novos, fora, series, ordem, mudou:!!(novos.length||fora.length||series.length||ordem)};
+  },
+  aplica(rot, t){
+    rot.ex=(t.ex||[]).map(e=>{
+      const velho=(rot.ex||[]).find(x=>x.exId===e.exId)||{};
+      return { exId:e.exId, descanso:e.descanso||velho.descanso||S.cfg.descanso||90,
+        notas:e.notas||velho.notas||'', ss:e.ss||null,
+        series:(e.series||[]).map(s=>({tipo:s.tipo||'N', kg:(s.kg==null?'':s.kg), reps:(s.reps==null?'':String(s.reps))})) };
+    });
+    rot.atualizado=agora();
+    S.rotinas[rot.id]=rot; salva('rotinas'); NET.agenda('rotinas/'+rot.id, rot);
+    try{ ROTPUB.envia(rot); }catch(e){}
+  },
+  oferece(t){
+    const rot = t.rid && S.rotinas[t.rid];
+    if(!rot) return;
+    const d=ROTFIM.diff(rot, t);
+    if(!d.mudou) return;
+    const nome=x=>BIB.ex(x.id).n;
+    const linhas=[];
+    d.novos.forEach(x=>linhas.push(h('div',{class:'f13',style:'color:var(--ok);padding:3px 0'},'+ '+nome(x)+' (novo)')));
+    d.fora.forEach(x=>linhas.push(h('div',{class:'f13',style:'color:var(--tx3);padding:3px 0'},'\u2212 '+nome(x)+' (n\u00e3o fez)')));
+    d.series.forEach(x=>{ const a=(rot.ex||[]).find(e=>e.exId===x.id);
+      linhas.push(h('div',{class:'f13 mut',style:'padding:3px 0'},'\u00b7 '+nome(x)+': '+((a.series||[]).length)+' \u2192 '+x.n+' s\u00e9ries')); });
+    if(d.ordem && !linhas.length) linhas.push(h('div',{class:'f13 mut',style:'padding:3px 0'},'\u00b7 Ordem dos exerc\u00edcios mudou'));
+    UI.folha('Atualizar a ficha?',[
+      h('div',{class:'f14 mut',style:'padding:2px 2px 12px;line-height:1.7'},
+        'Voc\u00ea fez o treino diferente da ficha "'+rot.titulo+'". Quer salvar essas mudan\u00e7as nela?'),
+      h('div',{style:'max-height:34vh;overflow-y:auto;margin-bottom:14px'}, ...linhas),
+      h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>{
+        ROTFIM.aplica(rot, t); UI.fechaFolha(); UI.toast('Ficha atualizada \u2713', true); }},'Atualizar ficha'),
+      h('button',{class:'btn',onclick:()=>UI.fechaFolha()},'Manter como estava')]);
+  }
+};
+
 const ADMIN = {
   broadcast(){
     const inT=h('input',{value:'Tem novidade no ar 🔥',maxlength:'60'});
@@ -5523,6 +5715,40 @@ const CONTA = {
         catch(err){ UI.toast(err.message); }
       }},'Esqueci a senha')]);
   },
+  async apagaNuvem(){
+    const u=S.auth.uid, meu=S.perfil||{};
+    const alvos=['/perfis/'+u, '/feed/'+u, '/fotos/'+u, '/rotinasPub/'+u, '/exsPub/'+u,
+                 '/seguindo/'+u, '/seguidores/'+u, '/usuarios/'+u];
+    if(meu.user) alvos.unshift('/usernames/'+meu.user);
+    // sai da lista de seguidores de quem eu sigo
+    for(const alvo of Object.keys(S.social.seguindo||{})){
+      try{ await NET.putD('/seguidores/'+alvo+'/'+u, null); }catch(e){}
+    }
+    for(const p of alvos){ try{ await NET.putD(p, null); }catch(e){} }
+    // apaga a credencial no Firebase Auth (a conta deixa de existir)
+    try{
+      const tk=await NET.token();
+      if(tk) await fetch('https://identitytoolkit.googleapis.com/v1/accounts:delete?key='+FB.key,
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:tk})});
+    }catch(e){}
+  },
+  apagar(){
+    const conf=h('input',{placeholder:'APAGAR',autocapitalize:'characters'});
+    UI.folha('Apagar minha conta',[
+      h('div',{class:'f14',style:'padding:2px 2px 12px;line-height:1.7;color:var(--err)'},
+        'Isso apaga de vez a sua conta e tudo que está nela: treinos, fichas, recordes, medições, fotos, perfil e o seu nome de usuário. Não tem como desfazer e não tem como recuperar depois.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:10px;line-height:1.6'},
+        'Se quiser guardar uma cópia antes, use Ajustes ▸ Seus dados ▸ Backup completo (JSON).'),
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Escreva APAGAR para confirmar'), conf,
+      h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-err',onclick:async function(){
+        if((conf.value||'').trim().toUpperCase()!=='APAGAR'){ UI.toast('Escreva APAGAR para confirmar'); return; }
+        this.disabled=true; this.textContent='Apagando…';
+        try{ await CONTA.apagaNuvem(); }catch(e){}
+        Object.keys(localStorage).filter(k=>k.startsWith('tg_')).forEach(k=>localStorage.removeItem(k));
+        location.reload();
+      }},'Apagar minha conta para sempre')]);
+  },
   sair(){
     UI.folha('Sair da conta?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},'Os dados continuam salvos na conta e voltam quando você entrar de novo. Este aparelho recomeça zerado.'),
@@ -5643,14 +5869,21 @@ const COMENT = {
       lista.innerHTML='';
       const arr=Object.entries(obj||{}).map(([cid,c])=>Object.assign({cid},c)).sort((a,b)=>(a.ts||0)-(b.ts||0));
       if(!arr.length){ lista.append(h('div',{class:'f13 mut',style:'padding:10px 0'},'Seja o primeiro a comentar.')); return; }
-      arr.forEach(c=>{
+      arr.filter(c=>!MOD.bloqueado(c.uid)).forEach(c=>{
         const podeApagar = c.uid===S.auth?.uid || dono===S.auth?.uid;
+        const alheio = c.uid && c.uid!==S.auth?.uid;
         lista.append(h('div',{class:'med-row',style:'align-items:flex-start'},
           h('div',{style:'flex-shrink:0'}, avatarEl((((FEED.perfis||{})[c.uid])||{}).foto, c.nome||c.user, 32)),
           h('div',{class:'esp',style:'min-width:0'},
             h('div',{class:'f13 b700'},(c.user? '@'+c.user : (c.nome||'Atleta')),
               h('span',{class:'f11 mut2',style:'font-weight:600'},'  ·  '+dataRelativa(c.ts||agora()))),
             h('div',{class:'f14',style:'line-height:1.45;word-break:break-word'},c.txt||'')),
+          alheio? h('button',{class:'btn btn-mini',style:'width:30px;padding:4px;flex-shrink:0',title:'Denunciar',onclick:()=>{
+            UI.folha('Coment\u00e1rio de '+(c.user? '@'+c.user : (c.nome||'Atleta')), [
+              h('div',{class:'f13 mut',style:'padding:2px 2px 12px;line-height:1.6;word-break:break-word'}, c.txt||''),
+              h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); MOD.folhaDenuncia('comentario', c.uid, dono+'/'+tid+'/'+c.cid, (c.user? '@'+c.user : c.nome)); }},'\u26a0\ufe0f Denunciar coment\u00e1rio'),
+              ...MOD.menuPessoa(c.uid, (c.user? '@'+c.user : (c.nome||'Atleta')))]);
+          }},'\u22ee'):null,
           podeApagar? h('button',{class:'btn btn-mini',style:'width:30px;padding:4px;flex-shrink:0',onclick:async ()=>{
             try{
               await NET.putD('/comentarios/'+dono+'/'+tid+'/'+c.cid, null);
@@ -5670,6 +5903,10 @@ const COMENT = {
       h('div',{style:'display:flex;gap:8px'}, inp,
         h('button',{class:'btn btn-p',style:'width:auto;padding:0 16px',disabled:!podeCom,onclick:async ()=>{
           const txt=(inp.value||'').trim(); if(!txt) return;
+          if(!FILTRO.passa(txt)){
+            UI.toast('Esse coment\u00e1rio tem linguagem que n\u00e3o \u00e9 permitida aqui');
+            return;
+          }
           const cid=uid();
           const c={uid:S.auth.uid, user:S.perfil.user, nome:S.perfil.nome||'', txt:txt.slice(0,500), ts:agora()};
           try{
@@ -5703,7 +5940,7 @@ const FEED = {
   async carrega(){
     if(!S.auth) return;
     FEED.hidrata();
-    const donos=[S.auth.uid].concat(Object.keys(S.social.seguindo||{}));
+    const donos=[S.auth.uid].concat(Object.keys(S.social.seguindo||{}).filter(u=>!MOD.bloqueado(u)));
     const pPerfis = NET.get('/perfis').then(v=>{ FEED.perfis=v||{}; });
     await Promise.all(donos.map(async d=>{
       FEED.curt[d]=await NET.get('/curtidas/'+d)||{};
@@ -5718,7 +5955,8 @@ const FEED = {
   },
   itens(){
     const meus=Object.values(S.treinos).filter(t=>!t.apagado).map(t=>({meu:true,dono:S.auth?.uid,t,id:t.id,inicio:t.inicio}));
-    const dos=Object.entries(FEED.amigos).flatMap(([d,arr])=>(arr||[]).map(r=>({meu:false,dono:d,r,id:r.id,inicio:r.inicio})));
+    const dos=Object.entries(FEED.amigos).filter(([d])=>!MOD.bloqueado(d))
+      .flatMap(([d,arr])=>(arr||[]).map(r=>({meu:false,dono:d,r,id:r.id,inicio:r.inicio})));
     return meus.concat(dos).sort((a,b)=>b.inicio-a.inicio).slice(0,80);
   }
 };
@@ -5900,6 +6138,7 @@ TELAS.boasVindas = function(){
       const n=(inp.value||'').trim(); if(!n){ UI.toast('Informe um nome'); return; }
       this.textContent='Preparando…';
       S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
+      TERMOS.marca();
       try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
       this.textContent='Criar conta com e-mail';
       CONTA.folhaCriar();
@@ -5908,11 +6147,13 @@ TELAS.boasVindas = function(){
       const n=(inp.value||'').trim(); if(!n){ UI.toast('Informe um nome'); return; }
       this.textContent='Preparando…';
       S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
+      TERMOS.marca();
       try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
       UI.vai('inicio',null,false);
     }},'Começar sem conta'),
     h('button',{class:'btn btn-mini',style:'background:none;border:none;color:var(--azul)',onclick:()=>CONTA.folhaEntrar()},
-      'Já tem conta? Entrar')));
+      'Já tem conta? Entrar'),
+    TERMOS.linhaAceite()));
 };
 
 /* ---------- inicialização ---------- */
@@ -5920,6 +6161,7 @@ TELAS.boasVindas = function(){
   try{ await BIB.carrega(); }catch(e){}
   $('#fantasma').remove();
   if(!S.perfil || !S.perfil.nome){ UI.vai('boasVindas',null,false); }
+  else if(!TERMOS.aceitou()){ setTimeout(()=>{ try{ TERMOS.folhaObrigatoria(); }catch(e){} }, 700); }
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano

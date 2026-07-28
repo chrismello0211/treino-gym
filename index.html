@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.4.5';
+const APP_VER='11.5';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -456,6 +456,31 @@ CORE.descansaApos = function(exList, ix){
   const ss=exList[ix] && exList[ix].ss;
   if(!ss) return true;
   return !exList.slice(ix+1).some(q=>q.ss===ss);
+};
+// desfaz as marcas que estas series haviam gravado em S.prs
+CORE.reverteSeries = function(exId, series){
+  let n=0;
+  // DE TRAS PRA FRENTE: cada serie guardou o estado de ANTES dela, entao a
+  // 1a serie tem o valor original. Revertendo na ordem direta, a ultima
+  // sobrescreveria as anteriores e a marca ficaria inflada do mesmo jeito.
+  (series||[]).slice().reverse().forEach(s=>{
+    if(!s || !s._prBackup) return;
+    s._prBackup.forEach(([tp, valAntigo])=>{
+      if(!S.prs[exId]) return;
+      if(valAntigo) S.prs[exId][tp]=valAntigo; else delete S.prs[exId][tp];
+      NET.agenda('prs/'+exId+'/'+tp, valAntigo||null);
+      n++;
+    });
+    delete s._prBackup; delete s.pr;
+  });
+  return n;
+};
+CORE.reverteExercicio = function(e){
+  return e ? CORE.reverteSeries(e.exId, e.series) : 0;
+};
+CORE.reverteTreino = function(t){
+  let n=0; ((t&&t.ex)||[]).forEach(e=>{ n+=CORE.reverteExercicio(e); });
+  return n;
 };
 CORE.recomputaPRs = function(lista, resets){
   resets = resets || {};
@@ -1773,7 +1798,10 @@ const ATIVO = {
   descarta(){
     UI.folha('Descartar treino?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'As séries registradas hoje serão perdidas. Essa ação não tem volta.'),
-      h('button',{class:'btn btn-err',onclick:()=>{ S.ativo=null; salva('ativo'); DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false); }},'Descartar treino')]);
+      h('button',{class:'btn btn-err',onclick:()=>{
+        if(CORE.reverteTreino(S.ativo)) salva('prs');  // treino descartado nao deixa recorde pra tras
+        S.ativo=null; salva('ativo'); DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
+      }},'Descartar treino')]);
   },
   concluir(){
     const t=S.ativo;
@@ -1985,7 +2013,11 @@ TELAS.ativo = function(){
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
       sec('Treino'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); reordenar(t.ex, ()=>salva('ativo')); }},'Reordenar exercícios'),
-      h('button',{class:'menu-op perigo',onclick:()=>{ t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover do treino')
+      h('button',{class:'menu-op perigo',onclick:()=>{
+        const rem=t.ex[ix];
+        if(CORE.reverteExercicio(rem)) salva('prs');   // devolve os recordes que ele havia gravado
+        t.ex.splice(ix,1); salva('ativo'); UI.fechaFolha(); UI.refaz();
+      }},'Remover do treino')
     ]);
   }
 };
@@ -5171,6 +5203,48 @@ function corrigePastasOrfas(){
   if(n){ salva('rotinas'); }
   return n;
 }
+function reparaPRsFantasma(){
+  if(S.cfg.prFantasma1) return 0;
+  try{
+    const lista = Object.values(S.treinos||{}).filter(t=>!t.apagado);
+    if(!lista.length){ S.cfg.prFantasma1=1; salva('cfg'); return 0; }
+    const resets={};
+    Object.entries(S.prs||{}).forEach(([ex,p])=>{ if(p && p.resetEm) resets[ex]=p.resetEm; });
+    // copia profunda: o historico salvo nao e tocado, so lido
+    const copia = JSON.parse(JSON.stringify(lista));
+    const reais = CORE.recomputaPRs(copia, resets);
+
+    let corrigidas=0; const tocados=[];
+    Object.keys(S.prs||{}).forEach(ex=>{
+      const velho=S.prs[ex]||{}, novo=reais[ex]||{};
+      ['kg','vol','rm','reps'].forEach(tp=>{
+        const a = velho[tp] ? velho[tp].v : 0;
+        const b = novo[tp]  ? novo[tp].v  : 0;
+        if(a > b){ corrigidas++; if(tocados.indexOf(ex)<0) tocados.push(ex); }
+      });
+    });
+    if(!corrigidas){ S.cfg.prFantasma1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); return 0; }
+
+    Object.entries(resets).forEach(([ex,r])=>{ reais[ex]=reais[ex]||{}; reais[ex].resetEm=r; });
+    S.prs = reais; salva('prs');
+    Object.entries(S.prs).forEach(([ex,p])=>{ if(p) Object.keys(p).forEach(tp=>{
+      if(tp!=='resetEm' && tp!=='_pos') NET.agenda('prs/'+ex+'/'+tp, p[tp]); }); });
+    S.cfg.prFantasma1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+
+    setTimeout(()=>{ try{
+      UI.folha('Recordes corrigidos',[
+        h('div',{class:'f14 mut',style:'padding:2px 2px 12px;line-height:1.7'},
+          'Uma falha antiga deixava marca de recorde gravada quando um exerc\u00edcio era removido do treino ou o treino era descartado. Isso travava recordes novos.'),
+        h('div',{class:'f14',style:'padding:2px 2px 12px;line-height:1.7'},
+          corrigidas+' marca'+(corrigidas>1?'s':'')+' foi ajustada em '+tocados.length+' exerc\u00edcio'+(tocados.length>1?'s':'')+
+          ', com base nos treinos que voc\u00ea realmente salvou. Seu hist\u00f3rico n\u00e3o mudou.'),
+        h('div',{class:'f13 mut2',style:'padding:0 2px 14px;line-height:1.6'},
+          tocados.slice(0,8).map(ex=>BIB.ex(ex).n).join(', ')+(tocados.length>8?'\u2026':'')),
+        h('button',{class:'btn btn-p',onclick:()=>UI.fechaFolha()},'Entendi')]);
+    }catch(e){} }, 1400);
+    return corrigidas;
+  }catch(e){ if(DEBUG) console.log('reparaPRs', e); return 0; }
+}
 function reconciliaRecordes(){
   // corrige treinos gravados com a contagem antiga (1 por exercício) -> conta cada PR
   if(S.cfg.recRecalc3) return;
@@ -6287,7 +6361,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); reconciliaRecordes(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.4.3';
+const APP_VER='11.4.4';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3458,11 +3458,11 @@ function corpoBlocos(pesos, larg){
 const ZONAS_F = {
   pescoco:[[50,16,3.4,3]],
   trapezio:[[45.5,18.5,3.2,2.6],[54.5,18.5,3.2,2.6]],
-  ombros:[[40,23.5,5,4.3],[60,23.5,5,4.3]],
-  peito:[[45,26,7,5],[55,26,7,5]],
-  biceps:[[36.5,38,3.6,6],[63.5,38,3.6,6]],
-  antebraco:[[33.5,47,2.8,5.5],[66.5,47,2.8,5.5]],
-  abdomen:[[50,40,6.5,7.5]],
+  ombros:[[39.5,21.5,4,3.5],[60.5,21.5,4,3.5]],
+  peito:[[46.5,26,4.2,4],[53.5,26,4.2,4]],
+  biceps:[[39.4,26,2.8,5.5],[60.6,26,2.8,5.5]],
+  antebraco:[[35.5,41.5,2.6,5],[64.5,41.5,2.6,5]],
+  abdomen:[[50,38,5.5,7]],
   abdutores:[[41.5,58,3.2,5],[58.5,58,3.2,5]],
   adutores:[[47.6,60,2.4,6],[52.4,60,2.4,6]],
   quadriceps:[[44.5,63,5,8],[55.5,63,5,8]],
@@ -3471,12 +3471,12 @@ const ZONAS_F = {
 const ZONAS_C = {
   pescoco:[[50,16,3.4,3]],
   trapezio:[[50,23,8,5]],
-  ombros:[[39.5,23.5,5,4.3],[60.5,23.5,5,4.3]],
+  ombros:[[39.5,21.5,4,3.5],[60.5,21.5,4,3.5]],
   'costas-sup':[[47,26,6,4],[53,26,6,4]],
-  costas:[[44,32,6,6],[56,32,6,6]],
-  dorsais:[[44.5,34,6,6],[55.5,34,6,6]],
-  triceps:[[36,38,3.4,6],[64,38,3.4,6]],
-  antebraco:[[31.5,47,2.8,5.5],[68.5,47,2.8,5.5]],
+  costas:[[45.5,32,5,6],[54.5,32,5,6]],
+  dorsais:[[45.5,34,5,6],[54.5,34,5,6]],
+  triceps:[[38.6,26,2.8,5.5],[61.4,26,2.8,5.5]],
+  antebraco:[[33.7,41.5,2.6,5],[66.3,41.5,2.6,5]],
   lombar:[[50,43,5,4]],
   gluteos:[[45,50,5,4.5],[55,50,5,4.5]],
   posteriores:[[44,63,5,8],[56,63,5,8]],
@@ -4006,8 +4006,12 @@ function abreRotinaPub(alvo, r){
       h('div',{class:'b700',style:'font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},e.n||'Exercício'),
       h('div',{class:'f12 mut'},(e.ser||3)+' séries × '+(e.reps||'10')))));
   UI.folha(r.titulo, [].concat(linhas, [h('div',{style:'height:10px'}),
-    h('button',{class:'btn btn-p',onclick:function(){
-      this.disabled=true;
+    h('button',{class:'btn btn-p',onclick:async function(){
+      this.disabled=true; this.textContent='Copiando\u2026';
+      // acervo do dono: e de la que vem foto e grupos secundarios do custom
+      let acervo={}; try{ acervo = await NET.get('/exsPub/'+alvo) || {}; }catch(e){}
+      const acervoPorNome={};
+      Object.values(acervo).forEach(x=>{ if(x && x.n) acervoPorNome[BIB.norm(x.n)]=x; });
       const nova={ id:uid(), titulo:r.titulo, pasta:'', criado:agora(), atualizado:agora(),
         ex:(r.ex||[]).map(e=>{
           let exId = (e.exId && BIB.porId[e.exId])? e.exId : null;
@@ -4022,8 +4026,13 @@ function abreRotinaPub(alvo, r){
           }
           if(!exId){
             exId='custom__'+uid();
+            const fonte = acervo[e.exId] || acervoPorNome[BIB.norm(e.n||'')] || null;
             const ent={id:exId, n:e.n||'Exercício', g:e.g||'corpo-inteiro', e:e.e||'outro', t:e.t||'peso_reps', custom:true, atualizado:agora()};
+            if(e.exId) ent.origem=e.exId;
+            if(fonte && fonte.foto) ent.foto=fonte.foto;
+            if(fonte && fonte.gs) ent.gs=fonte.gs;
             S.custom[exId]=ent; salva('custom'); NET.agenda('custom/'+exId, ent);
+            if(!ent.ocultoPub) EXSPUB.publica(ent);
             BIB.lista.push(ent); BIB.indexa();
           }
           const molde = Array.isArray(e.sr) && e.sr.length
@@ -4696,11 +4705,13 @@ const EXSVIEW = {
       const meu = EXSVIEW._meu(x);
       const arquivado = !!(meu && meu.oc);
       const jaTenho = !!(meu && !meu.oc);
-      const bt = h('button',{class:'btn btn-mini'+((jaTenho&&!arquivado)?'':' btn-p'),style:'width:auto;padding:8px 12px;flex-shrink:0',onclick:function(){
+      const semFoto = !!(jaTenho && !meu.foto && x.foto);
+      const bt = h('button',{class:'btn btn-mini'+((jaTenho&&!arquivado&&!semFoto)?'':' btn-p'),style:'width:auto;padding:8px 12px;flex-shrink:0',onclick:function(){
         if(arquivado){ EXSVIEW.restaura(meu); this.textContent='No acervo'; this.disabled=true; this.className='btn btn-mini'; return; }
+        if(semFoto){ EXSVIEW.puxaFoto(meu, x); this.textContent='No acervo'; this.disabled=true; this.className='btn btn-mini'; return; }
         if(jaTenho){ UI.toast('Você já tem esse exercício'); return; }
         EXSVIEW.copia(x); this.textContent='Copiado ✓'; this.disabled=true; this.className='btn btn-mini';
-      }}, arquivado? 'Restaurar' : (jaTenho? 'No acervo' : 'Copiar'));
+      }}, arquivado? 'Restaurar' : (semFoto? 'Pegar foto' : (jaTenho? 'No acervo' : 'Copiar')));
       return h('div',{class:'med-row'},
         (x.foto? h('img',{src:x.foto,loading:'lazy',style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0'})
                : h('div',{style:'width:40px;height:40px;border-radius:9px;background:var(--surf3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px'},'🏋️')),
@@ -4718,6 +4729,16 @@ const EXSVIEW = {
     return Object.values(S.custom||{}).find(c=> c && (c.origem===x.id || BIB.norm(c.n)===nn)) || null;
   },
   _jaTenho(x){ const m=EXSVIEW._meu(x); return !!(m && !m.oc); },
+  puxaFoto(c, x){
+    if(x.foto) c.foto=x.foto;
+    if(x.gs && !c.gs) c.gs=x.gs;
+    if(!c.origem) c.origem=x.id;
+    c.atualizado=agora();
+    S.custom[c.id]=c; salva('custom'); NET.agenda('custom/'+c.id, c);
+    if(!c.ocultoPub && !c.oc) EXSPUB.publica(c);
+    BIB.indexa();
+    UI.toast('Foto de “'+c.n+'” atualizada ✓', true);
+  },
   restaura(c){
     delete c.oc; c.atualizado=agora();
     S.custom[c.id]=c; salva('custom');

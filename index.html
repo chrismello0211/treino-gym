@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.4.4';
+const APP_VER='11.4.5';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3460,8 +3460,8 @@ const ZONAS_F = {
   trapezio:[[45.5,18.5,3.2,2.6],[54.5,18.5,3.2,2.6]],
   ombros:[[39.5,21.5,4,3.5],[60.5,21.5,4,3.5]],
   peito:[[46.5,26,4.2,4],[53.5,26,4.2,4]],
-  biceps:[[39.4,26,2.8,5.5],[60.6,26,2.8,5.5]],
-  antebraco:[[35.5,41.5,2.6,5],[64.5,41.5,2.6,5]],
+  biceps:[[39,29.3,2.8,4.5],[61,29.3,2.8,4.5]],
+  antebraco:[[36.1,39.6,3,5],[63.9,39.6,3,5]],
   abdomen:[[50,38,5.5,7]],
   abdutores:[[41.5,58,3.2,5],[58.5,58,3.2,5]],
   adutores:[[47.6,60,2.4,6],[52.4,60,2.4,6]],
@@ -3475,8 +3475,8 @@ const ZONAS_C = {
   'costas-sup':[[47,26,6,4],[53,26,6,4]],
   costas:[[45.5,32,5,6],[54.5,32,5,6]],
   dorsais:[[45.5,34,5,6],[54.5,34,5,6]],
-  triceps:[[38.6,26,2.8,5.5],[61.4,26,2.8,5.5]],
-  antebraco:[[33.7,41.5,2.6,5],[66.3,41.5,2.6,5]],
+  triceps:[[38,29.3,2.8,4.5],[62,29.3,2.8,4.5]],
+  antebraco:[[34.3,39.6,3,5],[65.7,39.6,3,5]],
   lombar:[[50,43,5,4]],
   gluteos:[[45,50,5,4.5],[55,50,5,4.5]],
   posteriores:[[44,63,5,8],[56,63,5,8]],

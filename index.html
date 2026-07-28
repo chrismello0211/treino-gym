@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.4.1';
+const APP_VER='11.4.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1449,7 +1449,13 @@ TELAS.treino = function(){
       'Nenhuma rotina ainda. Crie a primeira, defina exercícios e séries, e comece a registrar.'));
   }
   const pastas=Object.values(S.pastas).filter(p=>!p.apagada).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
-  const porPasta={}; rotinas.forEach(r=>{ (porPasta[r.pasta||'']=porPasta[r.pasta||'']||[]).push(r); });
+  // uma rotina pode apontar pra pasta apagada (ou que nunca existiu nesta conta,
+  // caso de rotina copiada de amigo). Sem isso ela some da tela e ninguem acha.
+  const idsPasta=new Set(pastas.map(p=>p.id));
+  const porPasta={}; rotinas.forEach(r=>{
+    const k=(r.pasta && idsPasta.has(r.pasta)) ? r.pasta : '';
+    (porPasta[k]=porPasta[k]||[]).push(r);
+  });
   Object.values(porPasta).forEach(l=>l.sort((a,b)=>(a.ordem||0)-(b.ordem||0)));
 
   const desenhaRotina=(r,dix)=>{
@@ -2180,7 +2186,14 @@ function skeletonCard(){
 }
 function diagnostico(){
   let log=[]; try{ log=JSON.parse(localStorage.getItem('tg_errlog')||'[]'); }catch(e){}
-  const tx=['ForgeX v'+APP_VER, navigator.userAgent, 'Data: '+new Date().toISOString(), 'Treinos: '+Object.keys(S.treinos).length+' · Rotinas: '+Object.keys(S.rotinas).length, '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']).join('\n');
+  const rots=Object.values(S.rotinas||{}).filter(r=>!r.apagada);
+  const vivas=new Set(Object.values(S.pastas||{}).filter(p=>!p.apagada).map(p=>p.id));
+  const orfas=rots.filter(r=>r.pasta && !vivas.has(r.pasta));
+  const tx=['ForgeX v'+APP_VER, navigator.userAgent, 'Data: '+new Date().toISOString(),
+    'Treinos: '+Object.keys(S.treinos).length+' · Rotinas: '+rots.length+' ativas de '+Object.keys(S.rotinas).length,
+    'Pastas: '+vivas.size+' · Rotinas em pasta inexistente: '+orfas.length+(orfas.length? ' ('+orfas.map(r=>r.titulo).join(', ')+')':''),
+    'Exercícios criados: '+Object.keys(S.custom||{}).length,
+    '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']).join('\n');
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tx).then(()=>UI.toast('Diagnóstico copiado ✓', true)).catch(()=>UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)])); }
   else UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)]);
 }
@@ -5111,6 +5124,17 @@ async function autocuraNuvem(){
     }
   }catch(e){}
 }
+function corrigePastasOrfas(){
+  const vivas=new Set(Object.values(S.pastas||{}).filter(p=>!p.apagada).map(p=>p.id));
+  let n=0;
+  Object.values(S.rotinas||{}).forEach(r=>{
+    if(r && !r.apagada && r.pasta && !vivas.has(r.pasta)){
+      r.pasta=''; r.atualizado=agora(); NET.agenda('rotinas/'+r.id, r); n++;
+    }
+  });
+  if(n){ salva('rotinas'); }
+  return n;
+}
 function reconciliaRecordes(){
   // corrige treinos gravados com a contagem antiga (1 por exercício) -> conta cada PR
   if(S.cfg.recRecalc3) return;
@@ -6227,7 +6251,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); reconciliaRecordes(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); reconciliaRecordes(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.5';
+const APP_VER='11.5.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1353,14 +1353,22 @@ const PICKER = {
     for(const t of ts){ for(const e of (t.ex||[])){ if(!ids.includes(e.exId)) ids.push(e.exId); } if(ids.length>=10) break; }
     return ids;
   },
-  criarCustom(prefill){
+  criarCustom(prefill, ed){
+    // ed preenchido = modo edicao: mesma folha, salva por cima em vez de criar
     const nome=h('input',{placeholder:'Nome do exercício'});
-    if(typeof prefill==='string' && prefill.trim()) nome.value=prefill.trim();
-    let fotoB64=null;
+    if(ed) nome.value = ed.n||'';
+    else if(typeof prefill==='string' && prefill.trim()) nome.value=prefill.trim();
+    let fotoB64 = (ed && ed.foto) ? ed.foto : null;
     const selG=h('select',{}, ...Object.entries(GRUPOS).sort((a,b)=>a[1].localeCompare(b[1],'pt')).map(([v,r])=>h('option',{value:v},r)));
     const selE=h('select',{}, ...Object.entries(EQUIPS).map(([v,r])=>h('option',{value:v},r)));
     const selT=h('select',{}, h('option',{value:'peso_reps'},'Peso × repetições'), h('option',{value:'reps'},'Só repetições'), h('option',{value:'tempo'},'Tempo (segundos)'));
     const est={g:null, gs:{}, e:null, t:'peso_reps', _ab:null};
+    if(ed){
+      est.g = ed.g||null;
+      est.e = (ed.e && ed.e!=='outro') ? ed.e : null;
+      est.t = ed.t||'peso_reps';
+      (ed.gs||[]).forEach(g2=>{ if(g2!==ed.g) est.gs[g2]=1; });
+    }
     const render=()=>{
       const secoes=[];
       secoes.push(h('div',{style:'display:flex;justify-content:center;margin-bottom:12px'},
@@ -1411,10 +1419,28 @@ const PICKER = {
       [['peso_reps','Peso e repetições'],['reps','Só repetições'],['tempo','Tempo (segundos)']]
         .forEach(([v,r])=>tg.append(h('button',{class:'chip'+(est.t===v?' on':''),onclick:()=>{est.t=v; render();}},r)));
       secoes.push(tg, h('div',{style:'height:14px'}));
+      if(ed && fotoB64){
+        secoes.push(h('button',{class:'menu-op',style:'margin-bottom:6px',onclick:()=>{ fotoB64=null; render(); }},'Remover foto'));
+      }
       secoes.push(h('button',{class:'btn btn-p',onclick:()=>{
         const n=(nome.value||'').trim();
         if(!n){ UI.toast('Informe o nome do exercício'); return; }
         if(!est.g){ UI.toast('Escolha o grupo muscular primário'); return; }
+        if(ed){
+          const gsE=Object.keys(est.gs);
+          ed.n=n; ed.g=est.g; ed.e=est.e||'outro'; ed.t=est.t;
+          if(fotoB64) ed.foto=fotoB64; else delete ed.foto;
+          if(gsE.length) ed.gs=gsE; else delete ed.gs;
+          ed.atualizado=agora();
+          S.custom[ed.id]=ed; salva('custom'); NET.agenda('custom/'+ed.id, ed);
+          if(!ed.ocultoPub && !ed.oc) EXSPUB.publica(ed);
+          if(!BIB.porId[ed.id]) BIB.lista.push(ed);
+          BIB.indexa();
+          FOLHA2.fecha();
+          try{ if(UI.telaAtual==='exercicio') UI.refaz(); else PICKER.lista(); }catch(e2){}
+          UI.toast('Exercício atualizado ✓', true);
+          return;
+        }
         const id='custom__'+uid();
         const ent={id, n, g:est.g, e:est.e||'outro', t:est.t, custom:true, atualizado:agora()};
         if(fotoB64) ent.foto=fotoB64;
@@ -1424,8 +1450,8 @@ const PICKER = {
         EXSPUB.publica(ent);
         BIB.lista.push(ent); BIB.indexa();
         FOLHA2.fecha(); PICKER.lista(); UI.toast('Exercício criado ✓', true);
-      }},'Salvar exercício'));
-      FOLHA2.abre('Criar exercício', secoes);
+      }}, ed? 'Salvar alterações' : 'Salvar exercício'));
+      FOLHA2.abre(ed? 'Editar exercício' : 'Criar exercício', secoes);
     };
     render();
   }
@@ -2565,6 +2591,9 @@ TELAS.exercicio = function({id}){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:18px'},x.n),
     h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>{
       UI.folha(x.n,[
+        podeFoto? h('button',{class:'menu-op',onclick:()=>{
+          UI.fechaFolha(); PICKER.criarCustom(null, S.custom[id]);
+        }},'Editar exercício') : h('span',{style:'display:none'}),
         h('button',{class:'menu-op perigo',onclick:()=>{
           UI.fechaFolha();
           UI.folha('Zerar recordes deste exercício?',[

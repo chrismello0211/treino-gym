@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.4.2';
+const APP_VER='11.4.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -921,6 +921,8 @@ const BIB = {
   temGifOuFoto(x){
     if(!x.custom) return true;                 // biblioteca sempre tem gif
     if(x.foto) return true;                    // custom com foto própria
+    if(!x.hevy) return true;                   // criado à mão ou copiado de amigo: sempre aparece
+    // só o resto da importação do Hevy precisa casar com a biblioteca pra não virar lixo
     const nn = x._nn || BIB.norm(x.n);
     return BIB.lista.some(q=>!q.custom && !q.oc && (q._nn===nn || (q._nn && q._nn.indexOf(nn+' (')===0)));
   },
@@ -4691,11 +4693,14 @@ const EXSVIEW = {
       return;
     }
     const linhas = lista.map(x=>{
-      const jaTenho = EXSVIEW._jaTenho(x);
-      const bt = h('button',{class:'btn btn-mini'+(jaTenho?'':' btn-p'),style:'width:auto;padding:8px 12px;flex-shrink:0',onclick:function(){
+      const meu = EXSVIEW._meu(x);
+      const arquivado = !!(meu && meu.oc);
+      const jaTenho = !!(meu && !meu.oc);
+      const bt = h('button',{class:'btn btn-mini'+((jaTenho&&!arquivado)?'':' btn-p'),style:'width:auto;padding:8px 12px;flex-shrink:0',onclick:function(){
+        if(arquivado){ EXSVIEW.restaura(meu); this.textContent='No acervo'; this.disabled=true; this.className='btn btn-mini'; return; }
         if(jaTenho){ UI.toast('Você já tem esse exercício'); return; }
         EXSVIEW.copia(x); this.textContent='Copiado ✓'; this.disabled=true; this.className='btn btn-mini';
-      }}, jaTenho? 'No acervo' : 'Copiar');
+      }}, arquivado? 'Restaurar' : (jaTenho? 'No acervo' : 'Copiar'));
       return h('div',{class:'med-row'},
         (x.foto? h('img',{src:x.foto,loading:'lazy',style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0'})
                : h('div',{style:'width:40px;height:40px;border-radius:9px;background:var(--surf3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px'},'🏋️')),
@@ -4707,10 +4712,20 @@ const EXSVIEW = {
     UI.folha('Exercícios de '+((perfil&&(perfil.nome||perfil.user))||'atleta'),
       [h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Toque em Copiar para adicionar ao seu acervo. Depois é seu, edite à vontade.'), ...linhas]);
   },
-  _jaTenho(x){
-    // já tenho se houver custom meu com mesmo nome (normalizado) ou id de origem registrado
+  _meu(x){
+    // meu equivalente: mesmo id de origem ou mesmo nome normalizado
     const nn=BIB.norm(x.n);
-    return Object.values(S.custom||{}).some(c=> c && (c.origem===x.id || BIB.norm(c.n)===nn));
+    return Object.values(S.custom||{}).find(c=> c && (c.origem===x.id || BIB.norm(c.n)===nn)) || null;
+  },
+  _jaTenho(x){ const m=EXSVIEW._meu(x); return !!(m && !m.oc); },
+  restaura(c){
+    delete c.oc; c.atualizado=agora();
+    S.custom[c.id]=c; salva('custom');
+    NET.agenda('custom/'+c.id, c);
+    if(!c.ocultoPub) EXSPUB.publica(c);
+    if(!BIB.porId[c.id]) BIB.lista.push(c);
+    BIB.indexa();
+    UI.toast('“'+c.n+'” voltou pro seu acervo ✓', true);
   },
   copia(x){
     const id='custom__'+uid();

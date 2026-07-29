@@ -102,6 +102,8 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
 .srow.feita{background:var(--okbg)}
 .srow input{padding:9px 4px;background:var(--surf2)}
 .srow input.sugerido{color:var(--tx3);opacity:.55;font-weight:600}
+.srow .cron{font-size:15px;line-height:1;color:var(--brand2);border-color:var(--brand-dim)}
+.srow .cron.on{background:var(--brand);color:#fff;border-color:transparent}
 .srow.feita input{background:rgba(255,255,255,.06);border-color:transparent}
 .srow.feita input,.srow.feita input.sugerido{color:var(--tx)!important;opacity:1!important;font-weight:700!important;-webkit-text-fill-color:var(--tx)}
 .stipo{font-weight:800;font-size:15px;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--surf2)}
@@ -379,7 +381,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.6.1';
+const APP_VER='11.7';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -984,7 +986,7 @@ const GRUPOS = {peito:'Peito', costas:'Costas', ombros:'Ombros', biceps:'Bíceps
 const EQUIPS = {barra:'Barra', halter:'Halteres', maquina:'Máquina', cabo:'Cabo/Polia', kettlebell:'Kettlebell',
   elastico:'Elástico', 'peso-corporal':'Peso corporal', banco:'Banco', bola:'Bola', anilha:'Anilha',
   caixa:'Caixa', suspensao:'Suspensão/TRX', corda:'Corda', 'corda-de-pular':'Corda de pular', outro:'Outro'};
-const TIPO_ROTULO = {peso_reps:['KG','REPS'], reps:['—','REPS'], tempo:['—','SEG']};
+const TIPO_ROTULO = {peso_reps:['KG','REPS'], reps:['—','REPS'], tempo:['—','TEMPO']};
 const PR_ROT = {kg:'Peso', vol:'Volume', rm:'1RM', reps:'Reps'};
 
 /* ---------- utilidades de UI ---------- */
@@ -1144,6 +1146,19 @@ function fmtPeso(kgVal, un){ // recebe SEMPRE em kg, exibe na unidade pedida
   return Math.round(v*10)/10;
 }
 function pesoCorporalAtual(){ try{ const l=medLista().filter(x=>x.peso!=null); return l.length? (Number(l.at(-1).peso)||0):0; }catch(e){ return 0; } }
+// campo de tempo: sempre m:ss, pra nao ficar "600" nem "90"
+function fmtTempoCampo(seg){
+  seg=Math.round(Number(seg)||0); if(!seg) return '';
+  return Math.floor(seg/60)+':'+String(seg%60).padStart(2,'0');
+}
+// numero sozinho: em cardio a pessoa pensa em MINUTOS, em prancha pensa em SEGUNDOS
+function parseTempoCampo(v, ehCardio){
+  v=String(v==null?'':v).trim().replace(',',':');
+  if(!v) return '';
+  if(v.indexOf(':')>=0){ const p=v.split(':'); return (parseInt(p[0],10)||0)*60+(parseInt(p[1],10)||0); }
+  const n=parseFloat(v)||0;
+  return Math.round(ehCardio ? n*60 : n);
+}
 function fmtMin(seg){ seg=Number(seg)||0; if(!seg) return ''; const m=Math.floor(seg/60), s=Math.round(seg%60); return s? m+':'+String(s).padStart(2,'0') : String(m); }
 function parseMin(v){ v=String(v||'').trim().replace(',',':'); if(!v) return ''; if(v.includes(':')){ const [m,s]=v.split(':'); return (parseInt(m,10)||0)*60+(parseInt(s,10)||0); } return (parseFloat(v)||0)*60; }
 const VIB = { v(p){ try{ if(S.cfg.vibra && navigator.vibrate) navigator.vibrate(p); }catch(e){} } };
@@ -1652,7 +1667,7 @@ TELAS.rotinaEditor = function(){
   }
   function cartaoEx(e,ix){
     const x=BIB.ex(e.exId);
-    const rot=(x.t==='tempo' && x.g==='cardio')? ['—','MIN'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
+    const rot=(TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
     const unAtual=unEx(e);
     const card=h('div',{class:'card'});
     card.dataset.dix=ix;
@@ -1678,7 +1693,10 @@ TELAS.rotinaEditor = function(){
       h('button',{class:'stipo '+s.tipo,onclick:()=>{ s.tipo=proxTipo(s.tipo); UI.refaz(); }}, s.tipo==='N'?String(numerada):s.tipo),
       h('div',{class:'anterior'},'—'),
       x.t==='peso_reps' ? h('input',{type:'text',inputmode:'decimal',value:s.kg,placeholder:'kg',oninput:ev=>s.kg=ev.target.value.replace(',','.')}) : h('div',{class:'anterior'},'—'),
-      h('input',{type:'number',inputmode:'numeric',value:s.reps,placeholder:x.t==='tempo'?'seg':'reps',oninput:ev=>s.reps=ev.target.value}),
+      (x.t==='tempo'
+        ? h('input',{type:'text',inputmode:'numeric',value:fmtTempoCampo(s.reps),placeholder:'0:00',
+            oninput:ev=>s.reps=parseTempoCampo(ev.target.value, x.g==='cardio')})
+        : h('input',{type:'number',inputmode:'numeric',value:s.reps,placeholder:'reps',oninput:ev=>s.reps=ev.target.value})),
       h('button',{class:'scheck',onclick:()=>{ if(e.series.length>1){ e.series.splice(si,1); UI.refaz(); } }},'✕'));
   }
   function proxTipo(t){ return {N:'W',W:'D',D:'F',F:'N'}[t]||'N'; }
@@ -1850,11 +1868,30 @@ const ATIVO = {
     UI.folha('Descartar treino?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'As séries registradas hoje serão perdidas. Essa ação não tem volta.'),
       h('button',{class:'btn btn-err',onclick:()=>{
+        ATIVO.paraCron(false);
         if(CORE.reverteTreino(S.ativo)) salva('prs');  // treino descartado nao deixa recorde pra tras
         S.ativo=null; salva('ativo'); DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
       }},'Descartar treino')]);
   },
+  cron:null,
+  iniciaCron(s){
+    ATIVO.paraCron();
+    ATIVO.cron={ s, ini: Date.now() - ((Number(s.reps)||0)*1000), inp:null, iv:null };
+    ATIVO.cron.iv=setInterval(()=>{
+      const c=ATIVO.cron; if(!c) return;
+      const seg=Math.round((Date.now()-c.ini)/1000);
+      c.s.reps=seg;
+      if(c.inp && c.inp.isConnected) c.inp.value=fmtTempoCampo(seg);
+    }, 250);
+    VIB.v(15); UI.refaz();
+  },
+  paraCron(grava){
+    const c=ATIVO.cron; if(!c) return;
+    clearInterval(c.iv); ATIVO.cron=null;
+    if(grava!==false){ c.s.reps=Math.max(1, Math.round((Date.now()-c.ini)/1000)); salva('ativo'); UI.refaz(); }
+  },
   concluir(){
+    ATIVO.paraCron();
     const t=S.ativo;
     const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; ['_auto','_sugKg','_sugReps','_dtKg','_dtReps','_planKg','_planReps','_prBackup'].forEach(k=>delete c[k]); return c; }) })).filter(e=>e.series.length);
     if(!feitos.length){ UI.toast('Nenhuma série concluída ainda'); return; }
@@ -1953,7 +1990,7 @@ TELAS.ativo = function(){
   }
   function cartao(e,ix){
     const x=BIB.ex(e.exId);
-    const rot=(x.t==='tempo' && x.g==='cardio')? ['—','MIN'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
+    const rot=(x.t==='tempo') ? ['⏱','TEMPO'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
     const unAtual=unEx(e);
     const card=h('div',{class:'card'});
     card.dataset.dix=ix;
@@ -1993,15 +2030,16 @@ TELAS.ativo = function(){
   function linha(e,s,si,x){
     const numerada=e.series.filter(q=>q.tipo!=='W').indexOf(s)+1;
     const pcEx = x.e==='peso-corporal' && x.t==='peso_reps';
-    const cardioMin = x.t==='tempo' && x.g==='cardio';
+    const ehTempo = x.t==='tempo';
+    const ehCardio = ehTempo && x.g==='cardio';
     const ant=ATIVO.serieAnterior(e.exId, si);
     // o valor anterior serve só de referência (placeholder). O campo começa vazio;
     // o que a pessoa não digitar não é gravado — igual ao Hevy.
     const refKg = (ant && ant.kg!=null && ant.kg!=='') ? ant.kg : (s._planKg!=null? s._planKg : null);
     const refReps = (ant && ant.reps!=null && ant.reps!=='') ? ant.reps : (s._planReps!=null? s._planReps : null);
     const phKg = refKg!=null ? String(fmtPeso(refKg, unEx(e))) : (pcEx?('+'+unEx(e)):unEx(e));
-    const phReps = refReps!=null ? (cardioMin?fmtMin(refReps):String(refReps)) : (cardioMin?'min':(x.t==='tempo'?'seg':'reps'));
-    const antTxt = ant ? (x.t==='peso_reps' ? fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps : (cardioMin? fmtMin(ant.reps)+'min' : ant.reps+(x.t==='tempo'?'s':' reps'))) : '—';
+    const phReps = refReps!=null ? (ehTempo?fmtTempoCampo(refReps):String(refReps)) : (ehTempo?'0:00':'reps');
+    const antTxt = ant ? (x.t==='peso_reps' ? fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps : (ehTempo? fmtTempoCampo(ant.reps) : ant.reps+' reps')) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
       h('button',{class:'stipo '+s.tipo,onclick:()=>{ if(s.pr && s.pr.length) folhaPRSerie(x,s,e); else if(!s.ok) tipoRpe(s); }},
         s.tipo==='N'?String(numerada||1):s.tipo,
@@ -2010,11 +2048,24 @@ TELAS.ativo = function(){
       h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
         ? h('input',{type:'text',inputmode:'decimal',value:(s.kg==null||s.kg===''?'':fmtPeso(s.kg, unEx(e))),placeholder:phKg,oninput:ev=>{ const raw=ev.target.value.replace(',','.'); s.kg = raw===''?'':(unEx(e)==='lb'? lbParaKg(raw) : raw); salva('ativo');ATIVO.pinta();},disabled:s.ok})
-        : h('div',{class:'anterior'},'—'),
-      cardioMin
-        ? h('input',{type:'text',inputmode:'numeric',value:(s.reps==null||s.reps===''?'':fmtMin(s.reps)),placeholder:phReps,oninput:ev=>{s.reps=parseMin(ev.target.value);salva('ativo');ATIVO.pinta();},disabled:s.ok})
+        : (ehTempo && !s.ok
+            ? h('button',{class:'btn btn-mini cron'+(ATIVO.cron&&ATIVO.cron.s===s?' on':''),
+                style:'width:100%;padding:9px 0',onclick:()=>{
+                  if(ATIVO.cron && ATIVO.cron.s===s) ATIVO.paraCron(); else ATIVO.iniciaCron(s);
+                }}, ATIVO.cron&&ATIVO.cron.s===s ? '\u23F8' : '\u25B6')
+            : h('div',{class:'anterior'},'—')),
+      ehTempo
+        ? (function(){
+            const inp=h('input',{type:'text',inputmode:'numeric',
+              value:(s.reps==null||s.reps===''?'':fmtTempoCampo(s.reps)),placeholder:phReps,
+              oninput:ev=>{ if(ATIVO.cron&&ATIVO.cron.s===s) ATIVO.paraCron(false);
+                s.reps=parseTempoCampo(ev.target.value, ehCardio); salva('ativo'); ATIVO.pinta(); },
+              disabled:s.ok});
+            if(ATIVO.cron && ATIVO.cron.s===s) ATIVO.cron.inp=inp;
+            return inp;
+          })()
         : h('input',{type:'number',inputmode:'numeric',value:(s.reps==null?'':s.reps),placeholder:phReps,oninput:ev=>{s.reps=ev.target.value;salva('ativo');ATIVO.pinta();},disabled:s.ok}),
-      h('button',{class:'scheck',onclick:()=>ATIVO.marca(e,s,row)}, s.ok?'✓':'○'));
+      h('button',{class:'scheck',onclick:()=>{ if(ATIVO.cron&&ATIVO.cron.s===s) ATIVO.paraCron(); ATIVO.marca(e,s,row); }}, s.ok?'✓':'○'));
     if(s.pr) row.classList.add('feita');
     (function(){
       let sx=0, sy=0, dx=0, mov=false;
@@ -2611,6 +2662,48 @@ TELAS.treinoDet = function({id}){
   }
 };
 
+const EXDEL = {
+  usos(id){
+    let tr=0, ro=0;
+    Object.values(S.treinos||{}).forEach(t=>{ if(t.apagado) return;
+      if((t.ex||[]).some(e=>e.exId===id)) tr++; });
+    Object.values(S.rotinas||{}).forEach(r=>{ if(r.apagada) return;
+      if((r.ex||[]).some(e=>e.exId===id)) ro++; });
+    return {tr, ro};
+  },
+  apaga(id){
+    const c=S.custom[id];
+    delete S.custom[id]; salva('custom'); NET.agenda('custom/'+id, null);
+    try{ EXSPUB.remove(id); }catch(e){}
+    if(S.prs && S.prs[id]){ delete S.prs[id]; salva('prs'); NET.agenda('prs/'+id, null); }
+    BIB.lista = BIB.lista.filter(x=>x.id!==id); BIB.indexa();
+    UI.pilha=[]; UI.vai('treino',null,false);
+    UI.toast('\u201c'+((c&&c.n)||'Exercício')+'\u201d apagado', true);
+  },
+  folha(id){
+    const c=S.custom[id]; if(!c) return;
+    const u=EXDEL.usos(id);
+    const usado = u.tr || u.ro;
+    const onde = [];
+    if(u.tr) onde.push(u.tr+' treino'+(u.tr>1?'s':'')+' do histórico');
+    if(u.ro) onde.push(u.ro+' ficha'+(u.ro>1?'s':''));
+    UI.folha('Apagar “'+c.n+'”?', [
+      h('div',{class:'f14 mut',style:'padding:2px 2px 12px;line-height:1.7'},
+        usado
+          ? ('Este exercício está em '+onde.join(' e ')+'. Apagar não apaga esses treinos, mas eles vão passar a mostrar “Exercício removido” no lugar do nome, e os recordes dele somem.')
+          : 'Ele não está em nenhum treino nem ficha. Pode apagar sem medo.'),
+      usado ? h('div',{class:'f13 mut2',style:'padding:0 2px 14px;line-height:1.6'},
+        'Se você só quer tirar da busca sem mexer no histórico, arquive em vez de apagar.') : null,
+      usado ? h('button',{class:'btn',style:'margin-bottom:8px',onclick:()=>{
+        const cc=S.custom[id]; cc.oc=1; cc.atualizado=agora();
+        salva('custom'); NET.agenda('custom/'+id, cc); BIB.indexa();
+        try{ EXSPUB.remove(id); }catch(e){}
+        UI.fechaFolha(); UI.refaz(); UI.toast('Arquivado: sai da busca, histórico preservado ✓', true);
+      }},'Arquivar em vez de apagar') : null,
+      h('button',{class:'btn btn-err',onclick:()=>{ UI.fechaFolha(); EXDEL.apaga(id); }},'Apagar para sempre')
+    ]);
+  }
+};
 const EDTREINO = {
   abre(t){
     const copia = JSON.parse(JSON.stringify(t.ex||[]));
@@ -2627,14 +2720,18 @@ const EDTREINO = {
           h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 11px;flex-shrink:0',
             onclick:()=>{ copia.splice(ie,1); render(); }},'Tirar')));
         (e.series||[]).forEach((s,is)=>{
+          const eT = x.t==='tempo', eC = eT && x.g==='cardio';
           const kg=h('input',{type:'number',inputmode:'decimal',value:num(s.kg),style:'text-align:center'});
-          const rp=h('input',{type:'number',inputmode:'numeric',value:num(s.reps),style:'text-align:center'});
+          const rp=h('input',{type:'text',inputmode:'numeric',style:'text-align:center',
+            value: eT ? fmtTempoCampo(s.reps) : num(s.reps)});
           kg.oninput=()=>{ s.kg = kg.value===''? '' : Number(kg.value); };
-          rp.oninput=()=>{ s.reps = rp.value===''? '' : Number(rp.value); };
+          rp.oninput=()=>{ s.reps = eT ? parseTempoCampo(rp.value, eC)
+                                       : (rp.value===''? '' : Number(rp.value)); };
           secoes.push(h('div',{class:'linha',style:'gap:8px;margin-bottom:6px'},
             h('span',{class:'f12 mut2',style:'width:16px;flex-shrink:0'}, String(is+1)),
-            kg, h('span',{class:'f12 mut2',style:'flex-shrink:0'}, x.t==='tempo'?'s':'kg'),
-            rp, h('span',{class:'f12 mut2',style:'flex-shrink:0'}, x.t==='tempo'?'':'reps'),
+            eT? null : kg,
+            eT? null : h('span',{class:'f12 mut2',style:'flex-shrink:0'},'kg'),
+            rp, h('span',{class:'f12 mut2',style:'flex-shrink:0'}, eT?'min:seg':'reps'),
             h('button',{class:'btn btn-mini',style:'width:34px;padding:6px;flex-shrink:0',
               onclick:()=>{ e.series.splice(is,1); render(); }},'\u2715')));
         });
@@ -2729,6 +2826,7 @@ TELAS.exercicio = function({id}){
     };
     document.body.appendChild(inp); inp.click();
   }}, (x.foto?'Alterar':'Adicionar')+' foto do exercício', h('span',{class:'esp'}), h('span',{style:'font-size:16px'},'📷')));
+  if(podeFoto) m.appendChild(h('button',{class:'menu-op perigo',style:'margin-bottom:10px',onclick:()=>EXDEL.folha(id)},'Apagar exercício'));
   if(podeFoto) m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:function(){
     const c=S.custom[id];
     if(c.oc) delete c.oc; else c.oc=1;
@@ -4338,7 +4436,7 @@ TELAS.rotinaVer = function({rid}){
     h('button',{class:'btn btn-mini',onclick:()=>ROT.editor(rid)},'Editar rotina')));
   (r.ex||[]).forEach(e=>{
     const x=BIB.ex(e.exId);
-    const rot=(x.t==='tempo' && x.g==='cardio')? ['—','MIN'] : (TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
+    const rot=(TIPO_ROTULO[x.t]||TIPO_ROTULO.peso_reps);
     const unAtual=unEx(e);
     const c=h('div',{class:'card'});
     const sstag=SS.aplica(c, r.ex, e); if(sstag) c.append(sstag);

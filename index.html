@@ -379,7 +379,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.6';
+const APP_VER='11.6.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -957,8 +957,12 @@ const BIB = {
     const usos = BIB._usos || (BIB._usos = BIB.contaUsos());
     const out=[];
     BIB.lista.forEach(x=>{
-      if(x.oc) return;
-      if(!BIB.temGifOuFoto(x)) return;          // customs órfãos da importação não poluem a busca
+      if(filtros.meus){
+        if(!x.custom) return;                   // só o que EU criei (arquivado inclusive)
+      } else {
+        if(x.oc) return;
+        if(!BIB.temGifOuFoto(x)) return;        // customs órfãos da importação não poluem a busca
+      }
       if(filtros.g && x.g!==filtros.g && !(x.gs||[]).includes(filtros.g)) return;
       if(filtros.e && x.e!==filtros.e) return;
       if(!nq){ out.push([0,x]); return; }
@@ -1262,18 +1266,24 @@ const PICKER = {
   aberto:false, filtros:{g:null,e:null}, q:'', onEscolha:null, modo:'escolher', sug:null,
   abre(onEscolha, modo, sugestaoDe){
     PICKER.onEscolha=onEscolha||null; PICKER.modo=modo||'escolher'; PICKER.sug=sugestaoDe||null;
-    PICKER.q=''; PICKER.filtros={g:null,e:null};
+    PICKER.q=''; PICKER.filtros={g:null,e:null,meus:false};
     const corpo = [
       h('input',{id:'pk-q', placeholder:'Procurar exercício…', oninput:e=>{ PICKER.q=e.target.value; PICKER.lista(); }}),
       h('div',{class:'linha',style:'margin-top:10px;gap:8px'},
         h('button',{class:'chip',id:'pk-f-e',onclick:PICKER.filtroEquip},'Todo equipamento'),
-        h('button',{class:'chip',id:'pk-f-g',onclick:PICKER.filtroGrupo},'Todos os músculos')),
+        h('button',{class:'chip',id:'pk-f-g',onclick:PICKER.filtroGrupo},'Todos os músculos'),
+        h('button',{class:'chip',id:'pk-f-m',onclick:PICKER.filtroMeus},'Meus')),
       h('div',{id:'pk-lista',style:'margin-top:8px'})
     ];
     UI.folha(PICKER.modo==='consulta'?'Exercícios':'Adicionar exercício', corpo,
       h('button',{class:'btn btn-mini btn-p',style:'margin-right:8px',onclick:()=>PICKER.criarCustom()},'＋ Criar'));
     PICKER.lista();
     setTimeout(()=>{ try{$('#pk-q').focus();}catch(e){} }, 250);
+  },
+  filtroMeus(){
+    PICKER.filtros.meus = !PICKER.filtros.meus;
+    const b=$('#pk-f-m'); if(b) b.classList.toggle('on', !!PICKER.filtros.meus);
+    PICKER.lista();
   },
   filtroEquip(){
     const ops=[[null,'Todo equipamento']].concat(Object.entries(EQUIPS));
@@ -1308,7 +1318,7 @@ const PICKER = {
     alvo.innerHTML='';
     const res = BIB.busca(PICKER.q, PICKER.filtros);
     // recentes primeiro quando sem busca
-    if(!PICKER.q && !PICKER.filtros.g && !PICKER.filtros.e){
+    if(!PICKER.q && !PICKER.filtros.g && !PICKER.filtros.e && !PICKER.filtros.meus){
       if(PICKER.sug && BIB.porId[PICKER.sug]){
         const g=BIB.porId[PICKER.sug].g;
         const sug=BIB.lista.filter(x=>x.g===g && x.id!==PICKER.sug && !x.oc && BIB.temGifOuFoto(x)).slice(0,6);
@@ -1324,7 +1334,11 @@ const PICKER = {
       }
       if(PICKER.sug||rec.length) alvo.appendChild(h('div',{class:'secao'},'Todos ('+res.length+')'));
     } else {
-      alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'}, res.length+' resultado'+(res.length===1?'':'s')));
+      const arq = PICKER.filtros.meus ? res.filter(x=>x.oc).length : 0;
+      alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'},
+        PICKER.filtros.meus
+          ? (res.length+' criado'+(res.length===1?'':'s')+' por você'+(arq? ' \u00b7 '+arq+' arquivado'+(arq===1?'':'s') : ''))
+          : (res.length+' resultado'+(res.length===1?'':'s'))));
     }
     const bloco=60; let mostrados=0;
     const mostra=()=>{ res.slice(mostrados, mostrados+bloco).forEach(x=>alvo.insertBefore(PICKER.linha(x), sent)); mostrados+=bloco;
@@ -1332,20 +1346,24 @@ const PICKER = {
     const sent=h('button',{class:'btn',style:'margin-top:8px',onclick:()=>mostra()},'Mostrar mais');
     alvo.appendChild(sent); mostra();
     if(!res.length){
-      alvo.appendChild(h('div',{class:'vazio'},'Nada encontrado na biblioteca.'));
+      alvo.appendChild(h('div',{class:'vazio'}, PICKER.filtros.meus
+        ? 'Você ainda não criou nenhum exercício.'
+        : 'Nada encontrado na biblioteca.'));
       alvo.appendChild(h('button',{class:'btn btn-p',onclick:()=>PICKER.criarCustom(PICKER.q)},
         (PICKER.q&&PICKER.q.trim())? 'Criar "'+PICKER.q.trim()+'"' : 'Criar exercício personalizado'));
     }
   },
   linha(x){
     return h('div',{class:'item',onclick:()=>{
-      if(PICKER.modo==='consulta'){ UI.fechaFolha(); UI.vai('exercicio',{id:x.id}); }
+      // arquivado nao entra em treino: abre a tela dele, que e onde se desarquiva
+      if(x.oc || PICKER.modo==='consulta'){ UI.fechaFolha(); UI.vai('exercicio',{id:x.id}); }
       else if(PICKER.onEscolha){ const cb=PICKER.onEscolha; UI.fechaFolha(); cb(x.id); }
     }},
       thumbEl(x.id),
       h('div',{class:'esp',style:'min-width:0'},
         h('div',{class:'b700',style:'font-size:15px'}, x.n),
-        h('div',{class:'f13 mut'}, GRUPOS[x.g]||x.g, x.e && x.e!=='outro' ? ' · '+(EQUIPS[x.e]||x.e) : '')),
+        h('div',{class:'f13 mut'}, GRUPOS[x.g]||x.g, x.e && x.e!=='outro' ? ' · '+(EQUIPS[x.e]||x.e) : '',
+          x.oc? h('span',{style:'color:var(--tx3)'},' · arquivado') : null)),
       h('div',{class:'mut2',html:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'}));
   },
   recentes(){

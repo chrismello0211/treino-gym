@@ -230,6 +230,7 @@ body.claro .musc .m{fill:#D9DEE5}
 .stipo{position:relative}
 .stipo .rpe{position:absolute;top:-5px;right:-7px;font-size:9px;font-weight:800;color:var(--brand2);background:var(--surf);padding:0 2px;border-radius:4px}
 .stipo .prm{position:absolute;top:-7px;left:-7px;font-size:11px;line-height:1}
+.pr-base{font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.3;font-weight:600}
 .corpoIm{display:flex;justify-content:center;align-items:flex-start;isolation:isolate;line-height:0}
 .corpoIm .cLado{position:relative;width:54%;margin:0 -4%;aspect-ratio:1/1;flex-shrink:0}
 .corpoIm .cLado img{width:100%;height:100%;display:block}
@@ -381,7 +382,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.7';
+const APP_VER='11.8';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1054,7 +1055,8 @@ const UI = {
   toast(msg, rec){ const t=$('#toast'); t.textContent=msg; t.classList.toggle('rec', !!rec); t.classList.add('on');
     clearTimeout(UI.toastT); UI.toastT=setTimeout(()=>t.classList.remove('on'), rec?3200:2100); },
   pingSync(ok){ /* discreto: só loga; indicador fica no Perfil */ UI.syncOk = ok; },
-  folha(titulo, corpoEls, acao){
+  folha(titulo, corpoEls, acao, aoFechar){
+    UI._aoFechar = aoFechar || null;
     $('#folha-cab').innerHTML=''; $('#folha-corpo').innerHTML='';
     const cab=[h('div',{class:'b800',style:'font-size:17px'}, titulo), h('div',{class:'esp'})];
     if(acao instanceof Node) cab.push(acao);
@@ -1064,7 +1066,11 @@ const UI = {
     $('#veu').classList.add('on'); $('#folha').classList.add('on');
     document.body.style.overflow='hidden';
   },
-  fechaFolha(){ $('#veu').classList.remove('on'); $('#folha').classList.remove('on'); document.body.style.overflow=''; }
+  fechaFolha(){
+    $('#veu').classList.remove('on'); $('#folha').classList.remove('on'); document.body.style.overflow='';
+    const fn=UI._aoFechar; UI._aoFechar=null;
+    if(fn){ try{ fn(); }catch(e){} }
+  }
 };
 function logoFX(alt, altura, comTag){
   const claro=document.body.classList.contains('claro');
@@ -1116,21 +1122,37 @@ const SOM = {
 document.addEventListener('pointerdown', ()=>SOM.init(), {once:true});
 
 /* ---------- timer de descanso ---------- */
+// serie que produziu o recorde, curtinha: "95 kg x 6"
+function serieDoPR(exId, tipo){
+  const p=(S.prs[exId]||{})[tipo]; if(!p) return '';
+  const tr=S.treinos[p.tid]; if(!tr) return '';
+  const ex=(tr.ex||[]).find(q=>q.exId===exId); if(!ex) return '';
+  const x=BIB.ex(exId);
+  const rp=s=> x.t==='tempo' ? fmtTempoCampo(s.reps) : (s.reps+' reps');
+  if(tipo==='kg'){
+    const s=(ex.series||[]).find(s=>s.ok && Number(s.kg)===Number(p.v));
+    return s? (CORE.fmtKg(s.kg)+' kg × '+rp(s)) : '';
+  }
+  if(tipo==='vol'){
+    const s=(ex.series||[]).find(s=>s.ok && Math.abs(CORE.volumeSerie(s)-p.v)<0.01);
+    return s? (CORE.fmtKg(s.kg)+' kg × '+rp(s)) : '';
+  }
+  if(tipo==='rm'){
+    let best=null;
+    (ex.series||[]).forEach(s=>{ if(!s.ok) return;
+      const r=CORE.est1RM(Number(s.kg)||0, Number(s.reps)||0);
+      if(!best || r>best.r) best={r,s}; });
+    return best? (CORE.fmtKg(best.s.kg)+' kg × '+rp(best.s)) : '';
+  }
+  return '';
+}
 function prDetalhe(exId, tipo){
   const p=(S.prs[exId]||{})[tipo]; if(!p) return;
   const NOM={kg:'Maior carga', vol:'Melhor série', rm:'1RM estimado', reps:'Mais repetições'};
-  let extra='';
-  const tr=S.treinos[p.tid];
-  if(tr){
-    const ex=(tr.ex||[]).find(q=>q.exId===exId);
-    if(ex){
-      if(tipo==='kg'){ const s=(ex.series||[]).find(s=>s.ok && Number(s.kg)===Number(p.v)); if(s) extra=' × '+s.reps+' reps'; }
-      if(tipo==='vol'){ const s=(ex.series||[]).find(s=>s.ok && Math.abs(CORE.volumeSerie(s)-p.v)<0.01); if(s) extra=' ('+CORE.fmtKg(s.kg)+' kg × '+s.reps+')'; }
-      if(tipo==='rm'){ let best=null; (ex.series||[]).forEach(s=>{ if(!s.ok) return; const r=CORE.est1RM(Number(s.kg)||0, Number(s.reps)||0); if(!best||r>best.r) best={r,s}; }); if(best) extra=' (base '+CORE.fmtKg(best.s.kg)+' kg × '+best.s.reps+')'; }
-    }
-  }
+  const base=serieDoPR(exId, tipo);
+  const extra = base? (tipo==='rm' ? ' (base '+base+')' : ' ('+base+')') : '';
   const data=p.data? ' · '+new Date(p.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'';
-  const _x=BIB.ex(id);
+  const _x=BIB.ex(exId);
   const _rot=(tipo==='reps'&&_x.t==='tempo')?'Mais tempo':NOM[tipo];
   const _val=(tipo==='reps')? (_x.t==='tempo'? fmtTempoEx(p.v) : Math.round(p.v)+' reps') : CORE.fmtKg(p.v)+' kg';
   UI.toast(_rot+': '+_val+extra+data, true);
@@ -2870,9 +2892,12 @@ TELAS.exercicio = function({id}){
         h('div',{class:'secao',style:'margin:0'},'Recordes pessoais 🏅'), h('div',{class:'esp'}),
         p.resetEm? h('div',{class:'f12 mut2'},'desde '+new Date(p.resetEm).toLocaleDateString('pt-BR')):null),
       h('div',{class:'stats3'},
-        p.kg? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'kg')},h('div',{class:'k'},'Maior carga'),h('div',{class:'v'},CORE.fmtKg(p.kg.v)+' kg')):null,
-        p.rm? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'rm')},h('div',{class:'k'},'1RM estimado'),h('div',{class:'v'},CORE.fmtKg(p.rm.v)+' kg')):null,
-        p.vol? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'vol')},h('div',{class:'k'},'Melhor série'),h('div',{class:'v'},CORE.fmtKg(p.vol.v)+' kg')):
+        p.kg? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'kg')},h('div',{class:'k'},'Maior carga'),h('div',{class:'v'},CORE.fmtKg(p.kg.v)+' kg'),
+          (function(){const b=serieDoPR(id,'kg');return b? h('div',{class:'pr-base'},b):null;})()):null,
+        p.rm? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'rm')},h('div',{class:'k'},'1RM estimado'),h('div',{class:'v'},CORE.fmtKg(p.rm.v)+' kg'),
+          (function(){const b=serieDoPR(id,'rm');return b? h('div',{class:'pr-base'},b):null;})()):null,
+        p.vol? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'vol')},h('div',{class:'k'},'Melhor série'),h('div',{class:'v'},CORE.fmtKg(p.vol.v)+' kg'),
+          (function(){const b=serieDoPR(id,'vol');return b? h('div',{class:'pr-base'},b):null;})()):
         p.reps? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'reps')},h('div',{class:'k'},BIB.ex(id).t==='tempo'?'Mais tempo':'Mais reps'),h('div',{class:'v'},BIB.ex(id).t==='tempo'? fmtTempoEx(p.reps.v) : p.reps.v)):null)));
   }
 
@@ -3645,7 +3670,8 @@ function reordenar(lista, aoCommit){
   UI.folha('Reordenar exercícios',[
     h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Arraste pelo ≡ para mudar a ordem. Dica: segurar um exercício no treino abre esta tela.'),
     wrap, h('div',{style:'height:8px'}),
-    h('button',{class:'btn btn-p',onclick:()=>{ UI.fechaFolha(); UI.refaz(); }},'Concluir')]);
+    h('button',{class:'btn btn-p',onclick:()=>UI.fechaFolha()},'Concluir')],
+    null, ()=>UI.refaz());
 }
 
 /* ---------- mapa muscular ---------- */
@@ -5438,32 +5464,41 @@ function corrigePastasOrfas(){
   return n;
 }
 function reparaPRsFantasma(){
-  if(S.cfg.prFantasma1) return 0;
+  if(S.cfg.prFantasma2) return 0;
   try{
     const lista = Object.values(S.treinos||{}).filter(t=>!t.apagado);
-    if(!lista.length){ S.cfg.prFantasma1=1; salva('cfg'); return 0; }
+    if(!lista.length){ S.cfg.prFantasma2=1; salva('cfg'); return 0; }
+    // exercicios que aparecem no historico. Fora dessa lista, nao da pra
+    // afirmar nada, entao a marca fica como esta.
+    const vistos=new Set();
+    lista.forEach(t=>(t.ex||[]).forEach(e=>{ if(e && e.exId) vistos.add(e.exId); }));
     const resets={};
     Object.entries(S.prs||{}).forEach(([ex,p])=>{ if(p && p.resetEm) resets[ex]=p.resetEm; });
     // copia profunda: o historico salvo nao e tocado, so lido
     const copia = JSON.parse(JSON.stringify(lista));
     const reais = CORE.recomputaPRs(copia, resets);
 
-    let corrigidas=0; const tocados=[];
+    let corrigidas=0; const tocados=[]; const final={};
     Object.keys(S.prs||{}).forEach(ex=>{
-      const velho=S.prs[ex]||{}, novo=reais[ex]||{};
+      const velho=S.prs[ex]||{};
+      if(!vistos.has(ex)){ final[ex]=velho; return; }   // sem historico: nao toca
+      const novo=Object.assign({}, reais[ex]||{});
       ['kg','vol','rm','reps'].forEach(tp=>{
         const a = velho[tp] ? velho[tp].v : 0;
         const b = novo[tp]  ? novo[tp].v  : 0;
         if(a > b){ corrigidas++; if(tocados.indexOf(ex)<0) tocados.push(ex); }
+        else if(velho[tp] && !novo[tp]) novo[tp]=velho[tp];
       });
+      final[ex]=novo;
     });
-    if(!corrigidas){ S.cfg.prFantasma1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); return 0; }
+    Object.keys(reais).forEach(ex=>{ if(!final[ex]) final[ex]=reais[ex]; });
+    if(!corrigidas){ S.cfg.prFantasma2=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); return 0; }
 
-    Object.entries(resets).forEach(([ex,r])=>{ reais[ex]=reais[ex]||{}; reais[ex].resetEm=r; });
-    S.prs = reais; salva('prs');
-    Object.entries(S.prs).forEach(([ex,p])=>{ if(p) Object.keys(p).forEach(tp=>{
-      if(tp!=='resetEm' && tp!=='_pos') NET.agenda('prs/'+ex+'/'+tp, p[tp]); }); });
-    S.cfg.prFantasma1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+    Object.entries(resets).forEach(([ex,r])=>{ final[ex]=final[ex]||{}; final[ex].resetEm=r; });
+    S.prs = final; salva('prs');
+    tocados.forEach(ex=>{ const p=S.prs[ex]||{};
+      ['kg','vol','rm','reps'].forEach(tp=>NET.agenda('prs/'+ex+'/'+tp, p[tp]||null)); });
+    S.cfg.prFantasma2=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
 
     setTimeout(()=>{ try{
       UI.folha('Recordes corrigidos',[

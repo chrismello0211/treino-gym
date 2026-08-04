@@ -382,7 +382,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.8';
+const APP_VER='11.8.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1034,21 +1034,31 @@ function thumbIni(exId){
 const UI = {
   telaAtual:null, args:null, pilha:[],
   toastT:null, syncT:null,
-  vai(tela, args, empilha=true){
+  vai(tela, args, empilha=true, rolagem){
     try{ UI.fechaFolha(); }catch(e){}
-    if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args]);
+    if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0]);
     UI.telaAtual = tela; UI.args = args||null;
     TELAS[tela](args||{});
     try{ const mm=$('#main'); mm.classList.remove('fx-tela'); void mm.offsetWidth; mm.classList.add('fx-tela'); }catch(e){}
-    window.scrollTo(0,0);
+    if(rolagem){
+      // a tela acabou de ser montada; espera o layout assentar antes de rolar
+      const alvo=rolagem;
+      const poe=()=>window.scrollTo(0, Math.min(alvo, Math.max(0, document.body.scrollHeight-window.innerHeight)));
+      poe(); requestAnimationFrame(poe); setTimeout(poe, 60); setTimeout(poe, 220);
+    } else window.scrollTo(0,0);
     $$('#tabbar .tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===tela));
     $('#tabbar').style.display = ['inicio','treino','perfil'].includes(tela)?'flex':'none';
     document.body.classList.toggle('tela-ativo', tela==='ativo');
   },
-  volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false); else UI.vai('treino', null, false); },
+  volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false, ant[2]||0); else UI.vai('treino', null, false); },
   refaz(){
     // limpeza defensiva: remove qualquer clone de drag preso e reseta opacidades
-    if(window.__tgDrag){ window.__tgDrag=false; document.querySelectorAll('[style*="z-index:9999"]').forEach(el=>el.remove()); document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; } if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{}); },
+    if(window.__tgDrag){ window.__tgDrag=false; document.querySelectorAll('[style*="z-index:9999"]').forEach(el=>el.remove()); document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; }
+    const y=window.scrollY||0;
+    if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{});
+    if(y>0){ const poe=()=>window.scrollTo(0, Math.min(y, Math.max(0, document.body.scrollHeight-window.innerHeight)));
+      poe(); requestAnimationFrame(poe); }
+  },
   topo(...els){ const t=$('#topo-in'); t.innerHTML=''; els.flat().forEach(e=>{ if(e==null||e===false) return; t.appendChild(e instanceof Node? e : document.createTextNode(String(e))); }); },
   btVoltar(){ return h('button',{class:'btn btn-mini',style:'width:42px;padding:9px', onclick:()=>UI.volta()},
     h('span',{html:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>'})); },

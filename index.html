@@ -148,6 +148,10 @@ body.tela-ativo #timerbar{bottom:calc(var(--sab) + 12px)}
   opacity:0;pointer-events:none;transition:all .2s;max-width:88vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.rec{border-color:var(--warn);color:var(--warn)}
+#syncbar{display:none;font-size:11.5px;font-weight:700;letter-spacing:.02em;color:var(--tx3);
+  padding:3px 16px 5px;text-align:center;background:var(--surf2);border-top:1px solid var(--line)}
+#syncbar.on{display:block}
+#syncbar.erro{color:var(--warn)}
 #toast.com-bt{pointer-events:auto;display:flex;align-items:center;gap:14px;text-align:left}
 #toast .bt-desf{background:none;border:none;color:var(--brand2);font-weight:800;font-size:14px;padding:4px 2px;cursor:pointer;flex-shrink:0}
 
@@ -320,7 +324,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
 </div>
 
 <div id="ta-progresso"></div>
-<header id="topo"><div class="topo-in" id="topo-in"></div></header>
+<header id="topo"><div class="topo-in" id="topo-in"></div><div id="syncbar"></div></header>
 
 <main id="main"></main>
 
@@ -384,7 +388,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.9';
+const APP_VER='11.10';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -656,6 +660,22 @@ const S = {
 };
 function salva(campo){ LS.set(campo, S[campo]); }
 
+// id fixo por instalacao: permite dizer "outro aparelho" com honestidade
+const DEV = (function(){
+  let d=LS.get('dev', null);
+  if(!d){ d=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); LS.set('dev', d); }
+  return d;
+})();
+function nomeAparelho(){
+  const u=navigator.userAgent||'';
+  if(/iPad/.test(u)) return 'iPad';
+  if(/iPhone/.test(u)) return 'iPhone';
+  if(/Android/.test(u)) return 'Android';
+  if(/Macintosh/.test(u)) return 'Mac';
+  if(/Windows/.test(u)) return 'PC';
+  return 'outro aparelho';
+}
+
 /* ---------- auth anônima + sync (REST) ---------- */
 const NET = {
   online: navigator.onLine,
@@ -734,7 +754,7 @@ const NET = {
     if(!r.ok) throw new Error('put');
     return true;
   },
-  agenda(path, val){ S.fila.push({path, val, ts:Date.now()}); if(S.fila.length>400) S.fila.splice(0, S.fila.length-400); salva('fila'); NET.despacha(); },
+  agenda(path, val){ S.fila.push({path, val, ts:Date.now()}); if(S.fila.length>400) S.fila.splice(0, S.fila.length-400); salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha(); },
   async despacha(){
     if(NET.sincronizando || !S.fila.length || !S.auth || !navigator.onLine) return;
     NET.sincronizando = true;
@@ -762,6 +782,7 @@ const NET = {
       }
       UI.pingSync(!S.fila.length);
     }catch(e){ UI.pingSync(false); }
+    try{ UI.pintaSync(); }catch(e){}
     NET.sincronizando = false;
   },
   async puxa(){
@@ -790,6 +811,7 @@ const NET = {
       m = fun(S.exNotas, nuvem.exNotas, 'exNotas') || m;
       m = fun(S.fotosProg, nuvem.fotosProg, 'fotosProg') || m;
       if(nuvem.bloq){ S.social.bloq=Object.assign(S.social.bloq||{}, nuvem.bloq); salva('social'); }
+      try{ SYNCATIVO.resolve(nuvem.ativo||null); }catch(e){ if(DEBUG) console.log('syncativo',e); }
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
         if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
@@ -812,6 +834,10 @@ const NET = {
     }catch(e){}
   }
 };
+window.addEventListener('online', ()=>{
+  const pend=(S.fila||[]).length;
+  if(pend) setTimeout(()=>{ if(!(S.fila||[]).length) UI.toast('Tudo sincronizado ✓', true); }, 3500);
+});
 window.addEventListener('online', ()=>{ NET.online=true; NET.despacha(); });
 window.addEventListener('offline', ()=>{ NET.online=false; });
 setInterval(()=>NET.despacha(), 25000);
@@ -1078,7 +1104,21 @@ const UI = {
     clearTimeout(UI.toastT);
     UI.toastT=setTimeout(()=>{ t.classList.remove('on','com-bt'); }, 6000);
   },
-  pingSync(ok){ /* discreto: só loga; indicador fica no Perfil */ UI.syncOk = ok; },
+  pingSync(ok){ UI.syncOk = ok; UI.pintaSync(); },
+  // regra: nada na tela quando esta tudo bem. So fala quando ha o que dizer.
+  pintaSync(){
+    try{
+      const el=$('#syncbar'); if(!el) return;
+      const pend=(S.fila||[]).length;
+      const off=!navigator.onLine;
+      if(!pend && !off){ el.classList.remove('on'); return; }
+      el.textContent = off
+        ? (pend? 'Sem conexão · '+pend+' para enviar' : 'Sem conexão · tudo salvo aqui')
+        : 'Enviando '+pend+'…';
+      el.classList.toggle('erro', off);
+      el.classList.add('on');
+    }catch(e){}
+  },
   folha(titulo, corpoEls, acao, aoFechar){
     UI._aoFechar = aoFechar || null;
     $('#folha-cab').innerHTML=''; $('#folha-corpo').innerHTML='';
@@ -1244,7 +1284,11 @@ const DESC = {
 $('#tb-m15').addEventListener('click',()=>DESC.ajusta(-15));
 $('#tb-p15').addEventListener('click',()=>DESC.ajusta(15));
 $('#tb-pular').addEventListener('click',()=>DESC.para());
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && DESC.fim) DESC.tic(); });
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && DESC.fim) DESC.tic();
+  // saindo do app: garante que o que esta aqui subiu, sem esperar o atraso
+  if(document.hidden && S.ativo){ try{ SYNCATIVO.sobeJa(); }catch(e){} }
+});
 
 /* ---------- gráfico canvas ---------- */
 function temaCanvas(){
@@ -1924,7 +1968,7 @@ const ATIVO = {
       h('button',{class:'btn btn-err',onclick:()=>{
         ATIVO.paraCron(false);
         if(CORE.reverteTreino(S.ativo)) salva('prs');  // treino descartado nao deixa recorde pra tras
-        S.ativo=null; salva('ativo'); DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
+        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
       }},'Descartar treino')]);
   },
   cron:null,
@@ -1993,8 +2037,11 @@ const ATIVO = {
           FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid][salvo.id]=foto; }
         if(S.perfil?.user && pubAgora) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, resumoTreino(salvo));
         // sugere atualizar rotina com as cargas de hoje
-        S.ativo=null; salva('ativo'); DESC.para();
+        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
+        if(!navigator.onLine){
+          setTimeout(()=>UI.toast('Treino salvo aqui. Vai sincronizar quando você conectar ✓', true), 500);
+        }
         setTimeout(()=>{ try{ ROTFIM.oferece(salvo); }catch(e){} }, 900);
       }},'Concluir e salvar')]);
   }
@@ -3554,6 +3601,126 @@ const SS = {
     const c=SS.cor(e.ss);
     card.style.borderLeft='3px solid '+c;
     return h('div',{class:'ss-tag',style:'background:'+c+'22;color:'+c},'SUPERSSÉRIE '+SS.rotulo(list,e));
+  }
+};
+
+/* ---------- treino ativo entre aparelhos ---------- */
+const SYNCATIVO = {
+  _t:null,
+  ATRASO: 10000,     // agrupa as mexidas: 1 subida a cada 10s de silencio
+  // marca quem mexeu e quando. Sem isso nao da pra resolver conflito.
+  carimba(){
+    if(!S.ativo) return;
+    S.ativo.dev = DEV;
+    S.ativo.devNome = nomeAparelho();
+    S.ativo.atualizado = agora();
+  },
+  // sobe depois de um tempinho parado (uso normal: marcar serie, digitar carga)
+  agenda(){
+    if(!S.auth || !S.ativo) return;
+    clearTimeout(SYNCATIVO._t);
+    SYNCATIVO._t=setTimeout(()=>SYNCATIVO.sobeJa(), SYNCATIVO.ATRASO);
+  },
+  // sobe na hora (comecar, concluir, descartar)
+  sobeJa(){
+    clearTimeout(SYNCATIVO._t); SYNCATIVO._t=null;
+    if(!S.auth) return;
+    if(!S.ativo){ NET.agenda('ativo', null); return; }
+    SYNCATIVO.carimba();
+    NET.agenda('ativo', S.ativo);
+  },
+  limpa(){
+    clearTimeout(SYNCATIVO._t); SYNCATIVO._t=null;
+    if(S.auth) NET.agenda('ativo', null);
+  },
+  // trabalho feito de verdade neste treino
+  temTrabalho(t){
+    return !!(t && (t.ex||[]).some(e=>(e.series||[]).some(s=>s.ok)));
+  },
+  // guarda um treino no historico em vez de jogar fora
+  arquiva(t, aviso){
+    if(!SYNCATIVO.temTrabalho(t)) return false;
+    const feitos=(t.ex||[]).map(e=>Object.assign({}, e, {series:(e.series||[]).filter(s=>s.ok)}))
+                           .filter(e=>e.series.length);
+    if(!feitos.length) return false;
+    const fim = t.atualizado || agora();
+    delete t._estr;
+    const salvo={ id:t.id, rid:t.rid, titulo:t.titulo, inicio:t.inicio, fim,
+      ex:feitos, volume:CORE.volumeTreino({ex:feitos}), series:CORE.seriesFeitas({ex:feitos}),
+      recordes:CORE.contaRecordes({ex:feitos}), atualizado:agora() };
+    S.treinos[salvo.id]=salvo; salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo);
+    if(aviso!==false) UI.toast('O outro treino foi guardado no seu histórico ✓', true);
+    return true;
+  },
+  assume(t){
+    S.ativo=t; SYNCATIVO.carimba(); salva('ativo'); SYNCATIVO.sobeJa();
+  },
+  // chamado no boot, depois que a nuvem desceu
+  resolve(daNuvem){
+    const local = S.ativo;
+    const remoto = (daNuvem && daNuvem.id) ? daNuvem : null;
+
+    // nada na nuvem: este aparelho manda
+    if(!remoto){ if(local) SYNCATIVO.sobeJa(); return; }
+
+    // mesmo treino: fica a versao mais recente, sem incomodar ninguem
+    if(local && local.id===remoto.id){
+      if((remoto.atualizado||0) > (local.atualizado||0)) { S.ativo=remoto; salva('ativo'); UI.refaz(); }
+      else SYNCATIVO.sobeJa();
+      return;
+    }
+
+    // veio deste mesmo aparelho e aqui nao tem nada: retoma calado
+    if(!local && remoto.dev===DEV){ S.ativo=remoto; salva('ativo'); return; }
+
+    const qdo = remoto.inicio ? dataRelativa(remoto.inicio) : '';
+    const ondeR = (remoto.devNome && remoto.dev!==DEV) ? remoto.devNome : 'outro aparelho';
+    const resumo = t => {
+      const ns=(t.ex||[]).reduce((a,e)=>a+(e.series||[]).filter(s=>s.ok).length,0);
+      return (t.titulo||'Treino')+' · '+ns+' série'+(ns===1?'':'s')+' feita'+(ns===1?'':'s');
+    };
+
+    // nada aqui, tem la: oferece retomar
+    if(!local){
+      setTimeout(()=>{ try{
+        UI.folha('Treino em andamento',[
+          h('div',{class:'f14 mut',style:'padding:2px 2px 12px;line-height:1.7'},
+            'Você começou um treino no '+ondeR+(qdo?' '+qdo:'')+' e não concluiu.'),
+          h('div',{class:'card',style:'margin-bottom:14px'},
+            h('div',{class:'b700',style:'font-size:15px'}, resumo(remoto))),
+          h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>{
+            UI.fechaFolha(); SYNCATIVO.assume(remoto); UI.pilha=[]; UI.vai('ativo',null,false);
+          }},'Continuar de onde parei'),
+          h('button',{class:'btn',onclick:()=>{
+            UI.fechaFolha();
+            const guardou=SYNCATIVO.arquiva(remoto, false);
+            SYNCATIVO.limpa();
+            UI.toast(guardou? 'Guardado no seu histórico ✓' : 'Treino descartado', true);
+            UI.refaz();
+          }}, SYNCATIVO.temTrabalho(remoto)? 'Encerrar e guardar no histórico' : 'Descartar')]);
+      }catch(e){} }, 900);
+      return;
+    }
+
+    // os dois tem treino DIFERENTE: pergunta, e o nao escolhido vai pro historico
+    setTimeout(()=>{ try{
+      UI.folha('Dois treinos em andamento',[
+        h('div',{class:'f14 mut',style:'padding:2px 2px 12px;line-height:1.7'},
+          'Tem um treino aberto aqui e outro no '+ondeR+'. Qual você quer continuar? O outro vai pro seu histórico, nada se perde.'),
+        h('div',{class:'card',style:'margin-bottom:10px'},
+          h('div',{class:'f12 mut2'},'Neste aparelho'),
+          h('div',{class:'b700',style:'font-size:15px'}, resumo(local))),
+        h('button',{class:'btn btn-p',style:'margin-bottom:14px',onclick:()=>{
+          UI.fechaFolha(); SYNCATIVO.arquiva(remoto); SYNCATIVO.sobeJa(); UI.refaz();
+        }},'Continuar este'),
+        h('div',{class:'card',style:'margin-bottom:10px'},
+          h('div',{class:'f12 mut2'}, ondeR+(qdo?' · '+qdo:'')),
+          h('div',{class:'b700',style:'font-size:15px'}, resumo(remoto))),
+        h('button',{class:'btn',onclick:()=>{
+          UI.fechaFolha(); SYNCATIVO.arquiva(local); SYNCATIVO.assume(remoto);
+          UI.pilha=[]; UI.vai('ativo',null,false);
+        }}, 'Continuar o do '+ondeR)]);
+    }catch(e){} }, 900);
   }
 };
 

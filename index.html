@@ -148,6 +148,8 @@ body.tela-ativo #timerbar{bottom:calc(var(--sab) + 12px)}
   opacity:0;pointer-events:none;transition:all .2s;max-width:88vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.rec{border-color:var(--warn);color:var(--warn)}
+#toast.com-bt{pointer-events:auto;display:flex;align-items:center;gap:14px;text-align:left}
+#toast .bt-desf{background:none;border:none;color:var(--brand2);font-weight:800;font-size:14px;padding:4px 2px;cursor:pointer;flex-shrink:0}
 
 /* gráfico */
 canvas.graf{width:100%;height:170px;display:block}
@@ -382,7 +384,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.8.1';
+const APP_VER='11.9';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1062,8 +1064,20 @@ const UI = {
   topo(...els){ const t=$('#topo-in'); t.innerHTML=''; els.flat().forEach(e=>{ if(e==null||e===false) return; t.appendChild(e instanceof Node? e : document.createTextNode(String(e))); }); },
   btVoltar(){ return h('button',{class:'btn btn-mini',style:'width:42px;padding:9px', onclick:()=>UI.volta()},
     h('span',{html:'<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>'})); },
-  toast(msg, rec){ const t=$('#toast'); t.textContent=msg; t.classList.toggle('rec', !!rec); t.classList.add('on');
+  toast(msg, rec){ const t=$('#toast'); t.innerHTML=''; t.textContent=msg;
+    t.classList.toggle('rec', !!rec); t.classList.remove('com-bt'); t.classList.add('on');
     clearTimeout(UI.toastT); UI.toastT=setTimeout(()=>t.classList.remove('on'), rec?3200:2100); },
+  desfazer(msg, aoDesfazer){
+    const t=$('#toast'); t.innerHTML='';
+    t.appendChild(h('span',{},msg));
+    t.appendChild(h('button',{class:'bt-desf',onclick:()=>{
+      clearTimeout(UI.toastT); t.classList.remove('on','com-bt');
+      try{ aoDesfazer(); }catch(e){ if(DEBUG) console.log('desfazer',e); }
+    }},'Desfazer'));
+    t.classList.remove('rec'); t.classList.add('on','com-bt');
+    clearTimeout(UI.toastT);
+    UI.toastT=setTimeout(()=>{ t.classList.remove('on','com-bt'); }, 6000);
+  },
   pingSync(ok){ /* discreto: só loga; indicador fica no Perfil */ UI.syncOk = ok; },
   folha(titulo, corpoEls, acao, aoFechar){
     UI._aoFechar = aoFechar || null;
@@ -1639,7 +1653,15 @@ const ROT = {
   apaga(r){
     UI.folha('Excluir "'+r.titulo+'"?', [
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'O histórico de treinos feitos com ela continua guardado.'),
-      h('button',{class:'btn btn-err',onclick:()=>{ r.apagada=true; r.atualizado=agora(); salva('rotinas'); NET.agenda('rotinas/'+r.id, r); ROTPUB.remove(r.id); UI.fechaFolha(); UI.refaz(); }},'Excluir rotina')
+      h('button',{class:'btn btn-err',onclick:()=>{
+        r.apagada=true; r.atualizado=agora(); salva('rotinas'); NET.agenda('rotinas/'+r.id, r); ROTPUB.remove(r.id);
+        UI.fechaFolha(); UI.refaz();
+        UI.desfazer('Rotina excluída', ()=>{
+          delete r.apagada; r.atualizado=agora(); salva('rotinas'); NET.agenda('rotinas/'+r.id, r);
+          try{ ROTPUB.envia(r); }catch(e){}
+          UI.refaz(); UI.toast('Rotina restaurada ✓', true);
+        });
+      }},'Excluir rotina')
     ]);
   },
   novaPasta(){
@@ -2689,7 +2711,13 @@ TELAS.treinoDet = function({id}){
         UI.fechaFolha(); UI.refaz(); UI.toast('Foto removida');
       }},'Remover foto do treino') : h('span',{style:'display:none'}),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); EDTREINO.abre(t); }},'Editar treino'),
-      h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); if(S.perfil?.user) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, null); if(t.temFoto && S.auth) NET.agenda('/fotos/'+S.auth.uid+'/'+t.id, null); UI.fechaFolha(); UI.volta(); }},'Excluir do histórico')
+      h('button',{class:'menu-op perigo',onclick:()=>{ t.apagado=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t); if(S.perfil?.user) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, null); if(t.temFoto && S.auth) NET.agenda('/fotos/'+S.auth.uid+'/'+t.id, null); UI.fechaFolha(); UI.volta();
+        UI.desfazer('Treino excluído', ()=>{
+          delete t.apagado; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id,t);
+          if(S.perfil?.user && S.cfg.feedPub!==false && S.auth) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+          UI.refaz(); UI.toast('Treino restaurado ✓', true);
+        });
+      }},'Excluir do histórico')
     ]);
   }
 };
@@ -2705,12 +2733,21 @@ const EXDEL = {
   },
   apaga(id){
     const c=S.custom[id];
+    const bkEx  = c ? JSON.parse(JSON.stringify(c)) : null;
+    const bkPrs = (S.prs && S.prs[id]) ? JSON.parse(JSON.stringify(S.prs[id])) : null;
     delete S.custom[id]; salva('custom'); NET.agenda('custom/'+id, null);
     try{ EXSPUB.remove(id); }catch(e){}
-    if(S.prs && S.prs[id]){ delete S.prs[id]; salva('prs'); NET.agenda('prs/'+id, null); }
+    if(bkPrs){ delete S.prs[id]; salva('prs'); NET.agenda('prs/'+id, null); }
     BIB.lista = BIB.lista.filter(x=>x.id!==id); BIB.indexa();
     UI.pilha=[]; UI.vai('treino',null,false);
-    UI.toast('\u201c'+((c&&c.n)||'Exercício')+'\u201d apagado', true);
+    UI.desfazer('\u201c'+((c&&c.n)||'Exercício')+'\u201d apagado', ()=>{
+      if(bkEx){ S.custom[id]=bkEx; salva('custom'); NET.agenda('custom/'+id, bkEx);
+        if(!bkEx.oc && !bkEx.ocultoPub){ try{ EXSPUB.publica(bkEx); }catch(e){} }
+        if(!BIB.porId[id]) BIB.lista.push(bkEx); BIB.indexa(); }
+      if(bkPrs){ S.prs[id]=bkPrs; salva('prs');
+        Object.keys(bkPrs).forEach(tp=>NET.agenda('prs/'+id+'/'+tp, bkPrs[tp])); }
+      UI.toast('Exercício restaurado ✓', true);
+    });
   },
   folha(id){
     const c=S.custom[id]; if(!c) return;
@@ -2836,9 +2873,15 @@ TELAS.exercicio = function({id}){
             h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},
               'Os recordes de carga, 1RM, série e repetições recomeçam do zero a partir de hoje. Útil quando você troca de academia e os pesos não batem. O histórico e os gráficos permanecem. Essa ação não tem volta.'),
             h('button',{class:'btn btn-err',onclick:()=>{
+              const bkPR = S.prs[id] ? JSON.parse(JSON.stringify(S.prs[id])) : null;
               S.prs[id]={resetEm:agora()};
               salva('prs'); NET.agenda('prs/'+id, S.prs[id]);
-              UI.fechaFolha(); UI.refaz(); UI.toast('Recordes zerados. Próximo treino define as novas marcas.');
+              UI.fechaFolha(); UI.refaz();
+              UI.desfazer('Recordes zerados', ()=>{
+                if(bkPR){ S.prs[id]=bkPR; NET.agenda('prs/'+id, bkPR); }
+                else { delete S.prs[id]; NET.agenda('prs/'+id, null); }
+                salva('prs'); UI.refaz(); UI.toast('Recordes restaurados ✓', true);
+              });
             }},'Zerar recordes')]);
         }},'Zerar recordes deste exercício')]);
     }},'⋯'));
@@ -5462,6 +5505,71 @@ async function autocuraNuvem(){
     }
   }catch(e){}
 }
+// treino apontando pra exercicio que nao existe (importacao que veio pela
+// metade): recria a partir do id, que guarda o nome.
+// "custom__hv-remada-halter" -> "Remada halter"
+function recuperaExsOrfaos(){
+  if(S.cfg.exOrfaos1) return 0;
+  try{
+    const meus=new Set();
+    Object.entries(S.custom||{}).forEach(function(par){
+      meus.add(par[0]); if(par[1] && par[1].id) meus.add(par[1].id);
+    });
+    const falta={};
+    Object.values(S.treinos||{}).forEach(tr=>{
+      if(!tr || tr.apagado) return;
+      (tr.ex||[]).forEach(e=>{
+        const i=e && e.exId;
+        if(i && !BIB.porId[i] && !meus.has(i)) falta[i]=(falta[i]||0)+1;
+      });
+    });
+    const ids=Object.keys(falta);
+    if(!ids.length){ S.cfg.exOrfaos1=1; salva('cfg'); return 0; }
+
+    const GRP=[[/panturrilh/,'panturrilha'],[/gluteo|coice|pelvica/,'gluteos'],
+      [/abdomin|abdome|prancha|obliquo|tocar nos pes/,'abdomen'],[/lombar/,'lombar'],
+      [/triceps|tricipes/,'triceps'],[/rosca|biceps|curl/,'biceps'],
+      [/antebraco|punho/,'antebraco'],[/encolhimento|trapezio/,'trapezio'],
+      [/remada|puxada|pulldown|barra fixa|pullover|tracao|dorsal|graviton/,'costas'],
+      [/supino|crucifixo|voador|peitoral|crossover|cross over|peck/,'peito'],
+      [/elevacao lateral|elevacao frontal|desenvolvimento|ombro|abertura|deltoid/,'ombros'],
+      [/agachamento|leg press|extensora|flexora|afundo|stiff|terra|avanco|bulgaro|step up|adutora|abdutora/,'pernas'],
+      [/corrida|esteira|bike|ciclismo|eliptico|escada|remo|pular corda/,'cardio']];
+    const EQP=[[/halter/,'halteres'],[/barra w|barra ez/,'barra-w'],[/barra|smith/,'barra'],
+      [/corda|cabo|polia|cross/,'cabo'],[/maquina|articulad|alavanca|multiflight|graviton/,'maquina'],
+      [/elastic/,'elastico'],[/kettlebell/,'kettlebell'],[/anilha/,'anilha']];
+
+    let n=0; const nomes=[];
+    ids.forEach(id=>{
+      const cru=String(id).replace(/^custom__(hv-)?/,'').replace(/-/g,' ').trim();
+      if(!cru) return;
+      const nome=cru.charAt(0).toUpperCase()+cru.slice(1);
+      const bn=BIB.norm(nome);
+      let g='corpo-inteiro', eq='outro';
+      for(const par of GRP){ if(par[0].test(bn)){ g=par[1]; break; } }
+      for(const par of EQP){ if(par[0].test(bn)){ eq=par[1]; break; } }
+      const ent={id:id, n:nome, g:g, e:eq, t:(g==='cardio'?'tempo':'peso_reps'),
+                 custom:true, recuperado:1, atualizado:agora()};
+      S.custom[id]=ent; NET.agenda('custom/'+id, ent);
+      BIB.lista.push(ent); nomes.push(nome); n++;
+    });
+    if(!n){ S.cfg.exOrfaos1=1; salva('cfg'); return 0; }
+    salva('custom'); BIB.indexa();
+    S.cfg.exOrfaos1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+
+    setTimeout(function(){ try{
+      UI.folha('Exerc\u00edcios recuperados',[
+        h('div',{class:'f14 mut',style:'padding:2px 2px 12px;line-height:1.7'},
+          n+' exerc\u00edcio'+(n>1?'s':'')+' do seu hist\u00f3rico apareciam como \u201cExerc\u00edcio removido\u201d. Recuperamos '+(n>1?'os nomes deles':'o nome dele')+' e '+(n>1?'eles voltaram':'ele voltou')+' pro seu acervo.'),
+        h('div',{class:'f13 mut2',style:'padding:0 2px 12px;line-height:1.6'},
+          nomes.slice(0,10).join(', ')+(nomes.length>10? ' e mais '+(nomes.length-10) : '')),
+        h('div',{class:'f13 mut2',style:'padding:0 2px 14px;line-height:1.6'},
+          'O grupo muscular foi deduzido do nome. Confira no seletor de exerc\u00edcios, filtro Meus, e ajuste o que estiver errado.'),
+        h('button',{class:'btn btn-p',onclick:function(){ UI.fechaFolha(); }},'Entendi')]);
+    }catch(e){} }, 1800);
+    return n;
+  }catch(e){ if(DEBUG) console.log('orfaos', e); return 0; }
+}
 function corrigePastasOrfas(){
   const vivas=new Set(Object.values(S.pastas||{}).filter(p=>!p.apagada).map(p=>p.id));
   let n=0;
@@ -6640,7 +6748,7 @@ TELAS.boasVindas = function(){
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

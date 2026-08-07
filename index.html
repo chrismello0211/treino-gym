@@ -388,7 +388,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.10';
+const APP_VER='11.11';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -655,6 +655,7 @@ const S = {
   ativo: LS.get('ativo', null),             // treino em andamento
   auth: LS.get('auth', null),               // {uid, refreshToken, idToken, exp}
   exNotas: LS.get('exNotas', {}),
+  trocas: LS.get('trocas', {}),             // exId -> {substitutoId: vezes}
   fotosProg: LS.get('fotosProg', {}),      // id -> {data, atualizado, apagado?} (a foto em si fica na nuvem)        // exId -> {txt, atualizado} nota fixa
   fila: LS.get('fila', [])                  // [{path, val, ts}]
 };
@@ -809,6 +810,17 @@ const NET = {
       m = fun(S.custom, nuvem.custom, 'custom') || m;
       m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
       m = fun(S.exNotas, nuvem.exNotas, 'exNotas') || m;
+      if(nuvem.app && nuvem.app.trocas){
+        const _num=v=> typeof v==='number'? {n:v,ts:0} : (v||{n:0,ts:0});
+        Object.entries(nuvem.app.trocas).forEach(([de,mp])=>{
+          S.trocas[de]=S.trocas[de]||{};
+          Object.entries(mp||{}).forEach(([para,v])=>{
+            const a=_num(S.trocas[de][para]), b=_num(v);
+            S.trocas[de][para]={n:Math.max(a.n,b.n), ts:Math.max(a.ts,b.ts)};
+          });
+        });
+        salva('trocas');
+      }
       m = fun(S.fotosProg, nuvem.fotosProg, 'fotosProg') || m;
       if(nuvem.bloq){ S.social.bloq=Object.assign(S.social.bloq||{}, nuvem.bloq); salva('social'); }
       try{ SYNCATIVO.resolve(nuvem.ativo||null); }catch(e){ if(DEBUG) console.log('syncativo',e); }
@@ -1369,6 +1381,21 @@ function grafLinha(canvas, pontos, formata){
 /* ---------- picker de exercícios ---------- */
 const PICKER = {
   aberto:false, filtros:{g:null,e:null}, q:'', onEscolha:null, modo:'escolher', sug:null,
+  registraTroca(de, para){
+    if(!de || !para || de===para) return;
+    S.trocas[de]=S.trocas[de]||{};
+    const at=S.trocas[de][para];
+    const n=(typeof at==='number'? at : (at&&at.n)||0)+1;   // aceita formato antigo
+    S.trocas[de][para]={n, ts:agora()};
+    salva('trocas'); NET.agenda('app/trocas', S.trocas);
+  },
+  maisTrocados(de){
+    const m=S.trocas[de]||{};
+    const val=k=>{ const v=m[k]; return typeof v==='number'? {n:v,ts:0} : (v||{n:0,ts:0}); };
+    return Object.keys(m).filter(id=>BIB.porId[id] && !BIB.porId[id].oc && id!==de)
+      .sort((a,b)=> (val(b).n-val(a).n) || (val(b).ts-val(a).ts))   // empate: o mais recente
+      .slice(0,3);
+  },
   abre(onEscolha, modo, sugestaoDe){
     PICKER.onEscolha=onEscolha||null; PICKER.modo=modo||'escolher'; PICKER.sug=sugestaoDe||null;
     PICKER.q=''; PICKER.filtros={g:null,e:null,meus:false};
@@ -1424,15 +1451,23 @@ const PICKER = {
     const res = BIB.busca(PICKER.q, PICKER.filtros);
     // recentes primeiro quando sem busca
     if(!PICKER.q && !PICKER.filtros.g && !PICKER.filtros.e && !PICKER.filtros.meus){
+      let jaListou=[];
       if(PICKER.sug && BIB.porId[PICKER.sug]){
+        const meus=PICKER.maisTrocados(PICKER.sug);
+        if(meus.length){
+          alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'},'Você costuma trocar por'));
+          meus.forEach(id=>{ alvo.appendChild(PICKER.linha(BIB.porId[id])); jaListou.push(id); });
+        }
         const g=BIB.porId[PICKER.sug].g;
-        const sug=BIB.lista.filter(x=>x.g===g && x.id!==PICKER.sug && !x.oc && BIB.temGifOuFoto(x)).slice(0,6);
+        const sug=BIB.lista.filter(x=>x.g===g && x.id!==PICKER.sug && !x.oc
+          && jaListou.indexOf(x.id)<0 && BIB.temGifOuFoto(x)).slice(0,6);
         if(sug.length){
-          alvo.appendChild(h('div',{class:'secao',style:'margin-top:4px'},'Sugeridos · '+(GRUPOS[g]||g)));
-          sug.forEach(x=>alvo.appendChild(PICKER.linha(x)));
+          alvo.appendChild(h('div',{class:'secao',style:meus.length?'':'margin-top:4px'},'Sugeridos · '+(GRUPOS[g]||g)));
+          sug.forEach(x=>{ alvo.appendChild(PICKER.linha(x)); jaListou.push(x.id); });
         }
       }
-      const rec = PICKER.recentes().filter(id=>BIB.porId[id] && !BIB.porId[id].oc && BIB.temGifOuFoto(BIB.porId[id]));
+      const rec = PICKER.recentes().filter(id=>BIB.porId[id] && !BIB.porId[id].oc
+        && jaListou.indexOf(id)<0 && BIB.temGifOuFoto(BIB.porId[id]));
       if(rec.length){
         alvo.appendChild(h('div',{class:'secao',style:PICKER.sug?'':'margin-top:4px'},'Recentes'));
         rec.slice(0,6).forEach(id=>alvo.appendChild(PICKER.linha(BIB.porId[id])));
@@ -1807,7 +1842,7 @@ TELAS.rotinaEditor = function(){
       ix<r.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(r.ex,ix); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(r.ex,ix); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); reordenar(r.ex, null); }},'Reordenar exercícios'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ const de=e.exId; UI.fechaFolha(); PICKER.abre(id=>{ PICKER.registraTroca(de, id); r.ex[ix]=Object.assign({},e,{exId:id}); UI.refaz(); }, 'escolher', de); }},'Substituir exercício'),
       h('button',{class:'menu-op perigo',onclick:()=>{ r.ex.splice(ix,1); UI.fechaFolha(); UI.refaz(); }},'Remover da rotina')
     ]);
   }
@@ -2212,7 +2247,7 @@ TELAS.ativo = function(){
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PROJ.folha(e.exId); }},'📈 E se eu subir o peso?'),
       sec('Este exercício'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); notaFixaFolha(e.exId); }},'📌 Nota fixa'),
-      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); PICKER.abre(id=>{ e.exId=id; e.series.forEach(s=>{ s.ok=false; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; delete s._dtKg; delete s._dtReps; s.kg=''; s.reps=''; delete s.pc; }); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
+      h('button',{class:'menu-op',onclick:()=>{ const deEx=e.exId; UI.fechaFolha(); PICKER.abre(id=>{ PICKER.registraTroca(deEx, id); e.exId=id; e.series.forEach(s=>{ s.ok=false; delete s.pr; delete s._auto; delete s._sugKg; delete s._sugReps; delete s._dtKg; delete s._dtReps; s.kg=''; s.reps=''; delete s.pc; }); salva('ativo'); UI.refaz(); }, 'escolher', e.exId); }},'Substituir exercício'),
       ix<t.ex.length-1 ? h('button',{class:'menu-op',onclick:()=>{ SS.liga(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Superssérie com o próximo') : null,
       e.ss ? h('button',{class:'menu-op',onclick:()=>{ SS.solta(t.ex,ix); salva('ativo'); UI.fechaFolha(); UI.refaz(); }},'Remover da superssérie') : null,
       sec('Treino'),
@@ -4052,15 +4087,22 @@ function calcStreak(meta){
   return streak;
 }
 function proximaRotina(){
-  const rots=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada); if(!rots.length) return null;
-  const ultimaExec={};
-  Object.values(S.treinos).forEach(t=>{ if(t.apagado||!t.rid) return; if(!ultimaExec[t.rid]||t.inicio>ultimaExec[t.rid]) ultimaExec[t.rid]=t.inicio; });
-  const ts=Object.values(S.treinos).filter(t=>!t.apagado&&t.rid&&S.rotinas[t.rid]).sort((a,b)=>b.inicio-a.inicio);
-  const pastaId = ts.length? S.rotinas[ts[0].rid].pasta : (rots[0].pasta||null);
-  let cand=rots.filter(r=>r.pasta===pastaId);
-  if(!cand.length) cand=rots;
-  cand.sort((a,b)=>(ultimaExec[a.id]||0)-(ultimaExec[b.id]||0) || (a.criado||0)-(b.criado||0));
-  return cand[0];
+  const rots=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada);
+  if(!rots.length) return null;
+  // mesma ordem que voce ve na tela de rotinas
+  const ordena = l => l.slice().sort((a,b)=>
+    ((a.ordem==null?9999:a.ordem)-(b.ordem==null?9999:b.ordem)) || ((a.criado||0)-(b.criado||0)));
+  const ts=Object.values(S.treinos)
+    .filter(t=>!t.apagado && t.rid && S.rotinas[t.rid] && !S.rotinas[t.rid].apagada)
+    .sort((a,b)=>b.inicio-a.inicio);
+  if(!ts.length) return ordena(rots)[0];          // nunca treinou: a primeira
+  const ultRot = S.rotinas[ts[0].rid];
+  const pastaId = ultRot.pasta || '';
+  let ciclo = ordena(rots.filter(r=>(r.pasta||'')===pastaId));
+  if(ciclo.length<2) ciclo = ordena(rots);
+  const i = ciclo.findIndex(r=>r.id===ultRot.id);
+  if(i<0) return ciclo[0];
+  return ciclo[(i+1) % ciclo.length];             // a proxima da lista, dando a volta
 }
 const METAUI={
   folha(){ const at=S.cfg.metaSem||0;

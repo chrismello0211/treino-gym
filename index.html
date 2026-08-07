@@ -389,7 +389,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.11.1';
+const APP_VER='11.11.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -756,24 +756,31 @@ const NET = {
     if(!r.ok) throw new Error('put');
     return true;
   },
-  // caminhos que sao "estado atual": so a ultima versao interessa, entao
-  // trocamos a pendencia antiga em vez de empilhar 30 versoes do mesmo treino
-  ULTIMO:{ 'ativo':1, 'app/cfg':1, 'app/perfil':1, 'app/trocas':1 },
+  // toda escrita e um PUT no caminho: se o mesmo caminho ja esta na fila,
+  // a versao antiga virou lixo. Guarda so a ultima.
   agenda(path, val){
-    if(NET.ULTIMO[path]){
-      const i=S.fila.findIndex(f=>f && f.path===path);
-      if(i>=0){ S.fila[i]={path, val, ts:Date.now()}; salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha(); return; }
+    const i=S.fila.findIndex(f=>f && f.path===path);
+    if(i>=0) S.fila[i]={path, val, ts:Date.now(), tent:S.fila[i].tent};
+    else {
+      S.fila.push({path, val, ts:Date.now()});
+      if(S.fila.length>400) S.fila.splice(0, S.fila.length-400);
     }
-    S.fila.push({path, val, ts:Date.now()});
-    if(S.fila.length>400) S.fila.splice(0, S.fila.length-400);
     salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha();
+  },
+  _retryT:null,
+  // se sobrou fila, volta pra terminar. Sem isso ela ficava parada.
+  reagenda(ms){
+    clearTimeout(NET._retryT);
+    NET._retryT=setTimeout(()=>{ NET._retryT=null; NET.despacha(); }, ms||1500);
   },
   async despacha(){
     if(NET.sincronizando || !S.fila.length || !S.auth || !navigator.onLine) return;
     NET.sincronizando = true;
+    let parouPorErro=false;
     try{
       const tk = await NET.token(); if(!tk) throw 0;
-      let passos = S.fila.length + 4;
+      // teto so pra nao prender a thread; o resto continua no proximo ciclo
+      let passos = 60;
       while(S.fila.length && passos-- > 0){
         const it = S.fila[0];
         const r = await fetch(NET.caminho(it.path)+'?auth='+tk, {method:'PUT', body:JSON.stringify(it.val)});
@@ -791,13 +798,19 @@ const NET = {
           }
           salva('fila'); continue;
         }
-        throw 0; // 401/5xx/rede: para e tenta de novo depois
+        parouPorErro=true;
+        break; // 401/5xx/rede: para e tenta de novo depois
       }
       if(!S.fila.length) UI._syncDesde=0;
       UI.pingSync(!S.fila.length);
-    }catch(e){ UI.pingSync(false); }
-    try{ UI.pintaSync(); }catch(e){}
+    }catch(e){ parouPorErro=true; UI.pingSync(false); }
     NET.sincronizando = false;
+    try{ UI.pintaSync(); }catch(e){}
+    // ainda tem coisa: volta. Rapido se estava so escoando, devagar se deu erro.
+    if(S.fila.length && navigator.onLine){
+      NET._falhas = parouPorErro ? Math.min((NET._falhas||0)+1, 6) : 0;
+      NET.reagenda(parouPorErro ? Math.min(2000*Math.pow(2,NET._falhas), 60000) : 400);
+    } else NET._falhas=0;
   },
   async puxa(){
     if(!S.auth || !navigator.onLine) return;
@@ -2489,6 +2502,8 @@ function diagnostico(){
     'Treinos: '+Object.keys(S.treinos).length+' · Rotinas: '+rots.length+' ativas de '+Object.keys(S.rotinas).length,
     'Pastas: '+vivas.size+' · Rotinas em pasta inexistente: '+orfas.length+(orfas.length? ' ('+orfas.map(r=>r.titulo).join(', ')+')':''),
     'Exercícios criados: '+Object.keys(S.custom||{}).length,
+    'Fila: '+(S.fila||[]).length+' pendente(s)'+((S.fila||[]).length? ' · 1º: '+S.fila[0].path : ''),
+    'Erros de envio: '+JSON.stringify(LS.get('filaErr', []).slice(-6)),
     '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']).join('\n');
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tx).then(()=>UI.toast('Diagnóstico copiado ✓', true)).catch(()=>UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)])); }
   else UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)]);
@@ -2949,8 +2964,7 @@ const EDTREINO = {
       const novos=CORE.recomputaPRs(copia, resets);
       Object.entries(resets).forEach(([exId,r])=>{ novos[exId]=novos[exId]||{}; novos[exId].resetEm=r; });
       S.prs=novos; salva('prs');
-      Object.entries(S.prs).forEach(([exId,p])=>{ if(p) Object.keys(p).forEach(tp=>{
-        if(tp!=='resetEm' && tp!=='_pos') NET.agenda('prs/'+exId+'/'+tp, p[tp]); }); });
+      Object.entries(S.prs).forEach(([exId,p])=>{ if(p) NET.agenda('prs/'+exId, p); });
       const eu=copia.find(z=>z.id===t.id);
       if(eu){ t.recordes=eu.recordes||0; t.ex=eu.ex; salva('treinos'); NET.agenda('treinos/'+t.id, t); }
     }catch(err){ if(DEBUG) console.log('edtreino prs', err); }
@@ -5860,8 +5874,8 @@ function reparaPRsFantasma(){
 
     Object.entries(resets).forEach(([ex,r])=>{ final[ex]=final[ex]||{}; final[ex].resetEm=r; });
     S.prs = final; salva('prs');
-    tocados.forEach(ex=>{ const p=S.prs[ex]||{};
-      ['kg','vol','rm','reps'].forEach(tp=>NET.agenda('prs/'+ex+'/'+tp, p[tp]||null)); });
+    // 1 escrita por exercicio, nao 4: o no inteiro de uma vez
+    tocados.forEach(ex=>NET.agenda('prs/'+ex, S.prs[ex]||null));
     S.cfg.prFantasma2=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
 
     setTimeout(()=>{ try{

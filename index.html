@@ -389,7 +389,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.11.3';
+const APP_VER='11.11.4';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -694,9 +694,9 @@ const NET = {
     if(!S.auth) return null;
     if(S.auth.idToken && Date.now() < S.auth.exp) return S.auth.idToken;
     try{
-      const r = await fetch('https://securetoken.googleapis.com/v1/token?key='+FB.key,{
+      const r = await NET.fetchT('https://securetoken.googleapis.com/v1/token?key='+FB.key,{
         method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(S.auth.refreshToken)});
+        body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(S.auth.refreshToken)}, 15000);
       if(!r.ok) throw 0;
       const d = await r.json();
       S.auth.idToken=d.id_token; S.auth.refreshToken=d.refresh_token;
@@ -775,27 +775,44 @@ const NET = {
   },
   // fetch que NUNCA fica pendurado. Sem isso, um envio que nao volta
   // (rede ruim, app em segundo plano) travava a fila inteira pra sempre.
-  async envia(url, corpo, ms){
+  async fetchT(url, opts, ms){
     const ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
     const t = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, ms||25000);
     try{
-      return await fetch(url, {method:'PUT', body:corpo, signal:ctrl?ctrl.signal:undefined});
+      return await fetch(url, Object.assign({}, opts||{}, {signal:ctrl?ctrl.signal:undefined}));
     } finally { clearTimeout(t); }
   },
+  async envia(url, corpo, ms){ return NET.fetchT(url, {method:'PUT', body:corpo}, ms); },
+  _gen:0,
   async despacha(){
-    // trava presa (envio que nunca voltou): solta depois de 90s
-    if(NET.sincronizando && NET._desde && Date.now()-NET._desde > 90000) NET.sincronizando=false;
+    // trava presa alem do razoavel: o proximo despacho TOMA a fila pra si.
+    // A geracao garante que o loop antigo, se ainda existir, desista.
+    if(NET.sincronizando && NET._desde && Date.now()-NET._desde > 120000){
+      NET._gen++; NET.sincronizando=false;
+    }
     if(NET.sincronizando || !S.fila.length || !S.auth || !navigator.onLine) return;
     NET.sincronizando = true; NET._desde = Date.now();
+    const gen = NET._gen;
+    // limpeza: a corrida antiga pode ter deixado o mesmo caminho 2x na fila
+    (function(){
+      const vistos={};
+      for(let i=S.fila.length-1;i>=0;i--){
+        const p=S.fila[i] && S.fila[i].path;
+        if(!p) continue;
+        if(vistos[p]) S.fila.splice(i,1); else vistos[p]=1;
+      }
+    })();
     let parouPorErro=false;
     try{
-      const tk = await NET.token(); if(!tk) throw 0;
+      const tk = await NET.token();
+      if(gen!==NET._gen) return;                    // outro loop assumiu
+      if(!tk) throw 0;
       let passos = 60, seguidas = 0;
       while(S.fila.length && passos-- > 0){
         const it = S.fila[0];
         // item adiado por falha de rede: deixa passar a vez sem tentar
         if(it.adiado && Date.now() < it.adiado){
-          if(S.fila.every(f=>f.adiado && Date.now()<f.adiado)) { parouPorErro=true; break; }
+          if(S.fila.every(f=>f.adiado && Date.now()<f.adiado)) { break; }
           S.fila.shift(); S.fila.push(it); continue;
         }
         const corpo = JSON.stringify(it.val);
@@ -803,8 +820,12 @@ const NET = {
         // payload grande merece mais tempo, mas nunca infinito
         try{ r = await NET.envia(NET.caminho(it.path)+'?auth='+tk, corpo, corpo.length>60000?40000:15000); }
         catch(e){ caiu=true; }
+        if(gen!==NET._gen) return;                  // outro loop assumiu no meio do envio
 
         if(r && r.ok){ S.fila.shift(); seguidas=0; salva('fila'); continue; }
+
+        // 401 no meio de envio longo: token venceu. Forca renovar no proximo ciclo.
+        if(r && r.status===401){ try{ S.auth.exp=0; }catch(e){} }
 
         // falhou: conta a tentativa
         const permanente = !!(r && r.status>=400 && r.status<500 && r.status!==401);
@@ -822,7 +843,7 @@ const NET = {
           if(it.tent>=limite){
             it.adiado = Date.now() + Math.min(10*60000, 30000*Math.pow(2, it.tent-limite));
             const errs = LS.get('filaErr', []);
-            errs.push({path:it.path, st:(caiu?'timeout':'rede'), tent:it.tent, adiado:1, ts:Date.now()});
+            errs.push({path:it.path, st:(caiu?'timeout':(r? r.status : 'rede')), tent:it.tent, adiado:1, ts:Date.now()});
             LS.set('filaErr', errs.slice(-30));
           }
           S.fila.push(it);                          // pro fim, os outros passam
@@ -834,6 +855,7 @@ const NET = {
       if(!S.fila.length) UI._syncDesde=0;
       UI.pingSync(!S.fila.length);
     }catch(e){ parouPorErro=true; UI.pingSync(false); }
+    if(gen!==NET._gen) return;                      // perdeu a vez: nao mexe em nada
     NET.sincronizando = false; NET._desde = 0;
     try{ UI.pintaSync(); }catch(e){}
     if(S.fila.length && navigator.onLine){
@@ -1176,7 +1198,10 @@ const UI = {
   pintaSync(){
     try{
       const el=$('#syncbar'); if(!el) return;
-      const pend=(S.fila||[]).length;
+      const agora_=Date.now();
+      // item adiado esta aguardando a proxima janela: nao e noticia
+      const ativos=(S.fila||[]).filter(f=>!(f && f.adiado && agora_<f.adiado)).length;
+      const pend=ativos;
       const off=!navigator.onLine;
       // online e escoando: nao fala nada. Sincronizar rapido nao e' noticia.
       const mostrar = off ? true : (pend>0 && UI._syncDesde && (Date.now()-UI._syncDesde)>15000);

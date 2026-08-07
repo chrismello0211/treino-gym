@@ -389,7 +389,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.11.2';
+const APP_VER='11.11.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -768,45 +768,74 @@ const NET = {
     salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha();
   },
   _retryT:null,
-  // se sobrou fila, volta pra terminar. Sem isso ela ficava parada.
+  _desde:0,
   reagenda(ms){
     clearTimeout(NET._retryT);
     NET._retryT=setTimeout(()=>{ NET._retryT=null; NET.despacha(); }, ms||1500);
   },
+  // fetch que NUNCA fica pendurado. Sem isso, um envio que nao volta
+  // (rede ruim, app em segundo plano) travava a fila inteira pra sempre.
+  async envia(url, corpo, ms){
+    const ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+    const t = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, ms||25000);
+    try{
+      return await fetch(url, {method:'PUT', body:corpo, signal:ctrl?ctrl.signal:undefined});
+    } finally { clearTimeout(t); }
+  },
   async despacha(){
+    // trava presa (envio que nunca voltou): solta depois de 90s
+    if(NET.sincronizando && NET._desde && Date.now()-NET._desde > 90000) NET.sincronizando=false;
     if(NET.sincronizando || !S.fila.length || !S.auth || !navigator.onLine) return;
-    NET.sincronizando = true;
+    NET.sincronizando = true; NET._desde = Date.now();
     let parouPorErro=false;
     try{
       const tk = await NET.token(); if(!tk) throw 0;
-      // teto so pra nao prender a thread; o resto continua no proximo ciclo
-      let passos = 60;
+      let passos = 60, seguidas = 0;
       while(S.fila.length && passos-- > 0){
         const it = S.fila[0];
-        const r = await fetch(NET.caminho(it.path)+'?auth='+tk, {method:'PUT', body:JSON.stringify(it.val)});
-        if(r.ok){ S.fila.shift(); salva('fila'); continue; }
-        if(r.status>=400 && r.status<500 && r.status!==401){
-          // erro permanente (regra/payload): não pode travar o resto da fila
-          it.tent = (it.tent||0)+1;
-          S.fila.shift();
-          if(it.tent>=3){
-            const errs = LS.get('filaErr', []);
-            errs.push({path:it.path, st:r.status, ts:Date.now()});
-            LS.set('filaErr', errs.slice(-30));
-          } else {
-            S.fila.push(it); // vai pro fim; os outros passam
-          }
-          salva('fila'); continue;
+        // item adiado por falha de rede: deixa passar a vez sem tentar
+        if(it.adiado && Date.now() < it.adiado){
+          if(S.fila.every(f=>f.adiado && Date.now()<f.adiado)) { parouPorErro=true; break; }
+          S.fila.shift(); S.fila.push(it); continue;
         }
+        const corpo = JSON.stringify(it.val);
+        let r=null, caiu=false;
+        // payload grande merece mais tempo, mas nunca infinito
+        try{ r = await NET.envia(NET.caminho(it.path)+'?auth='+tk, corpo, corpo.length>60000?40000:15000); }
+        catch(e){ caiu=true; }
+
+        if(r && r.ok){ S.fila.shift(); seguidas=0; salva('fila'); continue; }
+
+        // falhou: conta a tentativa
+        const permanente = !!(r && r.status>=400 && r.status<500 && r.status!==401);
+        it.tent = (it.tent||0)+1;
+        const limite = permanente ? 3 : 8;          // erro de regra desiste antes
+        S.fila.shift();
+        if(permanente && it.tent>=limite){
+          // erro de regra/payload nao passa nunca: sai da fila, fica no log
+          const errs = LS.get('filaErr', []);
+          errs.push({path:it.path, st:r.status, tent:it.tent, ts:Date.now()});
+          LS.set('filaErr', errs.slice(-30));
+        } else {
+          // problema de rede: NAO descarta (seria perder foto/treino).
+          // Adia e deixa os outros passarem; volta a tentar mais tarde.
+          if(it.tent>=limite){
+            it.adiado = Date.now() + Math.min(10*60000, 30000*Math.pow(2, it.tent-limite));
+            const errs = LS.get('filaErr', []);
+            errs.push({path:it.path, st:(caiu?'timeout':'rede'), tent:it.tent, adiado:1, ts:Date.now()});
+            LS.set('filaErr', errs.slice(-30));
+          }
+          S.fila.push(it);                          // pro fim, os outros passam
+        }
+        salva('fila');
         parouPorErro=true;
-        break; // 401/5xx/rede: para e tenta de novo depois
+        if(++seguidas>=3) break;                    // 3 falhas seguidas: rede ruim, espera
       }
       if(!S.fila.length) UI._syncDesde=0;
       UI.pingSync(!S.fila.length);
     }catch(e){ parouPorErro=true; UI.pingSync(false); }
-    NET.sincronizando = false;
+    NET.sincronizando = false; NET._desde = 0;
     try{ UI.pintaSync(); }catch(e){}
-    // ainda tem coisa: volta. Rapido se estava so escoando, devagar se deu erro.
     if(S.fila.length && navigator.onLine){
       NET._falhas = parouPorErro ? Math.min((NET._falhas||0)+1, 6) : 0;
       NET.reagenda(parouPorErro ? Math.min(2000*Math.pow(2,NET._falhas), 60000) : 400);
@@ -1159,10 +1188,12 @@ const UI = {
         return;
       }
       if(!UI._syncDesde) UI._syncDesde=Date.now();
+      const preso = !off && UI._syncDesde && (Date.now()-UI._syncDesde)>90000;
       el.textContent = off
         ? (pend? 'Sem conexão · '+pend+' guardado'+(pend>1?'s':'')+' aqui' : 'Sem conexão · tudo salvo aqui')
-        : 'Enviando… '+pend+' restante'+(pend>1?'s':'');
-      el.classList.toggle('erro', off);
+        : (preso ? 'Conexão instável · '+pend+' na fila, seus dados estão salvos aqui'
+                 : 'Enviando… '+pend+' restante'+(pend>1?'s':''));
+      el.classList.toggle('erro', off || preso);
       el.classList.add('on');
       document.body.classList.add('com-sync');
     }catch(e){}

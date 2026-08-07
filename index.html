@@ -148,10 +148,11 @@ body.tela-ativo #timerbar{bottom:calc(var(--sab) + 12px)}
   opacity:0;pointer-events:none;transition:all .2s;max-width:88vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 #toast.rec{border-color:var(--warn);color:var(--warn)}
-#syncbar{display:none;font-size:11.5px;font-weight:700;letter-spacing:.02em;color:var(--tx3);
-  padding:3px 16px 5px;text-align:center;background:var(--surf2);border-top:1px solid var(--line)}
+#syncbar{display:none;font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--tx3);
+  padding:4px 16px 0;text-align:center;line-height:1.3}
 #syncbar.on{display:block}
 #syncbar.erro{color:var(--warn)}
+body.com-sync main{padding-top:calc(var(--sat) + 84px)}
 #toast.com-bt{pointer-events:auto;display:flex;align-items:center;gap:14px;text-align:left}
 #toast .bt-desf{background:none;border:none;color:var(--brand2);font-weight:800;font-size:14px;padding:4px 2px;cursor:pointer;flex-shrink:0}
 
@@ -388,7 +389,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.11';
+const APP_VER='11.11.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -755,7 +756,18 @@ const NET = {
     if(!r.ok) throw new Error('put');
     return true;
   },
-  agenda(path, val){ S.fila.push({path, val, ts:Date.now()}); if(S.fila.length>400) S.fila.splice(0, S.fila.length-400); salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha(); },
+  // caminhos que sao "estado atual": so a ultima versao interessa, entao
+  // trocamos a pendencia antiga em vez de empilhar 30 versoes do mesmo treino
+  ULTIMO:{ 'ativo':1, 'app/cfg':1, 'app/perfil':1, 'app/trocas':1 },
+  agenda(path, val){
+    if(NET.ULTIMO[path]){
+      const i=S.fila.findIndex(f=>f && f.path===path);
+      if(i>=0){ S.fila[i]={path, val, ts:Date.now()}; salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha(); return; }
+    }
+    S.fila.push({path, val, ts:Date.now()});
+    if(S.fila.length>400) S.fila.splice(0, S.fila.length-400);
+    salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha();
+  },
   async despacha(){
     if(NET.sincronizando || !S.fila.length || !S.auth || !navigator.onLine) return;
     NET.sincronizando = true;
@@ -781,6 +793,7 @@ const NET = {
         }
         throw 0; // 401/5xx/rede: para e tenta de novo depois
       }
+      if(!S.fila.length) UI._syncDesde=0;
       UI.pingSync(!S.fila.length);
     }catch(e){ UI.pingSync(false); }
     try{ UI.pintaSync(); }catch(e){}
@@ -1123,12 +1136,22 @@ const UI = {
       const el=$('#syncbar'); if(!el) return;
       const pend=(S.fila||[]).length;
       const off=!navigator.onLine;
-      if(!pend && !off){ el.classList.remove('on'); return; }
+      // online e escoando: nao fala nada. Sincronizar rapido nao e' noticia.
+      const mostrar = off ? true : (pend>0 && UI._syncDesde && (Date.now()-UI._syncDesde)>15000);
+      if(!mostrar){
+        el.classList.remove('on'); el.textContent='';
+        document.body.classList.remove('com-sync');
+        if(!pend) UI._syncDesde=0;
+        else if(!UI._syncDesde) UI._syncDesde=Date.now();
+        return;
+      }
+      if(!UI._syncDesde) UI._syncDesde=Date.now();
       el.textContent = off
-        ? (pend? 'Sem conexão · '+pend+' para enviar' : 'Sem conexão · tudo salvo aqui')
-        : 'Enviando '+pend+'…';
+        ? (pend? 'Sem conexão · '+pend+' guardado'+(pend>1?'s':'')+' aqui' : 'Sem conexão · tudo salvo aqui')
+        : 'Enviando… '+pend+' restante'+(pend>1?'s':'');
       el.classList.toggle('erro', off);
       el.classList.add('on');
+      document.body.classList.add('com-sync');
     }catch(e){}
   },
   folha(titulo, corpoEls, acao, aoFechar){
@@ -3693,7 +3716,21 @@ const SYNCATIVO = {
   // chamado no boot, depois que a nuvem desceu
   resolve(daNuvem){
     const local = S.ativo;
-    const remoto = (daNuvem && daNuvem.id) ? daNuvem : null;
+    let remoto = (daNuvem && daNuvem.id) ? daNuvem : null;
+
+    // 1) o que esta na fila daqui e mais novo que a nuvem. Se ainda nao
+    //    subiu o estado do ativo, a nuvem esta desatualizada: ignora.
+    const pend = (S.fila||[]).filter(f=>f && f.path==='ativo');
+    if(pend.length){
+      const ult = pend[pend.length-1];
+      if(!ult.val || !ult.val.id) return;                 // aqui ja foi encerrado
+      if(!remoto || ult.val.id!==remoto.id) remoto=null;   // aqui e' outro/mais novo
+    }
+    // 2) trava dura: treino que ja esta no historico NUNCA volta a ficar ativo
+    if(remoto && S.treinos[remoto.id] && !S.treinos[remoto.id].apagado){
+      SYNCATIVO.limpa();
+      remoto=null;
+    }
 
     // nada na nuvem: este aparelho manda
     if(!remoto){ if(local) SYNCATIVO.sobeJa(); return; }

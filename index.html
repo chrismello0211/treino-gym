@@ -389,7 +389,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.11.4';
+const APP_VER='11.12';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1999,6 +1999,12 @@ const ATIVO = {
         s._prBackup=JSON.parse(JSON.stringify(prs.map(([t])=>[t, (S.prs[e.exId]||{})[t]])));
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
         prs.forEach(([t])=>NET.agenda('prs/'+e.exId+'/'+t, S.prs[e.exId][t]));
+        // avisa UMA vez por exercício, senão vira spam a cada série
+        if(!S.ativo._avEstr) S.ativo._avEstr={};
+        if(!S.ativo._avEstr[e.exId]){
+          S.ativo._avEstr[e.exId]=1; salva('ativo');
+          UI.toast('Primeira vez em ' + x.n + ': marca registrada. A partir do próximo treino vale medalha 🏅', true);
+        }
       } else if(prs.length){
         s.pr=prs.map(p=>p[0]);
         s._prBackup=JSON.parse(JSON.stringify(prs.map(([t])=>[t, (S.prs[e.exId]||{})[t]])));  // pra reverter se cancelar
@@ -2046,7 +2052,9 @@ const ATIVO = {
     const vol=CORE.volumeTreino(S.ativo), ser=CORE.seriesFeitas(S.ativo);
     const tot=(S.ativo.ex||[]).reduce((a,e)=>a+e.series.length,0);
     const el=$('#ta-vol'); if(el){
-      el.textContent=CORE.fmtKgCurto(vol)+' kg';
+      // resumido por padrao (polui menos); toque mostra o numero cheio
+      el.textContent=(S.cfg.volExato ? CORE.fmtKg(vol) : CORE.fmtKgCurto(vol))+' kg';
+      el.style.fontSize = (S.cfg.volExato && vol>=10000) ? '17px' : '';
       $('#ta-ser').textContent=ser+(tot?'/'+tot:'');
       const pct = tot? Math.round(100*ser/tot) : 0;
       const sk=$('#ta-serk'); if(sk) sk.textContent = tot? ('Séries · '+pct+'%') : 'Séries';
@@ -2154,7 +2162,7 @@ const ATIVO = {
       pubArea,
       h('button',{class:'btn btn-p',onclick:()=>{
         const fim=agora();
-        delete t._estr;
+        delete t._estr; delete t._avEstr;
         const salvo={ id:t.id, rid:t.rid, titulo:t.titulo, inicio:t.inicio, fim,
           ex:feitos, volume:CORE.volumeTreino(t), series:CORE.seriesFeitas(t),
           recordes:CORE.contaRecordes({ex:feitos}), atualizado:fim };
@@ -2193,7 +2201,11 @@ TELAS.ativo = function(){
     h('div',{class:'linha',style:'align-items:flex-start;gap:8px'},
       h('div',{class:'stats3 cab-ta',style:'flex:1;min-width:0'},
         h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k'},'Duração ✎'),h('div',{class:'v cron',id:'ta-cron',style:'color:var(--brand2)'},'0:00')),
-        h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v',id:'ta-vol',style:'white-space:nowrap'},'0 kg')),
+        h('div',{style:'cursor:pointer',title:'Toque para ver o valor exato',onclick:()=>{
+          S.cfg.volExato = !S.cfg.volExato; salva('cfg'); ATIVO.pinta();
+        }},
+          h('div',{class:'k'},'Volume'),
+          h('div',{class:'v',id:'ta-vol',style:'white-space:nowrap'},'0 kg')),
         h('div',{},h('div',{class:'k',id:'ta-serk'},'Séries'),h('div',{class:'v',id:'ta-ser'},'0')),
         h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',id:'ta-rec'},'0'))),
       h('div',{id:'ta-musc',style:'flex-shrink:0;width:76px;overflow:hidden;display:flex;justify-content:flex-end;cursor:pointer',onclick:()=>{ if(S.ativo) distMuscularFolha(S.ativo); }}))));
@@ -2559,6 +2571,7 @@ function diagnostico(){
     'Pastas: '+vivas.size+' · Rotinas em pasta inexistente: '+orfas.length+(orfas.length? ' ('+orfas.map(r=>r.titulo).join(', ')+')':''),
     'Exercícios criados: '+Object.keys(S.custom||{}).length,
     'Fila: '+(S.fila||[]).length+' pendente(s)'+((S.fila||[]).length? ' · 1º: '+S.fila[0].path : ''),
+    'Treino ativo: '+(S.ativo? (S.ativo.titulo+' · estreias: '+JSON.stringify(S.ativo._estr||{})) : 'nenhum'),
     'Erros de envio: '+JSON.stringify(LS.get('filaErr', []).slice(-6)),
     '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']).join('\n');
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tx).then(()=>UI.toast('Diagnóstico copiado ✓', true)).catch(()=>UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px'},tx)])); }
@@ -3772,7 +3785,7 @@ const SYNCATIVO = {
                            .filter(e=>e.series.length);
     if(!feitos.length) return false;
     const fim = t.atualizado || agora();
-    delete t._estr;
+    delete t._estr; delete t._avEstr;
     const salvo={ id:t.id, rid:t.rid, titulo:t.titulo, inicio:t.inicio, fim,
       ex:feitos, volume:CORE.volumeTreino({ex:feitos}), series:CORE.seriesFeitas({ex:feitos}),
       recordes:CORE.contaRecordes({ex:feitos}), atualizado:agora() };

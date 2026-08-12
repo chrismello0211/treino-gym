@@ -389,7 +389,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.12';
+const APP_VER='11.12.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -437,6 +437,17 @@ const CORE = {
     return n;
   },
   // marcas reais de um exercicio (ignora resetEm e controle interno)
+  // congela quais exercicios sao estreia ANTES de qualquer marca deste
+  // treino existir. Chamado ao comecar e ao adicionar exercicio.
+  marcaEstreias(t){
+    if(!t) return t;
+    t._estr = t._estr || {};
+    (t.ex||[]).forEach(e=>{
+      if(e && e.exId && t._estr[e.exId]===undefined)
+        t._estr[e.exId] = !CORE.marcasDe(S.prs[e.exId]).length;
+    });
+    return t;
+  },
   marcasDe(reg){
     if(!reg) return [];
     return ['kg','vol','rm','reps'].map(tp=>reg[tp]).filter(Boolean);
@@ -1959,7 +1970,9 @@ const ATIVO = {
       ex: r ? r.ex.map(e=>({ exId:e.exId, descanso:e.descanso, notas:e.notas||'', ss:e.ss||null,
         series: e.series.map(s=>({tipo:s.tipo, kg:'', reps:'', ok:false, _planKg:(s.kg!==''&&s.kg!=null?s.kg:null), _planReps:(s.reps!==''&&s.reps!=null?s.reps:null)})) })) : []
     };
-    salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
+    CORE.marcaEstreias(S.ativo);
+    salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+    UI.pilha=[]; UI.vai('ativo',null,false);
   },
   serieAnterior(exId, si){
     const ts=Object.values(S.treinos).sort((a,b)=>b.inicio-a.inicio);
@@ -1990,8 +2003,14 @@ const ATIVO = {
       // Recalcular a cada série fazia a 2ª série virar "estreia" sozinha.
       if(!S.ativo._estr) S.ativo._estr={};
       if(S.ativo._estr[e.exId]===undefined){
+        // treino começado em versão antiga: decide agora, mas o carimbo
+        // do treino atual só conta como "retomada" se JÁ houver série
+        // feita deste exercício. Sem isso, um treino que ficou com o mesmo
+        // id de um treino salvo virava "estreia" e comia a medalha.
         const _marcas=CORE.marcasDe(S.prs[e.exId]);
-        S.ativo._estr[e.exId] = !_marcas.length || _marcas.every(p=> p && p.tid===S.ativo.id);
+        const jaFeitas=(e.series||[]).filter(q=>q!==s && q.ok).length;
+        S.ativo._estr[e.exId] = !_marcas.length
+          || (jaFeitas>0 && _marcas.every(p=> p && p.tid===S.ativo.id));
       }
       const estreia = S.ativo._estr[e.exId]; // 1ª sessão (ou 1ª depois de zerar) sem medalha
       const prs=CORE.detectaPR(S.prs, e.exId, {...s});
@@ -2216,6 +2235,7 @@ TELAS.ativo = function(){
     const x=BIB.ex(id);
     const s0={tipo:'N',kg:'',reps:x.t==='tempo'?'40':'',ok:false};
     t.ex.push({exId:id, descanso: x.g==='cardio'?0:S.cfg.descanso, notas:'', series: x.g==='cardio'? [s0] : [s0,{...s0},{...s0}]});
+    CORE.marcaEstreias(t);
     salva('ativo'); UI.refaz();
   })},'＋ Adicionar exercício'));
 
@@ -2836,7 +2856,7 @@ TELAS.treinoDet = function({id}){
     S.ativo={ id:uid(), rid:t.rid||null, titulo:t.titulo, inicio:agora(),
       ex:(t.ex||[]).map(e=>({exId:e.exId, descanso:e.descanso, notas:e.notas||'', ss:e.ss||null,
         series:e.series.map(s=>({tipo:s.tipo, kg:'', reps:'', ok:false, _planKg:(s.kg!==''&&s.kg!=null?s.kg:null), _planReps:(s.reps!==''&&s.reps!=null?s.reps:null)}))}))};
-    salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
+    CORE.marcaEstreias(S.ativo); salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
   }},'🔁 Repetir este treino'));
   if(t.temFoto && S.auth) m.appendChild(FOTOS.lazy(S.auth.uid, t.id));
   const divg=gruposDoTreino(t);
@@ -2881,7 +2901,7 @@ TELAS.treinoDet = function({id}){
         S.ativo={ id:uid(), rid:t.rid, titulo:t.titulo, inicio:agora(),
           ex:t.ex.map(e=>({exId:e.exId, descanso:e.descanso??S.cfg.descanso, notas:e.notas||'', ss:e.ss||null,
             series:e.series.map(s=>({tipo:s.tipo,kg:s.kg,reps:s.reps,ok:false}))})) };
-        salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
+        CORE.marcaEstreias(S.ativo); salva('ativo'); UI.pilha=[]; UI.vai('ativo',null,false);
       }},'Repetir este treino'),
       h('button',{class:'menu-op',onclick:async ()=>{
         if(!S.auth){ UI.toast('Crie sua conta pra anexar fotos'); return; }

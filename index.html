@@ -397,7 +397,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.12.3';
+const APP_VER='11.13';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1357,7 +1357,7 @@ function prDetalhe(exId, tipo){
   const _val=(tipo==='reps')? (_x.t==='tempo'? fmtTempoEx(p.v) : Math.round(p.v)+' reps') : CORE.fmtKg(p.v)+' kg';
   UI.toast(_rot+': '+_val+extra+data, true);
 }
-const MEDALHA='🏅';
+const MEDALHA='🥇';
 const LB_POR_KG = 2.2046226218;
 function kgParaLb(kg){ return (Number(kg)||0)*LB_POR_KG; }
 function lbParaKg(lb){ return (Number(lb)||0)/LB_POR_KG; }
@@ -1505,8 +1505,19 @@ function grafLinha(canvas, pontos, formata){
 /* ---------- picker de exercícios ---------- */
 const PICKER = {
   aberto:false, filtros:{g:null,e:null}, q:'', onEscolha:null, modo:'escolher', sug:null,
+  // "mesmo músculo": grupo primário igual, ou o primário de um aparecendo
+  // entre os secundários do outro
+  combinam(a, b){
+    const x=BIB.porId[a], y=BIB.porId[b];
+    if(!x || !y) return false;
+    if(x.g===y.g) return true;
+    if((x.gs||[]).indexOf(y.g)>=0) return true;
+    if((y.gs||[]).indexOf(x.g)>=0) return true;
+    return false;
+  },
   registraTroca(de, para){
     if(!de || !para || de===para) return;
+    if(!PICKER.combinam(de, para)) return;   // troca sem relação muscular não vira sugestão
     S.trocas[de]=S.trocas[de]||{};
     const at=S.trocas[de][para];
     const n=(typeof at==='number'? at : (at&&at.n)||0)+1;   // aceita formato antigo
@@ -1516,7 +1527,9 @@ const PICKER = {
   maisTrocados(de){
     const m=S.trocas[de]||{};
     const val=k=>{ const v=m[k]; return typeof v==='number'? {n:v,ts:0} : (v||{n:0,ts:0}); };
-    return Object.keys(m).filter(id=>BIB.porId[id] && !BIB.porId[id].oc && id!==de)
+    return Object.keys(m)
+      // filtra também na LEITURA: limpa sozinho o que entrou errado antes desta versão
+      .filter(id=>BIB.porId[id] && !BIB.porId[id].oc && id!==de && PICKER.combinam(de, id))
       .sort((a,b)=> (val(b).n-val(a).n) || (val(b).ts-val(a).ts))   // empate: o mais recente
       .slice(0,3);
   },
@@ -2043,7 +2056,7 @@ const ATIVO = {
         if(!S.ativo._avEstr) S.ativo._avEstr={};
         if(!S.ativo._avEstr[e.exId]){
           S.ativo._avEstr[e.exId]=1; salva('ativo');
-          UI.toast('Primeira vez em ' + x.n + ': marca registrada. A partir do próximo treino vale medalha 🏅', true);
+          UI.toast('Primeira vez em ' + x.n + ': marca registrada. A partir do próximo treino vale medalha 🥇', true);
         }
       } else if(prs.length){
         s.pr=prs.map(p=>p[0]);
@@ -2055,7 +2068,7 @@ const ATIVO = {
         prs.forEach(([t,v],i)=>{
           const rotPr=(t==='reps'&&x.t==='tempo')?'Mais tempo':NOM[t];
           const valPr=(t==='reps')? (x.t==='tempo'? fmtTempoEx(v) : Math.round(v)+' reps') : CORE.fmtKg(v)+' kg';
-          const txt='Recorde · '+x.n+': '+rotPr+' '+valPr+' 🏅';
+          const txt='Recorde · '+x.n+': '+rotPr+' '+valPr+' 🥇';
           setTimeout(()=>UI.toast(txt, true), i*1400);
         });
         SOM.pr(); VIB.v([40,60,40]);
@@ -2101,7 +2114,7 @@ const ATIVO = {
       const sk=$('#ta-serk'); if(sk) sk.textContent='Séries';
       const rc=$('#ta-rec'); if(rc){
         const n=CORE.contaRecordes(S.ativo);
-        rc.textContent = n? n+' 🏅' : '0';
+        rc.textContent = n? n+' 🥇' : '0';
       }
     }
     $('#ta-progresso').style.width = tot? Math.min(100, 100*ser/tot)+'%' : '0%';
@@ -2283,7 +2296,7 @@ TELAS.ativo = function(){
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'color:var(--brand2);font-size:15.5px',onclick:()=>UI.vai('exercicio',{id:e.exId})}, x.n),
           h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g),
-          (function(){ const rr=recordeResumo(e.exId); return rr? h('div',{class:'f12',style:'color:#E8B84B;margin-top:2px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',onclick:()=>UI.vai('exercicio',{id:e.exId})}, '🏅 '+rr) : h('span',{style:'display:none'}); })()),
+          (function(){ const rr=recordeResumo(e.exId); return rr? h('div',{class:'f12',style:'color:#E8B84B;margin-top:2px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',onclick:()=>UI.vai('exercicio',{id:e.exId})}, '🥇 '+rr) : h('span',{style:'display:none'}); })()),
         h('button',{class:'btn btn-mini',style:'width:38px',onclick:()=>menuEx(e,ix)},'⋯')),
       h('input',{placeholder:'Notas…',value:e.notas||'',oninput:ev=>{e.notas=ev.target.value;salva('ativo');},style:'margin-bottom:8px;font-size:14px'}),
       (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
@@ -2720,7 +2733,7 @@ TELAS.ranking = function(){
   [['n','Treinos'],['vol','Volume'],['rec','Recordes']].forEach(par=>chips.append(
     h('button',{class:'chip'+(RANK.met===par[0]?' on':''),onclick:()=>{RANK.met=par[0]; UI.refaz();}},par[1])));
   m.appendChild(chips);
-  const fmt=(x)=> RANK.met==='vol'? CORE.fmtKg(x.vol)+' kg' : RANK.met==='rec'? x.rec+' 🏅' : x.n+(x.n===1?' treino':' treinos');
+  const fmt=(x)=> RANK.met==='vol'? CORE.fmtKg(x.vol)+' kg' : RANK.met==='rec'? x.rec+' 🥇' : x.n+(x.n===1?' treino':' treinos');
   const ls=RANK.ordena(RANK.dados(), RANK.met);
   const med=['🥇','🥈','🥉'];
   const card=h('div',{class:'card'});
@@ -2842,7 +2855,7 @@ TELAS.concluido = function({id}){
   const prs=[]; (t.ex||[]).forEach(e=>{ (e.series||[]).forEach(s=>{ if(s.pr&&s.pr.length) prs.push({e,s}); }); });
   if(prs.length){
     const c=h('div',{class:'card',style:'border-color:var(--brand)'},
-      h('div',{class:'secao',style:'margin:0 0 8px'},'🏅 Recordes de hoje ('+prs.length+')'));
+      h('div',{class:'secao',style:'margin:0 0 8px'},'🥇 Recordes de hoje ('+prs.length+')'));
     prs.slice(0,8).forEach(pp=>{ const x=BIB.ex(pp.e.exId);
       c.append(h('div',{class:'linha',style:'padding:6px 0'}, thumbEl(pp.e.exId),
         h('div',{class:'esp'}, h('div',{style:'font-size:14px'},x.n),
@@ -2870,7 +2883,7 @@ TELAS.treinoDet = function({id}){
     h('div',{class:'stats3',style:'flex:1'},
       h('button',{style:'background:none;border:none;text-align:left;padding:0;min-width:0;overflow:hidden',onclick:()=>editaTempoTreino(t)},h('div',{class:'k'},'Tempo ✎'),h('div',{class:'v'},CORE.fmtDur((t.fim-t.inicio)/1000))),
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🏅'))),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🥇'))),
     h('span',{style:'cursor:pointer',onclick:()=>distMuscularFolha(t)}, corpoSVG(gruposDoTreino(t), 92)))));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>{
@@ -2910,9 +2923,9 @@ TELAS.treinoDet = function({id}){
         h('div'),
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? CORE.fmtKg(s.kg)+' kg':'—'),
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='tempo'? fmtTempoEx(s.reps) : String(s.reps), s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
-        h('div',{style:'text-align:center'}, s.pr?'🏅':'')));
+        h('div',{style:'text-align:center'}, s.pr?'🥇':'')));
       if(s.pr && s.pr.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
-        '🏅 '+s.pr.map(p=>PR_ROT[p]||p).join(' · ')));
+        '🥇 '+s.pr.map(p=>PR_ROT[p]||p).join(' · ')));
     });
     m.appendChild(card);
   });
@@ -3172,7 +3185,7 @@ TELAS.exercicio = function({id}){
   if(p && (p.kg||p.vol||p.rm||p.reps)){
     m.appendChild(h('div',{class:'card'},
       h('div',{class:'linha',style:'margin:0 0 10px'},
-        h('div',{class:'secao',style:'margin:0'},'Recordes pessoais 🏅'), h('div',{class:'esp'}),
+        h('div',{class:'secao',style:'margin:0'},'Recordes pessoais 🥇'), h('div',{class:'esp'}),
         p.resetEm? h('div',{class:'f12 mut2'},'desde '+new Date(p.resetEm).toLocaleDateString('pt-BR')):null),
       h('div',{class:'stats3'},
         p.kg? h('div',{style:'cursor:pointer',onclick:()=>prDetalhe(id,'kg')},h('div',{class:'k'},'Maior carga'),h('div',{class:'v'},CORE.fmtKg(p.kg.v)+' kg'),
@@ -3243,7 +3256,7 @@ TELAS.perfil = function(){
     h('div',{class:'stats3',style:'margin-top:14px'},
       h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v',style:'font-size:16px'},nestaSemana.length+'x')),
       h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v',style:'font-size:16px'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:16px'},ts.reduce((a,t)=>a+(t.recordes||0),0)+' 🏅')))));
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:16px'},ts.reduce((a,t)=>a+(t.recordes||0),0)+' 🥇')))));
 
   // gráfico semanal com período e métrica
   const card=h('div',{class:'card'});
@@ -3655,7 +3668,7 @@ const SHARE = {
     if(o.dur) stats.push(['DURAÇÃO', CORE.fmtDur((t.fim-t.inicio)/1000)]);
     if(o.vol) stats.push(['VOLUME', CORE.fmtKg(t.volume)+' kg']);
     if(o.ser){ const ns = (t.ex&&t.ex.length)? CORE.seriesFeitas(t) : (t.series!=null? t.series : 0); stats.push(['SÉRIES', String(ns)]); }
-    if(o.rec && (t.recordes||0)>0) stats.push(['RECORDES', (t.recordes||0)+' 🏅']);
+    if(o.rec && (t.recordes||0)>0) stats.push(['RECORDES', (t.recordes||0)+' 🥇']);
     const duasCol = stats.length>=3;
     const altStats = stats.length? (duasCol? Math.ceil(stats.length/2)*190 : 190) : 0;
     let y = H - 150 - altStats;
@@ -4121,12 +4134,14 @@ function distMuscularFolha(t){
       h('div',{class:'b700',style:'width:26px;text-align:right;font-size:14px'}, String(n))));
   });
   UI.folha('Distribuição muscular',[corpo, tab,
-    h('div',{class:'f12 mut2',style:'margin-top:14px;line-height:1.5'},'Conta as séries válidas concluídas (aquecimento fica de fora). Os músculos acendem conforme o volume.')]);
+    h('div',{class:'f12 mut2',style:'margin-top:14px;line-height:1.5'},'Conta todas as séries concluídas, incluindo aquecimento. Os músculos acendem conforme o volume.')]);
 }
 function gruposDoTreino(t){
   const m=new Map();
   (t.ex||[]).forEach(e=>{
-    const feitas=e.series.filter(s=>s.ok&&s.tipo!=='W').length;
+    // aquecimento CONTA aqui: o músculo foi estimulado. Continua fora do
+    // volume e dos recordes, que é onde ele distorceria o número.
+    const feitas=e.series.filter(s=>s.ok).length;
     if(!feitas) return;
     const x=BIB.ex(e.exId);
     [x.g].concat(x.gs||[]).forEach(g=>m.set(g,(m.get(g)||0)+feitas));
@@ -4527,7 +4542,7 @@ function desenhaAmigo(r, dono, tid){
     h('div',{class:'stats3',style:'flex:1'},
       h('div',{},h('div',{class:'k'},'Tempo'),h('div',{class:'v'},CORE.fmtDur((r.fim-r.inicio)/1000))),
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(r.volume)+' kg')),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(r.recordes||0)+' 🏅'))),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(r.recordes||0)+' 🥇'))),
     gmap.size? corpoSVG(gmap, 92):null)));
   if(gmap.size){
     const tot=[...gmap.values()].reduce((a,b)=>a+b,0);
@@ -4558,9 +4573,9 @@ function desenhaAmigo(r, dono, tid){
           h('div',{style:'text-align:center;font-weight:700'}, s.k!==''&&s.k!=null? CORE.fmtKg(s.k):'—'),
           h('div',{style:'text-align:center;font-weight:700'}, s.r!=null? ((xb&&xb.t==='tempo')? fmtTempoEx(s.r) : String(s.r)):'—',
             s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
-          h('div',{style:'text-align:center'}, s.p?'🏅':'')));
+          h('div',{style:'text-align:center'}, s.p?'🥇':'')));
         if(s.p && s.p.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
-          '🏅 '+s.p.map(x=>PR_ROT[x]||x).join(' · ')));
+          '🥇 '+s.p.map(x=>PR_ROT[x]||x).join(' · ')));
       });
       card.append(h('button',{class:'menu-op',style:'margin-top:4px',onclick:()=>UI.vai('comparaEx',{uid:dono, nome:e.n})},
         h('span',{style:'font-weight:800;font-size:16px;color:var(--brand2)'},'Comparar'), h('span',{class:'esp'}),
@@ -4669,7 +4684,7 @@ TELAS.perfilAmigo = function({uid:alvo}){
         }}, sigo?'Seguindo ✓':'Seguir')),
       h('div',{class:'stats3',style:'margin-top:14px'},
         h('div',{},h('div',{class:'k'},'Treinamentos'),h('div',{class:'v'},its.length+(its.length>=40?'+':''))),
-        h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},recs+' 🏅')),
+        h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},recs+' 🥇')),
         h('div',{},h('div',{class:'k'},'Volume 30d'),h('div',{class:'v'},CORE.fmtKg(vol30)+' kg'))),
       h('div',{class:'f13 mut',style:'margin-top:10px'},
         h('span',{style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguidores', alvo)}, h('b',{id:'pa-segrs'},'…'),' seguidores'),
@@ -5213,7 +5228,7 @@ TELAS.stats = function(){
   const corte=agora()-28*864e5;
   const porGrupo={};
   ts.filter(t=>t.inicio>=corte).forEach(t=>(t.ex||[]).forEach(e=>{
-    const feitas=e.series.filter(s=>s.ok&&s.tipo!=='W').length; if(!feitas) return;
+    const feitas=e.series.filter(s=>s.ok).length; if(!feitas) return;  // idem: aquecimento estimula
     const g=BIB.ex(e.exId).g;
     porGrupo[g]=(porGrupo[g]||0)+feitas;
   }));
@@ -5324,7 +5339,7 @@ TELAS.relatorioMensal = function(){
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(A.vol)+' kg'),delta(A.vol,B.vol,v=>CORE.fmtKg(v)+'kg'))),
     h('div',{class:'stats3'},
       h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v'},A.ser)),
-      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},A.rec+' 🏅')),
+      h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},A.rec+' 🥇')),
       h('div',{},h('div',{class:'k'},'Exercícios'),h('div',{class:'v'},new Set(ts.flatMap(t=>(t.ex||[]).map(e=>e.exId))).size))),
     ant.length? h('div',{class:'f12 mut2',style:'margin-top:10px'},'Comparado a '+new Date(py,pm,1).toLocaleDateString('pt-BR',{month:'long'})):null));
   const g=new Map(); ts.forEach(t=>gruposDoTreino(t).forEach((v,gr)=>g.set(gr,(g.get(gr)||0)+v)));
@@ -5365,7 +5380,7 @@ TELAS.relatorioMensal = function(){
         thumbEl(r.exId),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
-          h('div',{class:'f12 mut'},'🏅 '+r.tipos.map(p=>PR_ROT[p]||p).join(' · ')+((r.kg!==''&&r.kg!=null)? (' · '+CORE.fmtKg(r.kg)+' kg × '+r.reps):(' · '+r.reps+' reps'))))));
+          h('div',{class:'f12 mut'},'🥇 '+r.tipos.map(p=>PR_ROT[p]||p).join(' · ')+((r.kg!==''&&r.kg!=null)? (' · '+CORE.fmtKg(r.kg)+' kg × '+r.reps):(' · '+r.reps+' reps'))))));
     });
     m.appendChild(card);
   }

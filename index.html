@@ -189,9 +189,14 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .feed-bar{position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:3px;background:var(--brand)}
 .fstats{display:flex;gap:8px;margin-bottom:4px}
 .fstat{flex:1;min-width:0;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:11px 10px}
+/* o volume é o dobro dos outros em caracteres: precisa de mais coluna */
+.fstat.f-tempo{flex:1.15}
+.fstat.f-volume{flex:1.4}
+.fstat.f-rec{flex:.8}
 .fstat-ico{display:flex;width:20px;height:20px;color:var(--tx3);margin-bottom:7px}
 .fstat-ico svg{width:20px;height:20px}
-.fstat.rec .fstat-ico{color:var(--brand2)}
+.fstat.rec .fstat-ico{color:#F5B300}
+.fstat.rec .fstat-ico svg{width:22px;height:22px;filter:drop-shadow(0 1px 2px rgba(245,179,0,.35))}
 .fstat-v{font-weight:800;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fstat-k{font-size:11.5px;color:var(--tx3);font-weight:600;margin-top:1px}
 .feed-exs{margin-top:14px}
@@ -397,7 +402,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.13';
+const APP_VER='11.13.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4436,9 +4441,11 @@ function cartaoFeed(i){
   const icoStat=(d)=>({
     tempo:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     volume:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
-    rec:'<circle cx="12" cy="8" r="5"/><path d="M8.5 12.5L7 21l5-2 5 2-1.5-8.5"/>'
+    rec:'<path fill="currentColor" stroke="none" d="M9.1 2H5.9l3.5 7.1c.7-.5 1.6-.8 2.5-.9L9.1 2z"/>'
+       +'<path fill="currentColor" stroke="none" d="M14.9 2h3.2l-3.5 7.1c-.7-.5-1.6-.8-2.5-.9L14.9 2z"/>'
+       +'<path fill="currentColor" stroke="none" fill-rule="evenodd" d="M5.7 15a6.3 6.3 0 1 0 12.6 0 6.3 6.3 0 1 0-12.6 0zM12 11.6l.88 2.19 2.35.16-1.8 1.51.57 2.29L12 16.5l-2 1.25.57-2.29-1.8-1.51 2.35-.16z"/>'
   }[d]);
-  const statCard=(chave,rot,val,destaque)=>h('div',{class:'fstat'+(destaque?' rec':'')},
+  const statCard=(chave,rot,val,destaque)=>h('div',{class:'fstat f-'+chave+(destaque?' rec':'')},
     h('span',{class:'fstat-ico',html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+icoStat(chave)+'</svg>'}),
     h('div',{class:'fstat-v'},val),
     h('div',{class:'fstat-k'},rot));
@@ -4453,7 +4460,7 @@ function cartaoFeed(i){
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
     h('div',{class:'fstats'},
       statCard('tempo','Tempo', CORE.fmtDur((t.fim-t.inicio)/1000)),
-      statCard('volume','Volume', CORE.fmtKg(t.volume)+' kg'),
+      statCard('volume','Volume', CORE.fmtVolCab(t.volume)+' kg'),
       statCard('rec','Recordes', String(t.recordes||0), !!t.recordes)));
   const fotoSlot = i.meu? (i.t.temFoto? FOTOS.lazy(i.dono, i.id):null) : ((i.r&&i.r.f)? FOTOS.lazy(i.dono, i.id):null);
   if(fotoSlot) card.append(fotoSlot);

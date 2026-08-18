@@ -39,10 +39,23 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--tx);
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
   font-size:16px; overscroll-behavior-y:none}
 button{font-family:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;font-size:inherit}
+/* iOS: o valor do input de hora vive num pseudo-elemento com altura e fonte
+   próprias, então o campo saía mais alto e com tipografia diferente do campo
+   de número logo acima. Aqui os dois são forçados à MESMA caixa. */
+input[type="time"]{-webkit-appearance:none;appearance:none;display:block;box-sizing:border-box;
+  text-align:center;font-size:17px;font-weight:700;line-height:20px;padding:10px 12px}
+input[type="time"]::-webkit-date-and-time-value{
+  text-align:center;margin:0;padding:0;line-height:20px;height:20px;font-size:17px;font-weight:700}
+input[type="time"]::-webkit-datetime-edit{padding:0;margin:0;line-height:20px}
+input[type="time"]::-webkit-datetime-edit-fields-wrapper{padding:0;margin:0}
+input[type="time"]::-webkit-datetime-edit-hour-field,
+input[type="time"]::-webkit-datetime-edit-minute-field,
+input[type="time"]::-webkit-datetime-edit-text{padding:0;margin:0}
+input[type="time"]::-webkit-calendar-picker-indicator{display:none;-webkit-appearance:none}
 input,select,textarea{font-family:inherit;font-size:inherit;color:var(--tx);background:var(--surf2);
   border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px;outline:none;width:100%}
 input:focus,textarea:focus{border-color:var(--brand)}
-input[type=number]{-moz-appearance:textfield;text-align:center;font-weight:700;font-size:17px}
+input[type=number]{-moz-appearance:textfield;text-align:center;font-weight:700;font-size:17px;line-height:20px}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 ::placeholder{color:var(--tx3)}
 h1,h2,h3{margin:0}
@@ -402,7 +415,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.13.1';
+const APP_VER='11.13.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2133,7 +2146,7 @@ const ATIVO = {
     const pad=n=>String(n).padStart(2,'0');
     const inpHora=h('input',{type:'time',value:pad(d.getHours())+':'+pad(d.getMinutes())});
     UI.folha('Ajustar tempo do treino',[
-      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Comeceçou antes e esqueceu de iniciar? Ajuste a duração já decorrida ou o horário de início.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Começou antes e esqueceu de iniciar? Ajuste a duração já decorrida ou o horário de início.'),
       h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Duração até agora (minutos)'), inpDur,
       h('div',{style:'height:12px'}),
       h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Ou horário de início'), inpHora,

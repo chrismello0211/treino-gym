@@ -178,7 +178,7 @@ canvas.graf{width:100%;height:170px;display:block}
 #ta-progresso{position:fixed;top:0;left:0;height:3px;background:var(--brand);z-index:46;width:0%;transition:width .3s}
 
 /* detalhe exercício */
-.ex-hero{width:100%;max-width:340px;aspect-ratio:1;border-radius:20px;background:#fff;display:block;margin:0 auto 12px;object-fit:cover}
+.ex-hero{width:100%;max-width:340px;aspect-ratio:1;border-radius:20px;background:#fff;display:block;margin:0 auto 12px;object-fit:cover;cursor:zoom-in}
 
 /* utilidades */
 .grade2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -290,6 +290,13 @@ img.avatar{object-fit:cover}
 .cmp-bar>div{height:100%;border-radius:8px}
 .cmp-val{font-size:12px;font-weight:800;margin-left:8px;min-width:64px;text-align:right}
 .rotpub{min-width:150px;max-width:150px;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:12px;flex-shrink:0;text-align:left}
+.rotpub-past{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;color:var(--tx2);
+  letter-spacing:.03em;text-transform:uppercase;padding:2px 2px 7px}
+.rotpub-past.sep{margin-top:12px;padding-top:13px;border-top:1px solid var(--line)}
+.rotpub-l{display:flex;align-items:center;gap:10px;width:100%;background:var(--surf2);
+  border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:7px;text-align:left}
+.rotpub-l:last-child{margin-bottom:0}
+.rotpub-seta{color:var(--tx3);font-size:19px;line-height:1;flex-shrink:0}
 /* glass iOS */
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)){
   #topo{background:rgba(11,13,16,.72)!important;-webkit-backdrop-filter:saturate(1.4) blur(16px);backdrop-filter:saturate(1.4) blur(16px)}
@@ -415,7 +422,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.13.2';
+const APP_VER='11.14.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1176,6 +1183,19 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function agora(){ return Date.now(); }
 function dataCurta(ts){ return new Date(ts).toLocaleDateString('pt-BR',{weekday:'short', day:'numeric', month:'short'}); }
 function dataLonga(ts){ const s=new Date(ts).toLocaleDateString('pt-BR',{weekday:'long', day:'numeric', month:'long'}); return s[0].toUpperCase()+s.slice(1); }
+// melhor imagem de um exercício: foto própria > gif dele > gif do
+// equivalente com mesmo nome na biblioteca
+function srcEx(exId){
+  const xf=BIB.porId[exId];
+  if(xf && xf.foto) return xf.foto;
+  let gifId=exId;
+  if(xf && xf.custom){
+    const nn = xf._nn || BIB.norm(xf.n);
+    const eq = BIB.lista.find(q=>!q.custom && (q._nn===nn || (q._nn && q._nn.indexOf(nn+' (')===0)));
+    if(eq) gifId=eq.id;
+  }
+  return BIB.gif(gifId);
+}
 function thumbEl(exId, tam){
   const xf=BIB.porId[exId];
   if(xf && xf.foto) return h('img',{class:'thumb', src:xf.foto, alt:'', loading:'lazy'});
@@ -1904,7 +1924,9 @@ const ROT = {
       h('button',{class:'btn btn-p',onclick:()=>{
         const n=(inp.value||'').trim(); if(!n) return;
         const id=uid(); S.pastas[id]={id,nome:n,ordem:Object.keys(S.pastas).length,atualizado:agora()};
-        salva('pastas'); NET.agenda('pastas/'+id, S.pastas[id]); UI.fechaFolha(); UI.refaz();
+        salva('pastas'); NET.agenda('pastas/'+id, S.pastas[id]);
+        try{ ROTPUB.syncTudo(); }catch(e){}
+        UI.fechaFolha(); UI.refaz();
       }},'Criar pasta')]);
   },
   menuPasta(p){
@@ -3185,8 +3207,10 @@ TELAS.exercicio = function({id}){
   }}, (S.custom[id].ocultoPub? 'Mostrar para amigos' : 'Ocultar dos amigos'),
      h('span',{class:'esp'}),
      h('span',{class:'f12 mut'}, S.custom[id].ocultoPub? 'oculto no perfil' : 'visível no perfil')));
-  const src=BIB.gif(id);
-  if(src) m.appendChild(h('img',{class:'ex-hero',src,alt:x.n}));
+  const src=srcEx(id);
+  if(src) m.appendChild(h('img',{class:'ex-hero fzoom',src,alt:x.n,
+    title:'Toque para ampliar',
+    onerror:function(){ this.remove(); }}));
   m.appendChild(h('div',{style:'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px'},
     h('span',{class:'chip on'},GRUPOS[x.g]||x.g),
     ...(x.gs||[]).map(g=>h('span',{class:'chip'},GRUPOS[g]||g)),
@@ -4718,15 +4742,48 @@ TELAS.perfilAmigo = function({uid:alvo}){
     m.appendChild(rotBox);
     NET.get('/rotinasPub/'+alvo).then(rp=>{
       if(UI.telaAtual!=='perfilAmigo') return;
-      const rots=Object.entries(rp||{}).map(([rid,r])=>Object.assign({rid},r)).filter(r=>r && r.titulo);
+      const dados = rp || {};
+      const pastas = dados._p || {};
+      const rots = Object.entries(dados)
+        .filter(([k,r])=>k!=='_p' && r && r.titulo)
+        .map(([rid,r])=>Object.assign({rid},r));
       if(!rots.length) return;
-      const scroll=h('div',{class:'sug-scroll'});
-      rots.sort((a,b)=>(b.atualizado||0)-(a.atualizado||0)).forEach(r=>{
-        scroll.append(h('button',{class:'rotpub',onclick:()=>abreRotinaPub(alvo, r)},
-          h('div',{class:'b700',style:'font-size:14px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},r.titulo),
-          h('div',{class:'f12 mut'},(r.ex||[]).length+' exercícios')));
+
+      // respeita a ordem que a pessoa usa no app dela
+      const ord = r => (r.ordem==null ? 0 : r.ordem);
+      const porOrdem = (a,b)=> (ord(a)-ord(b)) || ((a.criado||0)-(b.criado||0));
+      const idsPasta = Object.keys(pastas);
+      const grupos = [];
+      idsPasta
+        .sort((a,b)=>((pastas[a].o||0)-(pastas[b].o||0)))
+        .forEach(pid=>{
+          const lista = rots.filter(r=>r.pasta===pid).sort(porOrdem);
+          if(lista.length) grupos.push({nome: pastas[pid].n || 'Pasta', lista});
+        });
+      // fichas soltas (e as de pasta que nao veio) ficam no fim, sem cabeçalho
+      const soltas = rots.filter(r=>!r.pasta || idsPasta.indexOf(r.pasta)<0).sort(porOrdem);
+      if(soltas.length) grupos.push({nome:null, lista:soltas});
+
+      const linha = r => h('button',{class:'rotpub-l',onclick:()=>abreRotinaPub(alvo, r)},
+        h('div',{style:'flex:1;min-width:0;text-align:left'},
+          h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, r.titulo),
+          h('div',{class:'f12 mut',style:'margin-top:2px'}, (r.ex||[]).length+' exercício'+((r.ex||[]).length===1?'':'s'))),
+        h('span',{class:'rotpub-seta'},'\u203a'));
+
+      const card = h('div',{class:'card'},
+        h('div',{class:'secao',style:'margin:0 0 10px'},
+          'Rotinas', h('span',{class:'esp'}),
+          h('span',{class:'f12 mut2',style:'font-weight:600'}, rots.length+' ficha'+(rots.length===1?'':'s'))));
+      grupos.forEach((g,i)=>{
+        if(g.nome) card.append(h('div',{class:'rotpub-past'+(i?' sep':'')},
+          h('span',{style:'font-size:13px'},'\ud83d\udcc1'),
+          h('span',{style:'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, g.nome),
+          h('span',{class:'esp'}),
+          h('span',{class:'f12 mut2',style:'font-weight:600;flex-shrink:0'}, String(g.lista.length))));
+        else if(i) card.append(h('div',{class:'rotpub-past sep mut2',style:'font-weight:600'},'Sem pasta'));
+        g.lista.forEach(r=>card.append(linha(r)));
       });
-      rotBox.append(h('div',{class:'card'}, h('div',{class:'secao',style:'margin:0 0 10px'},'Rotinas'), scroll));
+      rotBox.append(card);
     }).catch(()=>{});
     if(its.length){
       m.appendChild(h('div',{class:'secao'},'Treinamentos recentes'));
@@ -5418,6 +5475,7 @@ TELAS.relatorioMensal = function(){
 /* ---------- rotinas públicas no perfil ---------- */
 function pubRotina(r){
   return { titulo:r.titulo, atualizado:agora(),
+    pasta:r.pasta||null, ordem:(r.ordem==null? null : r.ordem), criado:r.criado||null,
     ex:(r.ex||[]).map(e=>{ const x=BIB.ex(e.exId);
       return { exId:e.exId, n:x.n, g:x.g, e:x.e, t:x.t, cst:x.custom?1:0,
         notas:(e.notas||'').slice(0,300)||null,
@@ -5464,7 +5522,8 @@ const EXSVIEW = {
         EXSVIEW.copia(x); this.textContent='Copiado ✓'; this.disabled=true; this.className='btn btn-mini';
       }}, arquivado? 'Restaurar' : (semFoto? 'Pegar foto' : (jaTenho? 'No acervo' : 'Copiar')));
       return h('div',{class:'med-row'},
-        (x.foto? h('img',{src:x.foto,loading:'lazy',style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0'})
+        (x.foto? h('img',{class:'fzoom',src:x.foto,loading:'lazy',title:'Toque para ampliar',
+                  style:'width:40px;height:40px;border-radius:9px;object-fit:cover;flex-shrink:0;cursor:zoom-in'})
                : h('div',{style:'width:40px;height:40px;border-radius:9px;background:var(--surf3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px'},'🏋️')),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},x.n),
@@ -6129,9 +6188,34 @@ async function hidrataSocial(){
 }
 const ROTPUB = {
   pode(){ return !!(S.auth && S.perfil?.user && S.cfg.rotPub!==false); },
-  envia(r){ if(!ROTPUB.pode()||!r) return; NET.agenda('/rotinasPub/'+S.auth.uid+'/'+r.id, pubRotina(r)); },
+  envia(r){
+    if(!ROTPUB.pode()||!r) return;
+    if(r.apagada){ ROTPUB.remove(r.id); return; }   // apagada sai, nao entra
+    NET.agenda('/rotinasPub/'+S.auth.uid+'/'+r.id, pubRotina(r));
+  },
   remove(id){ if(S.auth && S.perfil?.user) NET.agenda('/rotinasPub/'+S.auth.uid+'/'+id, null); },
-  syncTudo(){ if(!ROTPUB.pode()) return; Object.values(S.rotinas).forEach(r=>ROTPUB.envia(r)); }
+  // as pastas viram um nó reservado, pra quem visita ver a organização real
+  pastas(){
+    const ps={};
+    Object.values(S.pastas||{}).forEach(p=>{
+      if(!p || p.apagada || !p.id) return;
+      const usada=Object.values(S.rotinas||{}).some(r=>r && !r.apagada && r.pasta===p.id);
+      if(usada) ps[p.id]={n:String(p.nome||'Pasta').slice(0,40), o:p.ordem||0};
+    });
+    return ps;
+  },
+  async syncTudo(){
+    if(!ROTPUB.pode()) return;
+    const ativas={};
+    Object.values(S.rotinas||{}).forEach(r=>{ if(r && !r.apagada && r.id){ ativas[r.id]=1; ROTPUB.envia(r); } });
+    const ps=ROTPUB.pastas();
+    NET.agenda('/rotinasPub/'+S.auth.uid+'/_p', Object.keys(ps).length? ps : null);
+    // faxina: tira da nuvem o que nao existe mais aqui
+    try{
+      const nuv=await NET.get('/rotinasPub/'+S.auth.uid);
+      Object.keys(nuv||{}).forEach(k=>{ if(k!=='_p' && !ativas[k]) ROTPUB.remove(k); });
+    }catch(e){}
+  }
 };
 
 /* ---------- EXPLORAR: pacotes de rotinas ---------- */

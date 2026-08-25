@@ -95,6 +95,8 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
 .chip.on{background:var(--brand-dim);border-color:var(--brand);color:var(--brand2)}
 .secao{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin:20px 2px 10px}
 .thumb{width:52px;height:52px;border-radius:50%;background:#fff;flex-shrink:0;object-fit:cover;border:2px solid var(--line)}
+/* a imagem grande vem de foto do usuário: não deixar o navegador borrar */
+.ex-hero{image-rendering:auto}
 .thumb-ini{width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
   font-weight:800;font-size:17px;background:var(--surf3);border:2px solid var(--line);color:var(--brand2)}
 .item{display:flex;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--surf2)}
@@ -290,13 +292,29 @@ img.avatar{object-fit:cover}
 .cmp-bar>div{height:100%;border-radius:8px}
 .cmp-val{font-size:12px;font-weight:800;margin-left:8px;min-width:64px;text-align:right}
 .rotpub{min-width:150px;max-width:150px;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:12px;flex-shrink:0;text-align:left}
-.rotpub-past{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:800;color:var(--tx2);
-  letter-spacing:.03em;text-transform:uppercase;padding:2px 2px 7px}
-.rotpub-past.sep{margin-top:12px;padding-top:13px;border-top:1px solid var(--line)}
-.rotpub-l{display:flex;align-items:center;gap:10px;width:100%;background:var(--surf2);
-  border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:7px;text-align:left}
+.rotpub-cab{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 2px 12px}
+.rotpub-cab-t{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3)}
+.rotpub-cab-n{font-size:12px;font-weight:700;color:var(--tx3);opacity:.75;flex-shrink:0}
+.rotpub-past{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:var(--tx2);
+  letter-spacing:.04em;text-transform:uppercase;padding:0 2px 9px}
+.rotpub-past.sep{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.rotpub-past-ico{font-size:12px;line-height:1;flex-shrink:0;opacity:.9}
+.rotpub-past-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rotpub-past-q{margin-left:auto;flex-shrink:0;font-size:11px;font-weight:700;color:var(--tx3);
+  background:var(--surf3);border-radius:20px;padding:2px 8px;letter-spacing:0}
+.rotpub-l{display:flex;align-items:center;gap:11px;width:100%;background:var(--surf2);
+  border:1px solid var(--line);border-radius:13px;padding:12px 13px 12px 0;margin-bottom:8px;
+  text-align:left;overflow:hidden;transition:background .12s}
 .rotpub-l:last-child{margin-bottom:0}
-.rotpub-seta{color:var(--tx3);font-size:19px;line-height:1;flex-shrink:0}
+.rotpub-l:active{background:var(--surf3)}
+.rotpub-bar{width:3px;align-self:stretch;background:var(--brand);border-radius:0 3px 3px 0;
+  flex-shrink:0;opacity:.85}
+.rotpub-txt{flex:1;min-width:0}
+.rotpub-tit{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rotpub-sub{font-size:12px;color:var(--tx3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rotpub-q{flex-shrink:0;font-size:12px;font-weight:800;color:var(--tx2);background:var(--surf3);
+  border-radius:8px;padding:4px 8px;line-height:1}
+.rotpub-seta{color:var(--tx3);font-size:18px;line-height:1;flex-shrink:0;margin-left:-2px}
 /* glass iOS */
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)){
   #topo{background:rgba(11,13,16,.72)!important;-webkit-backdrop-filter:saturate(1.4) blur(16px);backdrop-filter:saturate(1.4) blur(16px)}
@@ -422,7 +440,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.14.1';
+const APP_VER='11.15';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1710,8 +1728,9 @@ const PICKER = {
           inp.onchange=async()=>{
             const f=inp.files&&inp.files[0]; if(!f){ inp.remove(); return; }
             try{
-              fotoB64=await IMG.comprime(f, 256, 0.75);
-              if(fotoB64.length>70000) fotoB64=await IMG.comprime(f, 192, 0.68);
+              fotoB64=await IMG.comprime(f, 720, 0.82);
+              if(fotoB64.length>170000) fotoB64=await IMG.comprime(f, 560, 0.78);
+              if(fotoB64.length>170000) fotoB64=await IMG.comprime(f, 420, 0.72);
               render();
             }catch(e){ UI.toast('Não consegui ler a imagem'); }
             inp.remove();
@@ -3174,8 +3193,9 @@ TELAS.exercicio = function({id}){
     inp.onchange=async()=>{
       const f=inp.files&&inp.files[0]; if(!f){ inp.remove(); return; }
       try{
-        let b64=await IMG.comprime(f, 256, 0.75);
-        if(b64.length>70000) b64=await IMG.comprime(f, 192, 0.68);
+        let b64=await IMG.comprime(f, 720, 0.82);
+        if(b64.length>170000) b64=await IMG.comprime(f, 560, 0.78);
+        if(b64.length>170000) b64=await IMG.comprime(f, 420, 0.72);
         S.custom[id].foto=b64; S.custom[id].atualizado=agora();
         salva('custom'); NET.agenda('custom/'+id, S.custom[id]); EXSPUB.publica(S.custom[id]);
         UI.refaz(); UI.toast('Foto do exercício atualizada ✓', true);
@@ -3208,9 +3228,23 @@ TELAS.exercicio = function({id}){
      h('span',{class:'esp'}),
      h('span',{class:'f12 mut'}, S.custom[id].ocultoPub? 'oculto no perfil' : 'visível no perfil')));
   const src=srcEx(id);
-  if(src) m.appendChild(h('img',{class:'ex-hero fzoom',src,alt:x.n,
-    title:'Toque para ampliar',
-    onerror:function(){ this.remove(); }}));
+  if(src){
+    const hero=h('img',{class:'ex-hero fzoom',src,alt:x.n,
+      title:'Toque para ampliar',
+      onerror:function(){ this.remove(); }});
+    m.appendChild(hero);
+    // foto do próprio usuário salva em versão antiga: 256px, fica ruim ampliada
+    if(x.custom && x.foto){
+      const avisa=()=>{
+        if(!hero.naturalWidth || hero.naturalWidth>=560) return;
+        m.insertBefore(h('div',{class:'f12 mut2',style:'text-align:center;margin:-6px 0 12px;line-height:1.5'},
+          podeFoto
+            ? 'Foto em baixa resolução. Toque em “Alterar foto do exercício” para reenviar com qualidade.'
+            : 'Foto em baixa resolução (enviada em uma versão antiga do app).'), hero.nextSibling);
+      };
+      if(hero.complete) avisa(); else hero.onload=avisa;
+    }
+  }
   m.appendChild(h('div',{style:'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px'},
     h('span',{class:'chip on'},GRUPOS[x.g]||x.g),
     ...(x.gs||[]).map(g=>h('span',{class:'chip'},GRUPOS[g]||g)),
@@ -4764,23 +4798,45 @@ TELAS.perfilAmigo = function({uid:alvo}){
       const soltas = rots.filter(r=>!r.pasta || idsPasta.indexOf(r.pasta)<0).sort(porOrdem);
       if(soltas.length) grupos.push({nome:null, lista:soltas});
 
-      const linha = r => h('button',{class:'rotpub-l',onclick:()=>abreRotinaPub(alvo, r)},
-        h('div',{style:'flex:1;min-width:0;text-align:left'},
-          h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, r.titulo),
-          h('div',{class:'f12 mut',style:'margin-top:2px'}, (r.ex||[]).length+' exercício'+((r.ex||[]).length===1?'':'s'))),
-        h('span',{class:'rotpub-seta'},'\u203a'));
+      // os músculos que a ficha trabalha, do mais presente pro menos:
+      // diz mais sobre a rotina do que a contagem de exercícios
+      const musculos = r => {
+        const c={};
+        (r.ex||[]).forEach(e=>{ const g=e && e.g; if(g && GRUPOS[g]) c[g]=(c[g]||0)+1; });
+        const ord=Object.keys(c).sort((a,b)=>c[b]-c[a]);
+        const nomes=[];
+        ord.forEach(g=>{ const nm=GRUPOS[g]; if(nomes.indexOf(nm)<0) nomes.push(nm); });
+        // 3 grupos se couber; nomes longos (Panturrilha, Posteriores) viram 2
+        const tres=nomes.slice(0,3).join(' \u00b7 ');
+        return tres.length<=30 ? tres : nomes.slice(0,2).join(' \u00b7 ');
+      };
+      const linha = r => {
+        const n=(r.ex||[]).length;
+        const mus=musculos(r);
+        return h('button',{class:'rotpub-l',onclick:()=>abreRotinaPub(alvo, r)},
+          h('span',{class:'rotpub-bar'}),
+          h('div',{class:'rotpub-txt'},
+            h('div',{class:'rotpub-tit'}, r.titulo),
+            h('div',{class:'rotpub-sub'}, mus || (n+' exercício'+(n===1?'':'s')))),
+          h('span',{class:'rotpub-q'}, n+' ex'),
+          h('span',{class:'rotpub-seta'},'\u203a'));
+      };
 
       const card = h('div',{class:'card'},
-        h('div',{class:'secao',style:'margin:0 0 10px'},
-          'Rotinas', h('span',{class:'esp'}),
-          h('span',{class:'f12 mut2',style:'font-weight:600'}, rots.length+' ficha'+(rots.length===1?'':'s'))));
+        h('div',{class:'rotpub-cab'},
+          h('span',{class:'rotpub-cab-t'},'Rotinas'),
+          h('span',{class:'rotpub-cab-n'}, rots.length+' ficha'+(rots.length===1?'':'s'))));
+      const temPasta = grupos.some(g=>g.nome);
       grupos.forEach((g,i)=>{
         if(g.nome) card.append(h('div',{class:'rotpub-past'+(i?' sep':'')},
-          h('span',{style:'font-size:13px'},'\ud83d\udcc1'),
-          h('span',{style:'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, g.nome),
-          h('span',{class:'esp'}),
-          h('span',{class:'f12 mut2',style:'font-weight:600;flex-shrink:0'}, String(g.lista.length))));
-        else if(i) card.append(h('div',{class:'rotpub-past sep mut2',style:'font-weight:600'},'Sem pasta'));
+          h('span',{class:'rotpub-past-ico'},'\ud83d\udcc1'),
+          h('span',{class:'rotpub-past-n'}, g.nome),
+          h('span',{class:'rotpub-past-q'}, String(g.lista.length))));
+        // "Sem pasta" só faz sentido quando existe pasta pra contrastar
+        else if(temPasta) card.append(h('div',{class:'rotpub-past'+(i?' sep':'')},
+          h('span',{class:'rotpub-past-ico'},'\u2022'),
+          h('span',{class:'rotpub-past-n'},'Sem pasta'),
+          h('span',{class:'rotpub-past-q'}, String(g.lista.length))));
         g.lista.forEach(r=>card.append(linha(r)));
       });
       rotBox.append(card);

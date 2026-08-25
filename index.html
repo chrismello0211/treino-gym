@@ -274,10 +274,21 @@ body.claro .musc .m{fill:#D9DEE5}
 .sug-card{min-width:132px;max-width:132px;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:14px 10px 12px;position:relative;flex-shrink:0}
 .sug-card .btn{width:100%}
 .sug-x{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--tx3);font-size:13px;padding:4px}
-.reo-row{display:flex;align-items:center;gap:12px;height:52px;margin-bottom:8px;background:var(--surf2);border:1px solid var(--line);border-radius:12px;padding:0 6px 0 12px;user-select:none;transition:transform .15s}
+/* toque longo em elemento clicável não pode abrir o menu de seleção do iOS.
+   Campos de texto e conteúdo copiável ficam de fora desta regra. */
+button,.chip,.tab,.menu-op,.item,.med-row,.srow,.stipo,.scheck,.fstat,.rotpub-l,
+.reo-row,.drag-cab,.thumb,.secao,#tabbar,#topo{
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,select,.f13.mut,.f12.mut,.copiavel{
+  -webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default}
+.reo-row{display:flex;align-items:center;gap:12px;height:52px;margin-bottom:8px;background:var(--surf2);border:1px solid var(--line);border-radius:12px;padding:0 6px 0 12px;transition:transform .15s;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:pan-y}
+.reo-row *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .reo-row .thumb{width:38px;height:38px}
-.reo-h{font-size:22px;color:var(--tx3);padding:10px 12px;touch-action:none;cursor:grab;flex-shrink:0}
+.reo-h{font-size:22px;color:var(--tx3);padding:10px 14px;touch-action:none;cursor:grab;flex-shrink:0;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .reo-drag{transition:none;position:relative;z-index:6;box-shadow:0 8px 22px rgba(0,0,0,.55);background:var(--surf3)}
+body.arrastando,body.arrastando *{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important}
 .ntf-dot{position:absolute;top:6px;right:7px;width:10px;height:10px;border-radius:50%;background:var(--brand);display:none}
 img.avatar{object-fit:cover}
 .foto-post{width:100%;max-height:340px;object-fit:cover;border-radius:14px;display:block;margin:2px 0 10px;background:var(--surf2)}
@@ -440,7 +451,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.15';
+const APP_VER='11.15.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3669,6 +3680,9 @@ const FOTOVIEW={
   },
   _wh(ev){ ev.preventDefault(); FOTOVIEW._zoomEm(ev.clientX, ev.clientY, FOTOVIEW.sc*(ev.deltaY<0? 1.15:0.87), false); }
 };
+document.addEventListener('pointerup', ()=>{
+  if(document.body.classList.contains('arrastando')) document.body.classList.remove('arrastando');
+}, {passive:true});
 document.addEventListener('click', ev=>{
   if(FOTOVIEW.el) return;
   const im=ev.target && ev.target.closest && ev.target.closest('img.foto-post, img.fzoom');
@@ -4135,6 +4149,9 @@ function reordenar(lista, aoCommit){
       const alca=row.querySelector('.reo-h');
       alca.addEventListener('pointerdown', ev=>{
         ev.preventDefault();
+        // o iOS pode ter iniciado uma seleção antes do CSS agir: desfaz
+        try{ const sl=window.getSelection&&window.getSelection(); if(sl&&sl.removeAllRanges) sl.removeAllRanges(); }catch(e){}
+        document.body.classList.add('arrastando');
         const iIni=rows.indexOf(row); let cur=iIni;
         const y0=ev.clientY;
         row.classList.add('reo-drag');
@@ -4156,6 +4173,7 @@ function reordenar(lista, aoCommit){
         let solto=false;
         const solta=()=>{
           if(solto) return; solto=true;
+          document.body.classList.remove('arrastando');
           document.removeEventListener('pointermove',move);
           document.removeEventListener('pointerup',solta);
           document.removeEventListener('pointercancel',solta);

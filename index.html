@@ -451,7 +451,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.15.1';
+const APP_VER='11.16';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2591,17 +2591,30 @@ function notaFixaFolha(exId){
 const PROJ={
   base(exId){
     const ts=Object.values(S.treinos).filter(t=>!t.apagado).sort((a,b)=>b.inicio-a.inicio);
-    for(const t of ts){
-      const e=(t.ex||[]).find(q=>q.exId===exId); if(!e) continue;
-      let best=null;
+    let melhor=null, recente=null;
+    ts.forEach(t=>{
+      const e=(t.ex||[]).find(q=>q.exId===exId); if(!e) return;
+      let bt=null;
       (e.series||[]).forEach(s=>{ if(s.tipo==='W') return;
         const kg=Number(s.kg)||0, reps=Number(s.reps)||0;
-        const rm=CORE.est1RM(kg,reps); if(rm && (!best||rm>best.rm)) best={kg,reps,rm,quando:t.inicio}; });
-      if(best) return best;
-    }
+        const rm=CORE.est1RM(kg,reps);
+        if(rm && (!bt || rm>bt.rm)) bt={kg,reps,rm,quando:t.inicio};
+      });
+      if(!bt) return;
+      if(!recente) recente=bt;                 // ts vem do mais novo pro mais antigo
+      if(!melhor || bt.rm>melhor.rm) melhor=bt;
+    });
+    // o recorde guardado pode ter vindo de treino que não está no histórico local
     const p=S.prs[exId];
-    if(p && p.rm && Number(p.rm.v)) return {kg:0, reps:0, rm:Number(p.rm.v), quando:null, soPR:true};
-    return null;
+    const rmPR = (p && p.rm) ? (Number(p.rm.v)||0) : 0;
+    if(rmPR && (!melhor || rmPR > melhor.rm+0.05)){
+      melhor={kg:0, reps:0, rm:rmPR, quando:(p.rm.data||null), soPR:true};
+    }
+    if(!melhor) return null;
+    melhor.recente = recente;
+    // o julgamento usa a melhor marca; os atalhos partem de onde você está hoje
+    melhor.kgAtual = (recente && recente.kg) || melhor.kg || 0;
+    return melhor;
   },
   repsCom(rm, alvo){
     if(!rm || !alvo || alvo<=0) return null;
@@ -2623,7 +2636,7 @@ const PROJ={
     const b=PROJ.base(exId);
     if(!b){ UI.toast('Treine esse exercício pelo menos uma vez pra eu ter base de cálculo'); return; }
     const x=BIB.ex(exId);
-    const baseKg = b.kg || Math.round((b.rm/(1+8/30))*2)/2;
+    const baseKg = b.kgAtual || b.kg || Math.round((b.rm/(1+8/30))*2)/2;
     const inp=h('input',{type:'text',inputmode:'decimal',placeholder:'Peso que você quer testar (kg)'});
     const chips=h('div',{style:'display:flex;gap:8px;margin:12px 0 0;flex-wrap:wrap'});
     const res=h('div',{style:'margin-top:14px'});
@@ -2642,11 +2655,22 @@ const PROJ={
     [2.5,5,7.5].forEach(inc=>{ const alvo=Math.round((baseKg+inc)*2)/2;
       chips.append(h('button',{class:'chip',onclick:()=>{ inp.value=String(alvo); pinta(); }},'+'+inc+' → '+alvo+' kg')); });
     UI.folha('E se eu subir o peso?',[
-      h('div',{class:'f13 mut',style:'line-height:1.6;margin-bottom:4px'},
-        'Sua base no '+x.n+': '+(b.soPR? ('1RM estimado de '+CORE.fmtKg(b.rm)+' kg (recorde)') :
-          (CORE.fmtKg(b.kg)+' kg × '+b.reps+' reps'+(b.quando? ' ('+new Date(b.quando).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+')':'')+' · 1RM estimado ~'+CORE.fmtKg(b.rm)+' kg'))),
+      (function(){
+        const dt=q=> q? (' ('+new Date(q).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+')') : '';
+        const cab=[h('div',{class:'f13 mut',style:'line-height:1.6'},
+          'Sua melhor marca no '+x.n+': '+(b.soPR
+            ? ('1RM estimado de '+CORE.fmtKg(b.rm)+' kg'+dt(b.quando))
+            : (CORE.fmtKg(b.kg)+' kg × '+b.reps+' reps'+dt(b.quando)+' · 1RM estimado ~'+CORE.fmtKg(b.rm)+' kg')))];
+        // se o último treino foi mais leve, mostra também: o cálculo usa a melhor,
+        // mas a pessoa precisa saber de onde os atalhos partem
+        if(b.recente && (!b.quando || b.recente.quando!==b.quando) && b.recente.rm < b.rm-0.05){
+          cab.push(h('div',{class:'f12 mut2',style:'line-height:1.5;margin-top:3px'},
+            'Último treino: '+CORE.fmtKg(b.recente.kg)+' kg × '+b.recente.reps+' reps'+dt(b.recente.quando)));
+        }
+        return h('div',{style:'margin-bottom:4px'}, ...cab);
+      })(),
       inp, chips, res,
-      h('div',{class:'f12 mut2',style:'margin-top:16px;line-height:1.5'},'Estimativa pela fórmula de Epley com base no seu último desempenho. Funciona melhor entre 2 e 12 repetições. Escuta teu corpo sempre.')]);
+      h('div',{class:'f12 mut2',style:'margin-top:16px;line-height:1.5'},'Estimativa pela fórmula de Epley com base na sua melhor série registrada. Funciona melhor entre 2 e 12 repetições. Dia ruim acontece: escuta teu corpo sempre.')]);
     pinta();
   }
 };

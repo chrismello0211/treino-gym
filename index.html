@@ -451,7 +451,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.16';
+const APP_VER='11.16.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1335,6 +1335,7 @@ const UI = {
   },
   fechaFolha(){
     $('#veu').classList.remove('on'); $('#folha').classList.remove('on'); document.body.style.overflow='';
+    try{ if(typeof recuperaViewport==='function') setTimeout(()=>recuperaViewport(), 200); }catch(e){}
     const fn=UI._aoFechar; UI._aoFechar=null;
     if(fn){ try{ fn(); }catch(e){} }
   }
@@ -1369,7 +1370,10 @@ $('#veu').addEventListener('click', UI.fechaFolha);
     }
   }, {passive:true});
 })();
-$$('#tabbar .tab').forEach(t=>t.addEventListener('click', ()=>{ UI.pilha=[]; UI.vai(t.dataset.tab, null, false); }));
+$$('#tabbar .tab').forEach(t=>t.addEventListener('click', ()=>{
+  try{ if(typeof recuperaViewport==='function') recuperaViewport(true); }catch(e){}
+  UI.pilha=[]; UI.vai(t.dataset.tab, null, false);
+}));
 
 /* ---------- sons ---------- */
 const SOM = {
@@ -2719,6 +2723,10 @@ function diagnostico(){
     'Treinos: '+Object.keys(S.treinos).length+' · Rotinas: '+rots.length+' ativas de '+Object.keys(S.rotinas).length,
     'Pastas: '+vivas.size+' · Rotinas em pasta inexistente: '+orfas.length+(orfas.length? ' ('+orfas.map(r=>r.titulo).join(', ')+')':''),
     'Exercícios criados: '+Object.keys(S.custom||{}).length,
+    'Tela: '+window.innerWidth+'x'+window.innerHeight
+      +(window.visualViewport? (' · visivel '+Math.round(visualViewport.width)+'x'+Math.round(visualViewport.height)
+        +' · sobra '+Math.round(Math.max(0,window.innerHeight-visualViewport.height-visualViewport.offsetTop))+'px'
+        +(Math.max(0,window.innerHeight-visualViewport.height-visualViewport.offsetTop)>60? ' <<< VIEWPORT PRESO':'')) : ''),
     'Fila: '+(S.fila||[]).length+' pendente(s)'+((S.fila||[]).length? ' · 1º: '+S.fila[0].path : ''),
     'Treino ativo: '+(S.ativo? (S.ativo.titulo+' · estreias: '+JSON.stringify(S.ativo._estr||{})) : 'nenhum'),
     'Erros de envio: '+JSON.stringify(LS.get('filaErr', []).slice(-6)),
@@ -5580,16 +5588,57 @@ function pubRotina(r){
         sr:(e.series||[]).map(s=>({t:s.tipo||'N', r:(s.reps==null?'':String(s.reps))})),
         ser:(e.series||[]).length||3, reps:(e.series&&e.series[0]&&e.series[0].reps)||'10', descanso:e.descanso||90 }; }) };
 }
+// O iOS as vezes nao devolve a altura do layout depois que o teclado fecha.
+// Os elementos fixos (abas, cronometro, topo) ficam presos na altura que o
+// teclado deixou e a tela vira aquela bagunca. Isto detecta e recupera.
+function temFocoDeTexto(){
+  const a=document.activeElement;
+  return !!(a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable));
+}
+let _recT=0;
+function recuperaViewport(forcado){
+  const agoraMs=Date.now();
+  if(!forcado && agoraMs-_recT<400) return;   // nao martelar
+  _recT=agoraMs;
+  const y=window.scrollY||0;
+  const de=document.documentElement;
+  // um respiro minusculo na altura obriga o Safari a remedir o viewport
+  de.style.height='100.02%';
+  requestAnimationFrame(()=>{
+    de.style.height='';
+    window.scrollTo(0, y);
+    try{
+      document.body.classList.remove('kb');
+      de.style.setProperty('--kb','0px');
+    }catch(e){}
+  });
+}
 (function(){
   if(!window.visualViewport) return;
   const vv=window.visualViewport;
+  let presoDesde=0;
   const aj=()=>{
-    const kb=Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const sobra=Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const comFoco=temFocoDeTexto();
+    // sem campo em foco NAO existe teclado aberto: a sobra e' lixo de layout
+    const kb = comFoco ? sobra : 0;
     document.documentElement.style.setProperty('--kb', kb+'px');
     document.body.classList.toggle('kb', kb>60);
+    if(!comFoco && sobra>60){
+      if(!presoDesde) presoDesde=Date.now();
+      else if(Date.now()-presoDesde>500) { presoDesde=0; recuperaViewport(); }
+    } else presoDesde=0;
   };
-  vv.addEventListener('resize', aj); vv.addEventListener('scroll', aj); aj();
+  vv.addEventListener('resize', aj);
+  vv.addEventListener('scroll', aj);
+  aj();
+  setInterval(aj, 1200);   // o resize nem sempre dispara quando o layout trava
 })();
+// gatilhos de recuperacao: fechar teclado, voltar pro app, girar a tela
+document.addEventListener('focusout', ()=>setTimeout(()=>{ if(!temFocoDeTexto()) recuperaViewport(); }, 150));
+window.addEventListener('orientationchange', ()=>setTimeout(()=>recuperaViewport(true), 300));
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>recuperaViewport(true), 150); });
+window.addEventListener('pageshow', ()=>setTimeout(()=>recuperaViewport(true), 100));
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev=>{
     const d=ev.data||{};

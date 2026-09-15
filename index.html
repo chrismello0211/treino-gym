@@ -208,6 +208,8 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .fstat.f-tempo{flex:1.15}
 .fstat.f-volume{flex:1.4}
 .fstat.f-rec{flex:.8}
+.feed-acad{font-size:12.5px;color:var(--tx3);margin:-4px 0 10px 2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fstat-ico{display:flex;width:20px;height:20px;color:var(--tx3);margin-bottom:7px}
 .fstat-ico svg{width:20px;height:20px}
 .fstat.rec .fstat-ico{color:#F5B300}
@@ -451,7 +453,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.16.1';
+const APP_VER='11.17.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2272,6 +2274,17 @@ const ATIVO = {
       }
     };
     pintaFoto();
+    // ultima academia usada entra pre-selecionada: quase sempre e' a mesma
+    let acad = t.academia || (function(){ const c=ACAD.conhecidas(); return c.length? {n:c[0].n,id:c[0].id,lat:c[0].lat,lon:c[0].lon} : null; })();
+    const acadArea=h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:()=>{
+      ACAD.folha(acad, a=>{ acad=a; pintaAcad(); });
+    }});
+    const pintaAcad=()=>{ acadArea.innerHTML='';
+      acadArea.append(h('span',{},'📍 Academia'), h('span',{class:'esp'}),
+        h('span',{class:'f13'+(acad?'':' mut2'),style:'max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
+          acad? acad.n : 'Selecionar'));
+    };
+    pintaAcad();
     let pubAgora = (S.cfg.feedPub!==false);
     const pubArea = (S.perfil && S.perfil.user)
       ? h('button',{class:'menu-op',style:'margin-bottom:14px',onclick:function(){
@@ -2287,6 +2300,7 @@ const ATIVO = {
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(CORE.volumeTreino(t))+' kg')),
         h('div',{},h('div',{class:'k'},'Séries'),h('div',{class:'v'},CORE.seriesFeitas(t)))),
       fotoArea,
+      acadArea,
       pubArea,
       h('button',{class:'btn btn-p',onclick:()=>{
         const fim=agora();
@@ -2294,6 +2308,7 @@ const ATIVO = {
         const salvo={ id:t.id, rid:t.rid, titulo:t.titulo, inicio:t.inicio, fim,
           ex:feitos, volume:CORE.volumeTreino(t), series:CORE.seriesFeitas(t),
           recordes:CORE.contaRecordes({ex:feitos}), atualizado:fim };
+        if(acad && acad.n) salvo.academia=acad;
         if(foto) salvo.temFoto=true;
         S.treinos[salvo.id]=salvo; salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo);
         if(foto && S.auth){ NET.agenda('/fotos/'+S.auth.uid+'/'+salvo.id, foto);
@@ -2678,6 +2693,165 @@ const PROJ={
     pinta();
   }
 };
+
+/* ===================================================================
+   ACADEMIA DO TREINO (v11.17)
+   Busca por proximidade via OpenStreetMap (Overpass): sem chave, sem
+   cadastro, sem custo. A coordenada da pessoa e' usada so naquele
+   instante pra montar a consulta e NUNCA e' gravada nem enviada.
+   =================================================================== */
+const ACAD = {
+  ESPELHOS:['https://overpass-api.de/api/interpreter',
+            'https://overpass.kumi.systems/api/interpreter',
+            'https://overpass.private.coffee/api/interpreter'],
+  RAIO: 4000,
+  conhecidas(){
+    const m=new Map();
+    const poe=(a,peso)=>{
+      if(!a || !a.n) return;
+      const k=BIB.norm(a.n);
+      const at=m.get(k) || {n:a.n, id:a.id||null, lat:a.lat, lon:a.lon, usos:0};
+      at.usos+=peso;
+      if(!at.id && a.id) at.id=a.id;
+      if(at.lat==null && a.lat!=null){ at.lat=a.lat; at.lon=a.lon; }
+      m.set(k, at);
+    };
+    Object.values(S.treinos||{}).forEach(t=>{ if(!t.apagado) poe(t.academia, 2); });
+    Object.values((typeof FEED!=='undefined' && FEED.amigos)||{}).forEach(arr=>(arr||[]).forEach(r=>poe(r && r.acad, 1)));
+    return [...m.values()].sort((a,b)=>b.usos-a.usos);
+  },
+  dist(aLat,aLon,bLat,bLon){
+    if(aLat==null||bLat==null) return null;
+    const R=6371, r=Math.PI/180;
+    const dLat=(bLat-aLat)*r, dLon=(bLon-aLon)*r;
+    const s=Math.sin(dLat/2)**2 + Math.cos(aLat*r)*Math.cos(bLat*r)*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+  },
+  fmtDist(km){
+    if(km==null) return '';
+    return km<1 ? (Math.round(km*1000)+' m') : (km.toFixed(km<10?2:1).replace('.',',')+' km');
+  },
+  ondeEstou(){
+    return new Promise((ok,err)=>{
+      if(!navigator.geolocation) return err(new Error('sem-gps'));
+      navigator.geolocation.getCurrentPosition(
+        p=>ok({lat:p.coords.latitude, lon:p.coords.longitude}),
+        e=>err(e),
+        {enableHighAccuracy:false, timeout:12000, maximumAge:120000});
+    });
+  },
+  async porPerto(lat, lon){
+    const r=ACAD.RAIO, c=lat+','+lon;
+    const q='[out:json][timeout:20];('
+      +'node["leisure"="fitness_centre"](around:'+r+','+c+');'
+      +'way["leisure"="fitness_centre"](around:'+r+','+c+');'
+      +'node["amenity"="gym"](around:'+r+','+c+');'
+      +'way["amenity"="gym"](around:'+r+','+c+');'
+      +'node["sport"="fitness"](around:'+r+','+c+');'
+      +');out center 60;';
+    let ultimo=null;
+    for(const url of ACAD.ESPELHOS){
+      try{
+        const ctrl=(typeof AbortController!=='undefined')? new AbortController() : null;
+        const tt=setTimeout(()=>{ try{ ctrl&&ctrl.abort(); }catch(e){} }, 15000);
+        const rr=await fetch(url,{method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:'data='+encodeURIComponent(q), signal:ctrl?ctrl.signal:undefined});
+        clearTimeout(tt);
+        if(!rr.ok){ ultimo=new Error('http '+rr.status); continue; }
+        const d=await rr.json();
+        const out=[];
+        (d.elements||[]).forEach(el=>{
+          const tg=el.tags||{};
+          const nome=(tg.name||tg['name:pt']||'').trim();
+          if(!nome) return;
+          const la=el.lat!=null? el.lat : (el.center&&el.center.lat);
+          const lo=el.lon!=null? el.lon : (el.center&&el.center.lon);
+          if(la==null) return;
+          const end=[tg['addr:street'], tg['addr:housenumber'], tg['addr:suburb']].filter(Boolean).join(', ');
+          out.push({ id:'osm:'+el.type+'/'+el.id, n:nome.slice(0,70), lat:la, lon:lo,
+                     end:end||'', km:ACAD.dist(lat,lon,la,lo) });
+        });
+        const vistos=new Map();
+        out.forEach(a=>{ const k=BIB.norm(a.n); const ja=vistos.get(k);
+          if(!ja || a.km<ja.km) vistos.set(k,a); });
+        return [...vistos.values()].sort((a,b)=>a.km-b.km).slice(0,25);
+      }catch(e){ ultimo=e; }
+    }
+    throw ultimo || new Error('falhou');
+  }
+};
+
+// folha de escolha. Nada de localizacao acontece sem a pessoa tocar no botao.
+ACAD.folha = function(atual, aoEscolher){
+  const inp=h('input',{placeholder:'Nome da academia', maxlength:'70'});
+  if(atual && atual.n) inp.value=atual.n;
+  const lista=h('div',{style:'margin-top:12px'});
+  const escolhe=a=>{ UI.fechaFolha(); aoEscolher(a); };
+  const linha=(a, sub)=>h('button',{class:'rotpub-l',onclick:()=>escolhe(a)},
+    h('span',{class:'rotpub-bar'}),
+    h('div',{class:'rotpub-txt'},
+      h('div',{class:'rotpub-tit'}, a.n),
+      sub? h('div',{class:'rotpub-sub'}, sub) : null),
+    a.km!=null? h('span',{class:'rotpub-q'}, ACAD.fmtDist(a.km)) : null,
+    h('span',{class:'rotpub-seta'},'›'));
+  const pintaConhecidas=()=>{
+    lista.innerHTML='';
+    const q=BIB.norm(inp.value||'');
+    const cs=ACAD.conhecidas().filter(a=>!q || BIB.norm(a.n).indexOf(q)>=0);
+    if(cs.length){
+      lista.append(h('div',{class:'rotpub-past'},
+        h('span',{class:'rotpub-past-ico'},'★'),
+        h('span',{class:'rotpub-past-n'},'Que voce ja usou')));
+      cs.slice(0,6).forEach(a=>lista.append(linha({n:a.n,id:a.id,lat:a.lat,lon:a.lon},
+        a.usos>1? (a.usos+' treinos') : null)));
+    } else if(q){
+      lista.append(h('div',{class:'f13 mut',style:'padding:8px 2px'},
+        'Toque em Salvar pra usar \u201c'+inp.value.trim()+'\u201d.'));
+    }
+  };
+  inp.oninput=pintaConhecidas;
+  const btPerto=h('button',{class:'btn',style:'margin-top:12px'},'📍 Buscar academias perto de mim');
+  btPerto.onclick=async ()=>{
+    btPerto.disabled=true; btPerto.textContent='Procurando\u2026';
+    lista.innerHTML='';
+    try{
+      const pos=await ACAD.ondeEstou();
+      const rs=await ACAD.porPerto(pos.lat, pos.lon);
+      btPerto.disabled=false; btPerto.textContent='📍 Buscar de novo';
+      if(!rs.length){
+        lista.append(h('div',{class:'f13 mut',style:'padding:10px 2px;line-height:1.6'},
+          'Nenhuma academia mapeada num raio de 4 km. Escrever o nome \u00e0 m\u00e3o funciona igual.'));
+        return;
+      }
+      lista.append(h('div',{class:'rotpub-past'},
+        h('span',{class:'rotpub-past-ico'},'📍'),
+        h('span',{class:'rotpub-past-n'},'Perto de voc\u00ea'),
+        h('span',{class:'rotpub-past-q'}, String(rs.length))));
+      rs.forEach(a=>lista.append(linha(a, a.end||null)));
+    }catch(e){
+      btPerto.disabled=false; btPerto.textContent='📍 Tentar de novo';
+      const neg = e && (e.code===1 || /denied|permission/i.test(e.message||''));
+      lista.append(h('div',{class:'f13 mut',style:'padding:10px 2px;line-height:1.6'},
+        neg ? 'Voc\u00ea n\u00e3o permitiu a localiza\u00e7\u00e3o. Sem problema: escreva o nome da academia a\u00ed em cima.'
+            : 'N\u00e3o consegui buscar agora (sem conex\u00e3o ou servi\u00e7o fora do ar). Escrever o nome \u00e0 m\u00e3o funciona igual.'));
+    }
+  };
+  pintaConhecidas();
+  UI.folha('Academia', [
+    inp, btPerto, lista,
+    h('div',{class:'f12 mut2',style:'margin-top:12px;line-height:1.5'},
+      'A busca usa sua localiza\u00e7\u00e3o s\u00f3 neste momento, pra achar o que est\u00e1 perto. Ela n\u00e3o \u00e9 salva nem enviada pra ningu\u00e9m.'),
+    h('div',{style:'height:14px'}),
+    h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>{
+      const n=(inp.value||'').trim();
+      if(!n){ UI.toast('Escreva o nome ou escolha uma da lista'); return; }
+      const ja=ACAD.conhecidas().find(a=>BIB.norm(a.n)===BIB.norm(n));
+      escolhe(ja? {n:ja.n,id:ja.id,lat:ja.lat,lon:ja.lon} : {n});
+    }},'Salvar'),
+    atual? h('button',{class:'btn',onclick:()=>escolhe(null)},'Remover academia do treino') : null]);
+};
+
 const EXPORTA={
   async arquivo(nome, conteudo, mime){
     try{
@@ -2987,6 +3161,17 @@ TELAS.treinoDet = function({id}){
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🥇'))),
     h('span',{style:'cursor:pointer',onclick:()=>distMuscularFolha(t)}, corpoSVG(gruposDoTreino(t), 92)))));
+  m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:12px',onclick:()=>{
+    ACAD.folha(t.academia||null, a=>{
+      if(a && a.n) t.academia=a; else delete t.academia;
+      t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
+      if(S.perfil && S.perfil.user && S.cfg.feedPub!==false && S.auth)
+        NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+      UI.refaz(); UI.toast(a? 'Academia salva \u2713' : 'Academia removida', !!a);
+    });
+  }}, '📍 Academia', h('span',{class:'esp'}),
+     h('span',{class:'f13'+(t.academia?'':' mut2'),style:'max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
+       (t.academia && t.academia.n) || 'Selecionar')));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>{
     if(S.ativo){ UI.toast('Você já tem um treino em andamento'); return; }
@@ -4579,6 +4764,8 @@ function cartaoFeed(i){
       h('div',{class:'esp'}),
       i.meu? h('button',{class:'feed-mais',onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
+    (function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
+      return (a && a.n) ? h('div',{class:'feed-acad'}, '📍 '+a.n) : null; })(),
     h('div',{class:'fstats'},
       statCard('tempo','Tempo', CORE.fmtDur((t.fim-t.inicio)/1000)),
       statCard('volume','Volume', CORE.fmtVolCab(t.volume)+' kg'),
@@ -6992,6 +7179,7 @@ function resumoTreino(t){
       sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
     atualizado:agora() };
   if(t.temFoto) r0.f=1;
+  if(t.academia && t.academia.n) r0.acad={n:t.academia.n, id:t.academia.id||null};
   return r0;
 }
 const USERNAME = {

@@ -13,7 +13,7 @@ th{color:#ECECEE;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
 strong{color:#ECECEE}</style></head><body>
 
 <h1>Política de Privacidade — ForgeX</h1>
-<p class="data">Última atualização: julho de 2026</p>
+<p class="data">Última atualização: setembro de 2026</p>
 
 <p>Esta política explica o que o ForgeX guarda, onde guarda, o que fica visível para outras pessoas e como apagar tudo.</p>
 
@@ -22,16 +22,24 @@ strong{color:#ECECEE}</style></head><body>
 <tr><th>Dado</th><th>Quando</th></tr>
 <tr><td>Nome ou apelido que você escolhe</td><td>Sempre</td></tr>
 <tr><td>Rotinas, exercícios, séries, cargas, repetições, tempos, notas e recordes</td><td>Sempre</td></tr>
-<tr><td>Preferências do app (tema, unidade de peso, meta semanal, tempo de descanso)</td><td>Sempre</td></tr>
+<tr><td>Preferências do app (tema, unidade de peso, meta semanal, tempo de descanso, exercícios que você costuma trocar)</td><td>Sempre</td></tr>
 <tr><td>Identificador anônimo da conta gerado automaticamente</td><td>Sempre</td></tr>
 <tr><td>E-mail e senha</td><td>Só se você criar conta com e-mail</td></tr>
 <tr><td>Nome de usuário, foto de perfil, bio e link</td><td>Só se você preencher</td></tr>
 <tr><td>Medições corporais (peso, percentual de gordura, circunferências)</td><td>Só se você registrar</td></tr>
 <tr><td>Fotos de treino e fotos de progresso corporal</td><td>Só se você adicionar</td></tr>
+<tr><td>Foto que você adiciona a um exercício criado por você</td><td>Só se você adicionar</td></tr>
+<tr><td>Nome da academia do treino</td><td>Só se você preencher</td></tr>
+<tr><td>Lista de pessoas que você bloqueou</td><td>Só se você bloquear alguém</td></tr>
+<tr><td>Identificador do aparelho e o tipo dele (iPhone, Android, PC)</td><td>Enquanto há um treino em andamento, para continuá-lo em outro aparelho</td></tr>
 <tr><td>Token de notificação e modelo do aparelho</td><td>Só se você ativar notificações</td></tr>
 <tr><td>Treinos importados de outro app de treino, quando você importa um arquivo</td><td>Só se você importar</td></tr>
 </table>
-<p>O ForgeX <strong>não</strong> coleta localização, contatos, agenda, microfone, câmera em segundo plano nem identificadores de publicidade.</p>
+<p>O ForgeX <strong>não</strong> coleta contatos, agenda, microfone, câmera em segundo plano nem identificadores de publicidade.</p>
+
+<div class="box">
+<p><strong>Localização:</strong> o app só acessa sua localização se você tocar em <strong>“Buscar academias perto de mim”</strong>, ao registrar a academia de um treino. A coordenada é usada naquele instante para consultar o mapa e <strong>não é gravada no aparelho, não é enviada para os nossos servidores e não fica no seu histórico</strong>. O que fica salvo é apenas o nome da academia que você escolher. Você pode escrever o nome à mão e nunca conceder essa permissão: o recurso funciona igual.</p>
+</div>
 
 <h2>2. Onde os dados ficam</h2>
 <p>Os dados ficam salvos no seu aparelho e sincronizados com o <strong>Firebase Realtime Database</strong>, da Google, que atua como operador dos dados. A conta é criada de forma anônima na primeira vez que você abre o app. Se você criar conta com e-mail, ela deixa de ser anônima e passa a poder ser acessada de outro aparelho.</p>
@@ -44,41 +52,52 @@ strong{color:#ECECEE}</style></head><body>
 <li>Os treinos que você publica no feed, com exercícios, séries, cargas e recordes, se a opção "Publicar treinos no feed" estiver ligada</li>
 <li>A foto que você anexa a um treino publicado</li>
 <li>Suas rotinas, se "Rotinas públicas no perfil" estiver ligada</li>
-<li>Os exercícios que você criou, se não estiverem ocultos</li>
+<li>Os exercícios que você criou, com a foto que você tiver colocado neles, se não estiverem ocultos</li>
+<li>O nome da academia, nos treinos que você publica no feed</li>
 <li>Seus comentários e curtidas nos treinos de outras pessoas</li>
 <li>Quem você segue e quem segue você</li>
 </ul>
 <p>Você pode desligar a publicação no feed e as rotinas públicas em Ajustes, e escolher treino a treino se ele vai ou não para o feed, na hora de concluir.</p>
 
 <h2>4. Com quem compartilhamos</h2>
-<p>Com ninguém, além do Firebase (Google), que hospeda o serviço. <strong>Não vendemos dados, não há anúncios e não usamos rastreadores de publicidade ou analytics de terceiros.</strong></p>
+<p>Além do Firebase (Google), que hospeda o serviço, apenas em um caso: quando você usa a busca por proximidade de academias, a sua coordenada aproximada é enviada ao <strong>OpenStreetMap</strong> (serviço público e gratuito de mapas) somente para obter a lista de academias próximas. Nenhum dado seu acompanha essa consulta: nem nome, nem conta, nem identificador. Não registramos essa consulta.</p>
+<p><strong>Não vendemos dados, não há anúncios e não usamos rastreadores de publicidade ou analytics de terceiros.</strong></p>
 
-<h2>5. Notificações</h2>
+<h2>5. Permissões que o app pede</h2>
+<table>
+<tr><th>Permissão</th><th>Para quê</th><th>Obrigatória?</th></tr>
+<tr><td>Fotos / câmera</td><td>Anexar foto ao treino, ao perfil, a um exercício ou registrar progresso</td><td>Não</td></tr>
+<tr><td>Notificações</td><td>Avisar quando o descanso acaba e receber recados do app</td><td>Não</td></tr>
+<tr><td>Localização aproximada</td><td>Listar academias perto de você, só quando você toca no botão</td><td>Não</td></tr>
+</table>
+<p>Todas são opcionais e pedidas apenas no momento em que você usa o recurso. Negar qualquer uma delas não impede o uso do app.</p>
+
+<h2>6. Notificações</h2>
 <p>Se você ativar notificações, guardamos um token do aparelho para conseguir enviá-las. Desativar em Ajustes remove o token. Sair da conta também remove.</p>
 
-<h2>6. Denúncias e moderação</h2>
+<h2>7. Denúncias e moderação</h2>
 <p>Quando você denuncia um conteúdo, guardamos o motivo, a referência ao conteúdo denunciado e o identificador de quem denunciou, para conseguir analisar e agir. Denúncias são analisadas em até 24 horas.</p>
 
-<h2>7. Como apagar tudo</h2>
+<h2>8. Como apagar tudo</h2>
 <div class="box">
 <p><strong>No app:</strong> Ajustes, card Conta, botão <strong>Apagar minha conta</strong>. Isso apaga de vez a conta e os dados dela: treinos, rotinas, recordes, medições, fotos, perfil e o nome de usuário, tanto no aparelho quanto na nuvem.</p>
 </div>
 <p><strong>Pela web:</strong> se você já desinstalou o app, peça a exclusão em <a href="excluir-conta.html">forgex — excluir minha conta</a>.</p>
 <p>Antes de apagar, dá para baixar uma cópia de tudo em Ajustes, Seus dados, Backup completo (JSON), ou exportar os treinos em CSV.</p>
 
-<h2>8. O que pode continuar depois de apagar</h2>
+<h2>9. O que pode continuar depois de apagar</h2>
 <p>Curtidas e comentários que você deixou no treino de outra pessoa podem permanecer no conteúdo dela, sem o seu nome ou foto associados. Denúncias enviadas ficam guardadas pelo tempo necessário à moderação. Cópias em backup do provedor podem levar até 30 dias para expirar.</p>
 
-<h2>9. Seus direitos</h2>
+<h2>10. Seus direitos</h2>
 <p>Pela LGPD, você pode confirmar o tratamento, acessar, corrigir, portar e excluir seus dados, e revogar o consentimento. O acesso e a portabilidade estão no próprio app pelo backup em JSON e pela exportação em CSV. A exclusão está no botão descrito acima. Para qualquer outro pedido, escreva para <a href="mailto:christopherhallan@gmail.com">christopherhallan@gmail.com</a>.</p>
 
-<h2>10. Crianças</h2>
+<h2>11. Crianças</h2>
 <p>O ForgeX não é direcionado a menores de 13 anos e não coleta intencionalmente dados dessa faixa. Se identificarmos uma conta de menor de 13 anos, ela é removida.</p>
 
-<h2>11. Mudanças</h2>
+<h2>12. Mudanças</h2>
 <p>Se esta política mudar de forma relevante, avisamos no app antes de continuar.</p>
 
-<h2>12. Contato</h2>
+<h2>13. Contato</h2>
 <p>Responsável pelo tratamento dos dados: o desenvolvedor do ForgeX. Contato: <a href="mailto:christopherhallan@gmail.com">christopherhallan@gmail.com</a>.</p>
 
 <p style="margin-top:34px"><a href="termos.html">Termos de uso</a> · <a href="excluir-conta.html">Excluir minha conta</a> · <a href="./">Voltar ao app</a></p>

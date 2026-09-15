@@ -453,7 +453,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.17.1';
+const APP_VER='11.17.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2231,7 +2231,7 @@ const ATIVO = {
     UI.folha('Descartar treino?',[
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'As séries registradas hoje serão perdidas. Essa ação não tem volta.'),
       h('button',{class:'btn btn-err',onclick:()=>{
-        ATIVO.paraCron(false);
+        ATIVO.paraCron(false); ATIVO._rasc=null;
         if(CORE.reverteTreino(S.ativo)) salva('prs');  // treino descartado nao deixa recorde pra tras
         S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
       }},'Descartar treino')]);
@@ -2253,31 +2253,39 @@ const ATIVO = {
     clearInterval(c.iv); ATIVO.cron=null;
     if(grava!==false){ c.s.reps=Math.max(1, Math.round((Date.now()-c.ini)/1000)); salva('ativo'); UI.refaz(); }
   },
+  _rasc:null,
   concluir(){
     ATIVO.paraCron();
     const t=S.ativo;
+    if(!t) return;
+    // rascunho da conclusao: sobrevive a abrir a folha de academia
+    if(!ATIVO._rasc || ATIVO._rasc.tid!==t.id) ATIVO._rasc={tid:t.id};
+    const R=ATIVO._rasc;
     const feitos = t.ex.map(e=>({ ...e, series:e.series.filter(s=>s.ok).map(s=>{ const c={...s}; ['_auto','_sugKg','_sugReps','_dtKg','_dtReps','_planKg','_planReps','_prBackup'].forEach(k=>delete c[k]); return c; }) })).filter(e=>e.series.length);
     if(!feitos.length){ UI.toast('Nenhuma série concluída ainda'); return; }
-    let foto=null;
+    let foto=R.foto||null;
     const fotoArea=h('div',{class:'linha',style:'padding:0 2px 16px;gap:12px'});
     const pintaFoto=()=>{
       fotoArea.innerHTML='';
       if(foto){
         fotoArea.append(h('img',{class:'foto-mini',src:foto}),
-          h('button',{class:'btn btn-mini',style:'width:auto;padding:9px 14px',onclick:()=>{ foto=null; pintaFoto(); }},'Remover foto'));
+          h('button',{class:'btn btn-mini',style:'width:auto;padding:9px 14px',onclick:()=>{ foto=null; R.foto=null; pintaFoto(); }},'Remover foto'));
       } else {
         fotoArea.append(h('button',{class:'btn',style:'flex:1',onclick:async ()=>{
           const f=await IMG.escolhe(); if(!f) return;
-          try{ foto=await IMG.comprime(f, 1280, 0.8); if(foto.length>230000) foto=await IMG.comprime(f, 1080, 0.74); pintaFoto(); }
+          try{ foto=await IMG.comprime(f, 1280, 0.8); if(foto.length>230000) foto=await IMG.comprime(f, 1080, 0.74); R.foto=foto; pintaFoto(); }
           catch(e){ UI.toast('Não consegui ler essa imagem'); }
         }},'Adicionar foto ao treino'));
       }
     };
     pintaFoto();
     // ultima academia usada entra pre-selecionada: quase sempre e' a mesma
-    let acad = t.academia || (function(){ const c=ACAD.conhecidas(); return c.length? {n:c[0].n,id:c[0].id,lat:c[0].lat,lon:c[0].lon} : null; })();
+    let acad = (R.acad!==undefined) ? R.acad
+      : (t.academia || (function(){ const c=ACAD.conhecidas(); return c.length? {n:c[0].n,id:c[0].id,lat:c[0].lat,lon:c[0].lon} : null; })());
+    R.acad = acad;
     const acadArea=h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:()=>{
-      ACAD.folha(acad, a=>{ acad=a; pintaAcad(); });
+      // 'true' = nao fecha a folha; volta pra conclusao no lugar, sem piscar
+      ACAD.folha(acad, a=>{ R.acad=a; ATIVO.concluir(); }, true);
     }});
     const pintaAcad=()=>{ acadArea.innerHTML='';
       acadArea.append(h('span',{},'📍 Academia'), h('span',{class:'esp'}),
@@ -2285,10 +2293,11 @@ const ATIVO = {
           acad? acad.n : 'Selecionar'));
     };
     pintaAcad();
-    let pubAgora = (S.cfg.feedPub!==false);
+    let pubAgora = (R.pub!==undefined) ? R.pub : (S.cfg.feedPub!==false);
+    R.pub = pubAgora;
     const pubArea = (S.perfil && S.perfil.user)
       ? h('button',{class:'menu-op',style:'margin-bottom:14px',onclick:function(){
-          pubAgora=!pubAgora;
+          pubAgora=!pubAgora; R.pub=pubAgora;
           const c=this.querySelector('.chip');
           c.textContent=pubAgora?'Sim':'Nao'; c.classList.toggle('on',pubAgora);
         }}, 'Publicar no feed', h('span',{class:'esp'}),
@@ -2309,6 +2318,7 @@ const ATIVO = {
           ex:feitos, volume:CORE.volumeTreino(t), series:CORE.seriesFeitas(t),
           recordes:CORE.contaRecordes({ex:feitos}), atualizado:fim };
         if(acad && acad.n) salvo.academia=acad;
+        ATIVO._rasc=null;
         if(foto) salvo.temFoto=true;
         S.treinos[salvo.id]=salvo; salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo);
         if(foto && S.auth){ NET.agenda('/fotos/'+S.auth.uid+'/'+salvo.id, foto);
@@ -2783,11 +2793,11 @@ const ACAD = {
 };
 
 // folha de escolha. Nada de localizacao acontece sem a pessoa tocar no botao.
-ACAD.folha = function(atual, aoEscolher){
+ACAD.folha = function(atual, aoEscolher, semFechar){
   const inp=h('input',{placeholder:'Nome da academia', maxlength:'70'});
   if(atual && atual.n) inp.value=atual.n;
   const lista=h('div',{style:'margin-top:12px'});
-  const escolhe=a=>{ UI.fechaFolha(); aoEscolher(a); };
+  const escolhe=a=>{ if(!semFechar) UI.fechaFolha(); aoEscolher(a); };
   const linha=(a, sub)=>h('button',{class:'rotpub-l',onclick:()=>escolhe(a)},
     h('span',{class:'rotpub-bar'}),
     h('div',{class:'rotpub-txt'},
@@ -4764,8 +4774,8 @@ function cartaoFeed(i){
       h('div',{class:'esp'}),
       i.meu? h('button',{class:'feed-mais',onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
-    (function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
-      return (a && a.n) ? h('div',{class:'feed-acad'}, '📍 '+a.n) : null; })(),
+    ...(function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
+      return (a && a.n) ? [h('div',{class:'feed-acad'}, '📍 '+a.n)] : []; })(),
     h('div',{class:'fstats'},
       statCard('tempo','Tempo', CORE.fmtDur((t.fim-t.inicio)/1000)),
       statCard('volume','Volume', CORE.fmtVolCab(t.volume)+' kg'),

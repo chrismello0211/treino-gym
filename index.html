@@ -473,7 +473,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.18.2';
+const APP_VER='11.19';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1924,12 +1924,19 @@ TELAS.treino = function(){
   pastas.forEach(p=>{
     const rs=porPasta[p.id]||[];
     const box=h('div',{}); rs.forEach((r,i)=>box.appendChild(desenhaRotina(r,i)));
-    const det=h('details',{class:'pasta',open:true},
+    // lembra como voce deixou: recolhida continua recolhida na proxima abertura
+    const det=h('details',{class:'pasta',open: p.aberta!==false},
       h('summary',{},
         h('span',{class:'seta',html:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'}),
         p.nome+' ('+rs.length+')', h('span',{class:'esp'}),
         h('button',{class:'btn btn-mini',style:'width:34px;padding:5px',onclick:e=>{e.preventDefault();e.stopPropagation();ROT.menuPasta(p);}},'⋯')),
       box);
+    det.addEventListener('toggle', ()=>{
+      const aberta = det.open;
+      if((p.aberta!==false) === aberta) return;      // nao gravar a toa
+      p.aberta = aberta; p.atualizado=agora();
+      salva('pastas'); NET.agenda('pastas/'+p.id, p);
+    });
     m.appendChild(det);
     if(rs.length>1) dragOrdena(box, solta(rs));
   });
@@ -1985,10 +1992,34 @@ const ROT = {
         UI.fechaFolha(); UI.refaz();
       }},'Criar pasta')]);
   },
+  ordenaPastas(){
+    const lista=Object.values(S.pastas).filter(x=>!x.apagada)
+      .sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+    if(lista.length<2){ UI.toast('Você só tem uma pasta'); return; }
+    const conta=id=>Object.values(S.rotinas).filter(r=>!r.apagada && r.pasta===id).length;
+    reordenar(lista, ()=>{
+      lista.forEach((p,i)=>{
+        if(p.ordem===i) return;
+        p.ordem=i; p.atualizado=agora(); NET.agenda('pastas/'+p.id, p);
+      });
+      salva('pastas');
+      try{ ROTPUB.syncTudo(); }catch(e){}     // o perfil publico segue a mesma ordem
+    }, {
+      titulo:'Reordenar pastas',
+      dica:'Arraste pelo ≡. A pasta que você está treinando agora fica melhor no topo.',
+      linha:(p)=>h('div',{class:'reo-row'},
+        h('span',{style:'font-size:17px;flex-shrink:0;width:26px;text-align:center'},'\ud83d\udcc1'),
+        h('div',{class:'esp',style:'min-width:0'},
+          h('div',{class:'b700',style:'font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, p.nome),
+          h('div',{class:'f12 mut'}, conta(p.id)+' ficha'+(conta(p.id)===1?'':'s'))),
+        h('div',{class:'reo-h'},'\u2261'))
+    });
+  },
   menuPasta(p){
     const inp=h('input',{value:p.nome});
     UI.folha('Pasta', [
       inp, h('div',{style:'height:10px'}),
+      h('button',{class:'menu-op',style:'margin-bottom:8px',onclick:()=>{ UI.fechaFolha(); ROT.ordenaPastas(); }},'\u2261 Reordenar pastas'),
       h('button',{class:'btn',onclick:()=>{ p.nome=(inp.value||p.nome).trim(); p.atualizado=agora(); salva('pastas'); NET.agenda('pastas/'+p.id,p); UI.fechaFolha(); UI.refaz(); }},'Salvar nome'),
       h('div',{style:'height:8px'}),
       h('button',{class:'btn btn-err',onclick:()=>{ p.apagada=true; p.atualizado=agora();
@@ -4492,13 +4523,23 @@ function holdReordenar(container, abrir){
   container.__reoPD=onDown;
   container.addEventListener('pointerdown', onDown);
 }
-function reordenar(lista, aoCommit){
+function reordenar(lista, aoCommit, opts){
+  opts = opts || {};
   const H=60;
   const wrap=h('div',{});
   let rows=[];
   function draw(){
     wrap.innerHTML=''; rows=[];
     lista.forEach((e,i)=>{
+      // desenhista proprio (pastas, por exemplo) ou o padrao de exercicio
+      if(opts.linha){
+        const row=opts.linha(e,i);
+        row._i=i;
+        const alca=row.querySelector('.reo-h');
+        if(alca) ligaArrasto(row, alca);
+        rows.push(row); wrap.appendChild(row);
+        return;
+      }
       const x=BIB.ex(e.exId);
       const row=h('div',{class:'reo-row'},
         thumbEl(e.exId),
@@ -4506,6 +4547,12 @@ function reordenar(lista, aoCommit){
         h('div',{class:'reo-h'},'≡'));
       row._i=i;
       const alca=row.querySelector('.reo-h');
+      ligaArrasto(row, alca);
+      rows.push(row); wrap.appendChild(row);
+    });
+  }
+  function ligaArrasto(row, alca){
+      if(!alca) return;
       alca.addEventListener('pointerdown', ev=>{
         ev.preventDefault();
         // o iOS pode ter iniciado uma seleção antes do CSS agir: desfaz
@@ -4546,12 +4593,11 @@ function reordenar(lista, aoCommit){
         document.addEventListener('pointerup',solta);
         document.addEventListener('pointercancel',solta);
       });
-      rows.push(row); wrap.appendChild(row);
-    });
   }
   draw();
-  UI.folha('Reordenar exercícios',[
-    h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Arraste pelo ≡ para mudar a ordem. Dica: segurar um exercício no treino abre esta tela.'),
+  UI.folha(opts.titulo || 'Reordenar exercícios',[
+    h('div',{class:'f13 mut',style:'margin-bottom:10px'},
+      opts.dica || 'Arraste pelo ≡ para mudar a ordem. Dica: segurar um exercício no treino abre esta tela.'),
     wrap, h('div',{style:'height:8px'}),
     h('button',{class:'btn btn-p',onclick:()=>UI.fechaFolha()},'Concluir')],
     null, ()=>UI.refaz());

@@ -208,8 +208,28 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .fstat.f-tempo{flex:1.15}
 .fstat.f-volume{flex:1.4}
 .fstat.f-rec{flex:.8}
-.feed-acad{font-size:12.5px;color:var(--tx3);margin:-4px 0 10px 2px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-acad{display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  font-size:12.5px;color:var(--tx2);margin:-2px 0 10px 2px;padding:5px 10px;
+  background:var(--surf2);border:1px solid var(--line);border-radius:20px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.feed-acad:active{background:var(--surf3)}
+.feed-acad span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-acad-ir{color:var(--tx3);font-size:11px;flex-shrink:0}
+.acad-linha{display:flex;gap:8px;align-items:stretch;margin-bottom:12px}
+.acad-ir{flex:1;min-width:0;display:flex;align-items:center;gap:10px;text-align:left;
+  background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:11px 13px}
+.acad-ir:active{background:var(--surf3)}
+.acad-pin{font-size:17px;flex-shrink:0}
+.acad-n{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acad-sub{font-size:12px;color:var(--tx3);margin-top:2px}
+.acad-ed{flex-shrink:0;width:46px;background:var(--surf2);border:1px solid var(--line);
+  border-radius:14px;color:var(--tx3);font-size:15px}
+.acad-ed:active{background:var(--surf3)}
+.nov-l{display:flex;gap:12px;align-items:flex-start;padding:11px 2px;border-top:1px solid var(--line)}
+.nov-l:first-of-type{border-top:none}
+.nov-i{font-size:19px;line-height:1.2;flex-shrink:0;width:26px;text-align:center}
+.nov-t{font-weight:700;font-size:14.5px}
+.nov-d{font-size:12.5px;color:var(--tx3);line-height:1.5;margin-top:3px}
 .fstat-ico{display:flex;width:20px;height:20px;color:var(--tx3);margin-bottom:7px}
 .fstat-ico svg{width:20px;height:20px}
 .fstat.rec .fstat-ico{color:#F5B300}
@@ -453,7 +473,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.17.2';
+const APP_VER='11.18.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2750,6 +2770,29 @@ const ACAD = {
         {enableHighAccuracy:false, timeout:12000, maximumAge:120000});
     });
   },
+  // abre no app de mapas do aparelho. Com coordenada aponta o pino;
+  // sem ela (post antigo), busca pelo nome.
+  abreMapa(a){
+    if(!a || !a.n) return;
+    const nome=encodeURIComponent(a.n);
+    const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent||'');
+    let url;
+    if(a.lat!=null && a.lon!=null){
+      url = iOS ? ('https://maps.apple.com/?ll='+a.lat+','+a.lon+'&q='+nome)
+                : ('https://www.google.com/maps/search/?api=1&query='+a.lat+'%2C'+a.lon);
+    } else {
+      url = iOS ? ('https://maps.apple.com/?q='+nome)
+                : ('https://www.google.com/maps/search/?api=1&query='+nome);
+    }
+    try{ window.open(url, '_blank', 'noopener'); }catch(e){ location.href=url; }
+  },
+  // quantas vezes voce treinou naquele lugar
+  vezes(a){
+    if(!a || !a.n) return 0;
+    const k=BIB.norm(a.n);
+    return Object.values(S.treinos||{}).filter(t=>!t.apagado && t.academia
+      && (BIB.norm(t.academia.n)===k || (a.id && t.academia.id===a.id))).length;
+  },
   async porPerto(lat, lon){
     const r=ACAD.RAIO, c=lat+','+lon;
     const q='[out:json][timeout:20];('
@@ -2797,6 +2840,7 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
   const inp=h('input',{placeholder:'Nome da academia', maxlength:'70'});
   if(atual && atual.n) inp.value=atual.n;
   const lista=h('div',{style:'margin-top:12px'});
+  let ultimaPos=null;   // so pra calcular distancia depois de uma busca
   const escolhe=a=>{ if(!semFechar) UI.fechaFolha(); aoEscolher(a); };
   const linha=(a, sub)=>h('button',{class:'rotpub-l',onclick:()=>escolhe(a)},
     h('span',{class:'rotpub-bar'}),
@@ -2813,8 +2857,16 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
       lista.append(h('div',{class:'rotpub-past'},
         h('span',{class:'rotpub-past-ico'},'★'),
         h('span',{class:'rotpub-past-n'},'Que voce ja usou')));
-      cs.slice(0,6).forEach(a=>lista.append(linha({n:a.n,id:a.id,lat:a.lat,lon:a.lon},
-        a.usos>1? (a.usos+' treinos') : null)));
+      cs.slice(0,6).forEach(a=>{
+        const meus=ACAD.vezes(a);
+        const p=[];
+        if(meus) p.push(meus===1? '1 treino seu' : meus+' treinos seus');
+        if(ultimaPos && a.lat!=null){
+          const km=ACAD.dist(ultimaPos.lat, ultimaPos.lon, a.lat, a.lon);
+          if(km!=null) p.push(ACAD.fmtDist(km)+' daqui');
+        }
+        lista.append(linha({n:a.n,id:a.id,lat:a.lat,lon:a.lon}, p.join(' \u00b7 ')||null));
+      });
     } else if(q){
       lista.append(h('div',{class:'f13 mut',style:'padding:8px 2px'},
         'Toque em Salvar pra usar \u201c'+inp.value.trim()+'\u201d.'));
@@ -2827,6 +2879,7 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
     lista.innerHTML='';
     try{
       const pos=await ACAD.ondeEstou();
+      ultimaPos=pos;
       const rs=await ACAD.porPerto(pos.lat, pos.lon);
       btPerto.disabled=false; btPerto.textContent='📍 Buscar de novo';
       if(!rs.length){
@@ -2838,7 +2891,12 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
         h('span',{class:'rotpub-past-ico'},'📍'),
         h('span',{class:'rotpub-past-n'},'Perto de voc\u00ea'),
         h('span',{class:'rotpub-past-q'}, String(rs.length))));
-      rs.forEach(a=>lista.append(linha(a, a.end||null)));
+      rs.forEach(a=>{
+        const meus=ACAD.vezes(a);
+        const sub=[meus? (meus===1?'1 treino seu':meus+' treinos seus') : null, a.end||null]
+          .filter(Boolean).join(' \u00b7 ');
+        lista.append(linha(a, sub||null));
+      });
     }catch(e){
       btPerto.disabled=false; btPerto.textContent='📍 Tentar de novo';
       const neg = e && (e.code===1 || /denied|permission/i.test(e.message||''));
@@ -2860,6 +2918,44 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
       escolhe(ja? {n:ja.n,id:ja.id,lat:ja.lat,lon:ja.lon} : {n});
     }},'Salvar'),
     atual? h('button',{class:'btn',onclick:()=>escolhe(null)},'Remover academia do treino') : null]);
+};
+
+
+/* ---------- o que mudou desde a ultima vez ---------- */
+const NOVIDADES = {
+  V: 3,     // subir este numero faz a folha aparecer de novo
+  ITENS: [
+    ['📍','Academia no treino',
+     'Registre onde treinou. O app acha as academias perto de voce, e tocar no nome abre o mapa.'],
+    ['\ud83e\udd47','Recordes mais claros',
+     'A medalha ficou dourada e agora aparece a serie exata que gerou cada recorde.'],
+    ['\u23F1','Cronometro na prancha',
+     'Exercicio de tempo ganhou play, e tudo passou a aparecer em minutos e segundos.'],
+    ['\u21B6','Desfazer',
+     'Excluiu treino, ficha ou exercicio sem querer? Tem 6 segundos pra voltar atras.'],
+    ['\u270E','Editar treino salvo',
+     'Esqueceu uma serie? Da pra ajustar carga, repeticoes e exercicios depois de concluir.']
+  ],
+  deveMostrar(){
+    if(!S.perfil || !S.perfil.nome) return false;          // quem nunca usou nao tem novidade
+    if(!Object.keys(S.treinos||{}).length) return false;   // nem quem nunca treinou
+    return (S.cfg.novid||0) < NOVIDADES.V;
+  },
+  marca(){ S.cfg.novid=NOVIDADES.V; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); },
+  folha(){
+    const corpo=[h('div',{class:'f14 mut',style:'padding:2px 2px 14px;line-height:1.6'},
+      'Umas coisas novas entraram desde a ultima vez que voce abriu:')];
+    NOVIDADES.ITENS.forEach(([ico,tit,txt])=>{
+      corpo.push(h('div',{class:'nov-l'},
+        h('span',{class:'nov-i'}, ico),
+        h('div',{style:'min-width:0'},
+          h('div',{class:'nov-t'}, tit),
+          h('div',{class:'nov-d'}, txt))));
+    });
+    corpo.push(h('div',{style:'height:14px'}));
+    corpo.push(h('button',{class:'btn btn-p',onclick:()=>{ NOVIDADES.marca(); UI.fechaFolha(); }},'Bora treinar'));
+    UI.folha('Novidades no ForgeX', corpo, null, ()=>NOVIDADES.marca());
+  }
 };
 
 const EXPORTA={
@@ -3171,7 +3267,7 @@ TELAS.treinoDet = function({id}){
       h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(t.volume)+' kg')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},(t.recordes||0)+' 🥇'))),
     h('span',{style:'cursor:pointer',onclick:()=>distMuscularFolha(t)}, corpoSVG(gruposDoTreino(t), 92)))));
-  m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:12px',onclick:()=>{
+  const trocaAcad=()=>{
     ACAD.folha(t.academia||null, a=>{
       if(a && a.n) t.academia=a; else delete t.academia;
       t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
@@ -3179,9 +3275,22 @@ TELAS.treinoDet = function({id}){
         NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
       UI.refaz(); UI.toast(a? 'Academia salva \u2713' : 'Academia removida', !!a);
     });
-  }}, '📍 Academia', h('span',{class:'esp'}),
-     h('span',{class:'f13'+(t.academia?'':' mut2'),style:'max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
-       (t.academia && t.academia.n) || 'Selecionar')));
+  };
+  if(t.academia && t.academia.n){
+    const vz=ACAD.vezes(t.academia);
+    m.appendChild(h('div',{class:'acad-linha'},
+      h('button',{class:'acad-ir',onclick:()=>ACAD.abreMapa(t.academia)},
+        h('span',{class:'acad-pin'},'📍'),
+        h('div',{style:'min-width:0;text-align:left'},
+          h('div',{class:'acad-n'}, t.academia.n),
+          h('div',{class:'acad-sub'}, vz>1? (vz+' treinos aqui \u00b7 abrir no mapa') : 'abrir no mapa')),
+        h('span',{class:'esp'}),
+        h('span',{class:'feed-acad-ir',style:'font-size:14px'},'\u2197')),
+      h('button',{class:'acad-ed',title:'Trocar academia',onclick:trocaAcad},'\u270E')));
+  } else {
+    m.appendChild(h('button',{class:'menu-op',style:'margin-bottom:12px',onclick:trocaAcad},
+      '📍 Academia', h('span',{class:'esp'}), h('span',{class:'f13 mut2'},'Selecionar')));
+  }
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>SHARE.folha(t)},'📤 Compartilhar treino'));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>{
     if(S.ativo){ UI.toast('Você já tem um treino em andamento'); return; }
@@ -3352,6 +3461,14 @@ const EDTREINO = {
         }},'+ série'));
       });
       secoes.push(h('div',{style:'height:10px'}));
+      secoes.push(h('button',{class:'menu-op',style:'margin-bottom:6px',onclick:()=>{
+        ACAD.folha(t.academia||null, a=>{
+          if(a && a.n) t.academia=a; else delete t.academia;
+          render();
+        }, true);
+      }}, '📍 Academia', h('span',{class:'esp'}),
+         h('span',{class:'f13'+(t.academia?'':' mut2'),style:'max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},
+           (t.academia && t.academia.n) || 'Selecionar')));
       secoes.push(h('button',{class:'menu-op',onclick:()=>{
         PICKER.abre(id=>{
           copia.push({exId:id, descanso:S.cfg.descanso||90, notas:'',
@@ -4775,7 +4892,12 @@ function cartaoFeed(i){
       i.meu? h('button',{class:'feed-mais',onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
     ...(function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
-      return (a && a.n) ? [h('div',{class:'feed-acad'}, '📍 '+a.n)] : []; })(),
+      if(!(a && a.n)) return [];
+      return [h('button',{class:'feed-acad',title:'Abrir no mapa',
+        onclick:ev=>{ ev.stopPropagation(); ACAD.abreMapa(a); }},
+        h('span',{},'📍 '+a.n),
+        h('span',{class:'feed-acad-ir'},'\u2197'))];
+    })(),
     h('div',{class:'fstats'},
       statCard('tempo','Tempo', CORE.fmtDur((t.fim-t.inicio)/1000)),
       statCard('volume','Volume', CORE.fmtVolCab(t.volume)+' kg'),
@@ -7189,7 +7311,11 @@ function resumoTreino(t){
       sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
     atualizado:agora() };
   if(t.temFoto) r0.f=1;
-  if(t.academia && t.academia.n) r0.acad={n:t.academia.n, id:t.academia.id||null};
+  if(t.academia && t.academia.n){
+    r0.acad={n:t.academia.n, id:t.academia.id||null};
+    // coordenada do LUGAR (publica) pra quem ve poder abrir no mapa
+    if(t.academia.lat!=null){ r0.acad.lat=t.academia.lat; r0.acad.lon=t.academia.lon; }
+  }
   return r0;
 }
 const USERNAME = {
@@ -7582,6 +7708,10 @@ TELAS.boasVindas = function(){
   else if(!TERMOS.aceitou()){ setTimeout(()=>{ try{ TERMOS.folhaObrigatoria(); }catch(e){} }, 700); }
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
+  // novidades: depois que a nuvem desceu, e nunca por cima dos termos
+  setTimeout(()=>{ try{
+    if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
+  }catch(e){} }, 2600);
   // rede em segundo plano
   (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }

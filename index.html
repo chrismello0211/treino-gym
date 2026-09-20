@@ -473,7 +473,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.19';
+const APP_VER='11.19.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3304,7 +3304,10 @@ TELAS.concluido = function({id}){
 
 TELAS.treinoDet = function({id}){
   const t=S.treinos[id]; if(!t){ UI.volta(); return; }
-  UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},t.titulo,h('small',{},dataLonga(t.inicio))),
+  UI.topo(UI.btVoltar(),
+    h('button',{class:'topo-tit',style:'font-size:19px;background:none;border:none;padding:0;text-align:left;min-width:0',
+      title:'Tocar para renomear', onclick:()=>renomeia()},
+      t.titulo, h('small',{},dataLonga(t.inicio))),
     h('button',{class:'btn btn-mini',style:'width:38px',onclick:menu},'⋯'));
   const m=$('#main'); m.innerHTML='';
   m.appendChild(h('div',{class:'card'},h('div',{class:'linha'},
@@ -3381,8 +3384,26 @@ TELAS.treinoDet = function({id}){
     });
     m.appendChild(card);
   });
+  function renomeia(){
+    const inp=h('input',{value:t.titulo, maxlength:'60', placeholder:'Nome do treino'});
+    UI.folha('Renomear treino',[
+      inp, h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:()=>{
+        const n=(inp.value||'').trim();
+        if(!n){ UI.toast('Escreva um nome'); return; }
+        if(n===t.titulo){ UI.fechaFolha(); return; }
+        t.titulo=n; t.atualizado=agora();
+        salva('treinos'); NET.agenda('treinos/'+t.id, t);
+        // o feed precisa refletir o nome novo
+        if(S.perfil && S.perfil.user && S.cfg.feedPub!==false && S.auth)
+          NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+        UI.fechaFolha(); UI.refaz(); UI.toast('Treino renomeado \u2713', true);
+      }},'Salvar')]);
+    setTimeout(()=>{ try{ inp.focus(); inp.select(); }catch(e){} }, 120);
+  }
   function menu(){
     UI.folha(t.titulo,[
+      h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha(); renomeia(); }},'\u270E Renomear treino'),
       h('button',{class:'menu-op',onclick:()=>{ UI.fechaFolha();
         if(S.ativo){ UI.toast('Já existe um treino em andamento'); return; }
         S.ativo={ id:uid(), rid:t.rid, titulo:t.titulo, inicio:agora(),

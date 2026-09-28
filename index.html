@@ -473,7 +473,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.20.1';
+const APP_VER='11.21';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1476,6 +1476,23 @@ function parseTempoCampo(v, ehCardio){
 }
 function fmtMin(seg){ seg=Number(seg)||0; if(!seg) return ''; const m=Math.floor(seg/60), s=Math.round(seg%60); return s? m+':'+String(s).padStart(2,'0') : String(m); }
 function parseMin(v){ v=String(v||'').trim().replace(',',':'); if(!v) return ''; if(v.includes(':')){ const [m,s]=v.split(':'); return (parseInt(m,10)||0)*60+(parseInt(s,10)||0); } return (parseFloat(v)||0)*60; }
+const TELA = {
+  lock:null,
+  quer(){ return !!S.ativo && S.cfg.telaAcesa!==false && ('wakeLock' in navigator); },
+  async pega(){
+    if(!TELA.quer() || TELA.lock || document.visibilityState!=='visible') return;
+    try{
+      TELA.lock = await navigator.wakeLock.request('screen');
+      TELA.lock.addEventListener('release', ()=>{ TELA.lock=null; });
+    }catch(e){ TELA.lock=null; }
+  },
+  solta(){ try{ if(TELA.lock) TELA.lock.release(); }catch(e){} TELA.lock=null; }
+};
+// o sistema solta a trava quando o app some da tela; pega de novo na volta
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') TELA.pega(); });
+document.addEventListener('pointerdown', ()=>{
+  if(!S.ativo && TELA.lock) TELA.solta(); else if(!TELA.lock) TELA.pega();
+}, {passive:true});
 const VIB = {
   _sw:null,
   // iPhone nao tem API de vibracao na web. Desde o iOS 18, alternar um
@@ -1497,7 +1514,8 @@ const VIB = {
       if(typeof navigator.vibrate==='function'){ navigator.vibrate(p); return; }
       const n = Array.isArray(p) ? Math.ceil(p.length/2) : 1;   // pulsos do padrao
       const lb = VIB._ios();
-      for(let i=0; i<Math.min(3, n); i++) setTimeout(()=>{ try{ lb.click(); }catch(e){} }, i*150);
+      try{ lb.click(); }catch(e){}            // sincrono: ainda dentro do toque
+      for(let i=1; i<Math.min(3, n); i++) setTimeout(()=>{ try{ lb.click(); }catch(e){} }, i*150);
     }catch(e){}
   }
 };
@@ -1511,9 +1529,12 @@ const DESC = {
   },
   ajusta(d){ DESC.fim+=d*1000; DESC.total=Math.max(1,DESC.total+d); DESC.tic(); },
   async notifica(){
-    // com o app aberto na tela, o banner do sistema e' redundante: o som, o
-    // toque e o aviso dentro do app ja bastam. So notifica quem nao esta vendo.
-    if(document.visibilityState==='visible') return;
+    const visivel = document.visibilityState==='visible';
+    const temVibra = (typeof navigator.vibrate==='function');
+    // Android vibra de verdade, entao com o app na tela o banner sobra.
+    // iPhone nao tem vibracao na web: a notificacao e' o unico jeito de
+    // vibrar na hora certa. Aparece, vibra e some sozinha (abaixo).
+    if(visivel && (temVibra || !S.cfg.vibra)) return;
     try{
       if(!('Notification' in window) || Notification.permission!=='granted') return;
       const reg = await navigator.serviceWorker.getRegistration();
@@ -1526,12 +1547,23 @@ const DESC = {
         icon:'icon-192.png', badge:'icon-192.png', tag:'forgex-descanso',
         vibrate:[160,90,160,90,300], renotify:true, silent:false, data:{ url:'./' }
       });
+      if(visivel){
+        // com o app aberto ela so existe pra vibrar: some em 4s e nao acumula
+        setTimeout(async()=>{ try{
+          (await reg.getNotifications({tag:'forgex-descanso'})).forEach(n=>n.close());
+        }catch(e){} }, 4000);
+      }
     }catch(e){}
   },
   para(){ clearInterval(DESC.intervalo); $('#timerbar').classList.remove('on'); DESC.fim=0; },
   tic(){
     const resta=(DESC.fim-agora())/1000;
-    if(resta<=0){ DESC.para(); SOM.fimDescanso(); UI.toast('Descanso concluído · bora pra próxima'); return; }
+    if(resta<=0){
+      const atraso=-resta; DESC.para();
+      if(atraso<=5){ SOM.fimDescanso(); UI.toast('Descanso concluído · bora pra próxima'); }
+      else UI.toast('Seu descanso acabou há '+(atraso<90? Math.round(atraso)+'s' : Math.round(atraso/60)+' min'));
+      return;
+    }
     $('#tb-tempo').textContent = CORE.fmtRelogio(resta);
     $('#tb-fill').style.width = Math.max(0, 100*(1-resta/DESC.total))+'%';
   }
@@ -2147,7 +2179,7 @@ TELAS.rotinaEditor = function(){
 /* ---------- TREINO ATIVO ---------- */
 const ATIVO = {
   cronI:null,
-  comeca(rid){ VIB.v(30);
+  comeca(rid){ VIB.v(30); setTimeout(()=>TELA.pega(), 50);
     if(S.ativo){ UI.vai('ativo'); return; }
     const r = rid ? S.rotinas[rid] : null;
     S.ativo = {
@@ -2310,7 +2342,7 @@ const ATIVO = {
       h('button',{class:'btn btn-err',onclick:()=>{
         ATIVO.paraCron(false); ATIVO._rasc=null;
         if(CORE.reverteTreino(S.ativo)) salva('prs');  // treino descartado nao deixa recorde pra tras
-        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
+        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); TELA.solta(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
       }},'Descartar treino')]);
   },
   cron:null,
@@ -2402,7 +2434,7 @@ const ATIVO = {
           FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid][salvo.id]=foto; }
         if(S.perfil?.user && pubAgora) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, resumoTreino(salvo));
         // sugere atualizar rotina com as cargas de hoje
-        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para();
+        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); TELA.solta();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
         if(!navigator.onLine){
           setTimeout(()=>UI.toast('Treino salvo aqui. Vai sincronizar quando você conectar ✓', true), 500);
@@ -3944,7 +3976,16 @@ TELAS.config = function(){
 
   const sw=(rot,campo)=>h('button',{class:'menu-op',onclick:function(){ S.cfg[campo]=!S.cfg[campo]; salvaCfg(); this.querySelector('.chip').textContent=S.cfg[campo]?'Ligado':'Desligado'; this.querySelector('.chip').classList.toggle('on',S.cfg[campo]); }},
     rot, h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg[campo]?' on':'')},S.cfg[campo]?'Ligado':'Desligado'));
-  m.appendChild(h('div',{class:'card'}, sw('Som do timer','som'), sw('Vibração','vibra')));
+  const swTela=h('button',{class:'menu-op',onclick:function(){
+      S.cfg.telaAcesa = (S.cfg.telaAcesa===false); salvaCfg();
+      const on=S.cfg.telaAcesa!==false, c=this.querySelector('.chip');
+      c.textContent=on?'Ligado':'Desligado'; c.classList.toggle('on',on);
+      if(on) TELA.pega(); else TELA.solta();
+    }}, 'Manter tela acesa no treino', h('span',{class:'esp'}),
+    h('span',{class:'chip'+(S.cfg.telaAcesa!==false?' on':'')}, S.cfg.telaAcesa!==false?'Ligado':'Desligado'));
+  m.appendChild(h('div',{class:'card'}, sw('Som do timer','som'), sw('Vibração','vibra'), swTela,
+    h('div',{class:'f12 mut2',style:'line-height:1.5;margin-top:6px;padding:0 4px'},
+      'Se a tela apagar ou você sair do app, o iPhone pausa o ForgeX e o aviso do descanso não chega na hora. Com a tela acesa ele continua contando.')));
 
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'secao',style:'margin:0 0 8px'},'Importar treinos'),

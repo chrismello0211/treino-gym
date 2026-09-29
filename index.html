@@ -473,7 +473,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.21';
+const APP_VER='11.22';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1489,7 +1489,15 @@ const TELA = {
   solta(){ try{ if(TELA.lock) TELA.lock.release(); }catch(e){} TELA.lock=null; }
 };
 // o sistema solta a trava quando o app some da tela; pega de novo na volta
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') TELA.pega(); });
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState!=='visible') return;
+  TELA.pega();
+  try{ DESC.checaServidor(); }catch(e){}
+  // o aviso que chegou com o app fora da tela ja cumpriu o papel: tira da central
+  if(!DESC.fim && navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(reg=>{
+    if(reg) reg.getNotifications({tag:'forgex-descanso'}).then(ns=>ns.forEach(n=>n.close()));
+  }).catch(()=>{});
+});
 document.addEventListener('pointerdown', ()=>{
   if(!S.ativo && TELA.lock) TELA.solta(); else if(!TELA.lock) TELA.pega();
 }, {passive:true});
@@ -1521,14 +1529,45 @@ const VIB = {
 };
 const DESC = {
   fim:0, total:0, intervalo:null, exNome:'',
+  // ---- aviso pelo servidor (Function pushDescanso) ----
+  // O iPhone congela o app quando ele sai da tela, e o cronometro para junto.
+  // Por isso o fim do descanso e' entregue ao servidor, que manda a
+  // notificacao na hora certa. So vale com a chave /config/pushDescanso.
+  remotoOn:false, rid:null, agendado:false, _deb:0,
+  async checaServidor(){
+    const v = await NET.get('/config/pushDescanso');
+    DESC.remotoOn = (v===true);
+  },
+  agenda(){
+    DESC.agendado=false;
+    if(!DESC.remotoOn || !S.auth || !S.cfg.pushTok || !DESC.fim) return;
+    if(typeof Notification==='undefined' || Notification.permission!=='granted') return;
+    const id = uid(); DESC.rid = id;
+    const val = { fim: Math.round(DESC.fim), t0: agora(), id, tok: String(S.cfg.pushTok).slice(0, 400),
+                  ex: String(DESC.exNome||'').slice(0, 80) };
+    NET.putD('/descansos/'+S.auth.uid, val)
+      .then(()=>{ if(DESC.rid===id) DESC.agendado=true; })
+      .catch(()=>{ if(DESC.rid===id) DESC.agendado=false; });   // falhou: o aviso local assume
+  },
+  desagenda(){
+    clearTimeout(DESC._deb);
+    const tinha = DESC.rid; DESC.rid=null; DESC.agendado=false;
+    if(tinha && S.auth) NET.putD('/descansos/'+S.auth.uid, null).catch(()=>{});
+  },
   inicia(seg, exNome){
     if(seg<=0) return;
     DESC.total=seg; DESC.fim=agora()+seg*1000; DESC.exNome=exNome||'';
     $('#timerbar').classList.add('on'); DESC.tic();
     clearInterval(DESC.intervalo); DESC.intervalo=setInterval(DESC.tic, 250);
+    clearTimeout(DESC._deb); DESC.agenda();
   },
-  ajusta(d){ DESC.fim+=d*1000; DESC.total=Math.max(1,DESC.total+d); DESC.tic(); },
+  ajusta(d){
+    DESC.fim+=d*1000; DESC.total=Math.max(1,DESC.total+d); DESC.tic();
+    // varios toques seguidos no +15 viram UMA escrita so
+    if(DESC.rid){ clearTimeout(DESC._deb); DESC._deb=setTimeout(()=>DESC.agenda(), 700); }
+  },
   async notifica(){
+    if(DESC.agendado) return;          // o servidor ja vai mandar (e vibrar)
     const visivel = document.visibilityState==='visible';
     const temVibra = (typeof navigator.vibrate==='function');
     // Android vibra de verdade, entao com o app na tela o banner sobra.
@@ -1555,11 +1594,16 @@ const DESC = {
       }
     }catch(e){}
   },
-  para(){ clearInterval(DESC.intervalo); $('#timerbar').classList.remove('on'); DESC.fim=0; },
+  para(cancela){
+    clearInterval(DESC.intervalo); $('#timerbar').classList.remove('on'); DESC.fim=0;
+    // Pular, concluir ou descartar: cancela no servidor. No fim natural o
+    // aviso ja esta a caminho, entao nao mexe.
+    if(cancela!==false) DESC.desagenda();
+  },
   tic(){
     const resta=(DESC.fim-agora())/1000;
     if(resta<=0){
-      const atraso=-resta; DESC.para();
+      const atraso=-resta; DESC.para(false);
       if(atraso<=5){ SOM.fimDescanso(); UI.toast('Descanso concluído · bora pra próxima'); }
       else UI.toast('Seu descanso acabou há '+(atraso<90? Math.round(atraso)+'s' : Math.round(atraso/60)+' min'));
       return;
@@ -6133,7 +6177,7 @@ window.addEventListener('pageshow', ()=>setTimeout(()=>recuperaViewport(true), 1
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev=>{
     const d=ev.data||{};
-    if(d && d.tipo==='push-fg' && d.title){ try{ UI.toast(d.title, true); }catch(e){} }
+    if(d && d.tipo==='push-fg' && d.title && d.k!=='descanso'){ try{ UI.toast(d.title, true); }catch(e){} }
   });
 }
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
@@ -7885,7 +7929,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

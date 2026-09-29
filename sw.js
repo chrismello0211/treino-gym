@@ -3,7 +3,7 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v11.21', GCACHE='tg-gifs-v1';
+const CACHE='tg-v11.22', GCACHE='tg-gifs-v1';
 const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
 
 self.addEventListener('install',e=>{ self.skipWaiting();
@@ -43,17 +43,26 @@ self.addEventListener('push', e=>{
   let d={}; try{ d=e.data.json(); }catch(_){}
   const dd=(d&&d.data)||d||{};
   const title=dd.title||'ForgeX';
+  const ehDesc = dd.tipo==='descanso';
   e.waitUntil((async()=>{
     await self.registration.showNotification(title,{
       body: dd.body||'',
       icon:'icon-192.png',
       badge:'icon-192.png',
-      tag: dd.tipo? (dd.tipo+':'+(dd.tid||dd.quem||'')) : undefined,
+      // descanso usa sempre a mesma etiqueta: o novo substitui o velho
+      tag: ehDesc ? 'forgex-descanso' : (dd.tipo? (dd.tipo+':'+(dd.tid||dd.quem||'')) : undefined),
+      renotify: ehDesc || undefined,
+      vibrate: ehDesc ? [160,90,160,90,300] : undefined,
       data:{ url: dd.url||'./' }
     });
     // avisa janelas abertas (app em primeiro plano)
     const cs=await clients.matchAll({type:'window', includeUncontrolled:true});
-    cs.forEach(c=>c.postMessage({tipo:'push-fg', title, body:dd.body||''}));
+    cs.forEach(c=>c.postMessage({tipo:'push-fg', k: dd.tipo||'', title, body:dd.body||''}));
+    // com o app aberto na tela, o aviso do descanso existe so pra vibrar: some em 4s
+    if(ehDesc && cs.some(c=>c.visibilityState==='visible' || c.focused)){
+      await new Promise(r=>setTimeout(r, 4000));
+      (await self.registration.getNotifications({tag:'forgex-descanso'})).forEach(n=>n.close());
+    }
   })());
 });
 self.addEventListener('notificationclick', e=>{

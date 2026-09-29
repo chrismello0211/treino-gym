@@ -473,7 +473,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.22';
+const APP_VER='11.22.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -769,6 +769,27 @@ const S = {
   fila: LS.get('fila', [])                  // [{path, val, ts}]
 };
 function salva(campo){ LS.set(campo, S[campo]); }
+// Notificação é estado DESTE aparelho. As versões antigas guardavam o token
+// dentro dos ajustes, que sincronizam: o token de um aparelho sobrescrevia o do
+// outro, o aviso ia pro aparelho errado e um aparelho apagava o token do outro.
+const PUSHDEV = {
+  get(){ const v = LS.get('pushDev', null); return (v && typeof v==='object') ? v : {}; },
+  set(o){ LS.set('pushDev', o || {}); },
+  on(){ return !!PUSHDEV.get().on; },
+  tok(){ return PUSHDEV.get().tok || null; }
+};
+(function migraPush(){
+  try{
+    if(!S.cfg || !(('push' in S.cfg) || ('pushTok' in S.cfg))) return;
+    const d = PUSHDEV.get();
+    // a permissao do sistema e' a verdade deste aparelho; o "push" dos ajustes
+    // pode ter vindo de outro aparelho
+    if(d.on===undefined && typeof Notification!=='undefined' && Notification.permission==='granted') d.on = 1;
+    // o token antigo NAO e' confiavel (pode ser de outro aparelho): o renova() busca o verdadeiro
+    PUSHDEV.set(d);
+    delete S.cfg.push; delete S.cfg.pushTok; salva('cfg');
+  }catch(e){}
+})();
 
 // id fixo por instalacao: permite dizer "outro aparelho" com honestidade
 const DEV = (function(){
@@ -1012,7 +1033,10 @@ const NET = {
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
         if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
-        if(nuvem.app.cfg && (nuvem.app.cfg.atualizado||0)>(S.cfg.atualizado||0)){ S.cfg=nuvem.app.cfg; salva('cfg'); m=true; }
+        if(nuvem.app.cfg && (nuvem.app.cfg.atualizado||0)>(S.cfg.atualizado||0)){
+          const nc=Object.assign({}, nuvem.app.cfg); delete nc.push; delete nc.pushTok;   // isso e' do aparelho
+          S.cfg=nc; salva('cfg'); m=true;
+        }
       }
       if(nuvem.prs){
         Object.entries(nuvem.prs).forEach(([ex,p])=>{
@@ -1540,11 +1564,12 @@ const DESC = {
   },
   agenda(){
     DESC.agendado=false;
-    if(!DESC.remotoOn || !S.auth || !S.cfg.pushTok || !DESC.fim) return;
+    if(!DESC.remotoOn || !S.auth || !DESC.fim || !PUSHDEV.on()) return;
     if(typeof Notification==='undefined' || Notification.permission!=='granted') return;
     const id = uid(); DESC.rid = id;
-    const val = { fim: Math.round(DESC.fim), t0: agora(), id, tok: String(S.cfg.pushTok).slice(0, 400),
-                  ex: String(DESC.exNome||'').slice(0, 80) };
+    const val = { fim: Math.round(DESC.fim), t0: agora(), id, ex: String(DESC.exNome||'').slice(0, 80) };
+    // o token e' o DESTE aparelho; sem ele, o servidor avisa todos os aparelhos da conta
+    const tk = PUSHDEV.tok(); if(tk) val.tok = String(tk).slice(0, 400);
     NET.putD('/descansos/'+S.auth.uid, val)
       .then(()=>{ if(DESC.rid===id) DESC.agendado=true; })
       .catch(()=>{ if(DESC.rid===id) DESC.agendado=false; });   // falhou: o aviso local assume
@@ -3985,9 +4010,9 @@ TELAS.config = function(){
         'Rotinas públicas no perfil', h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg.rotPub!==false?' on':'')},S.cfg.rotPub!==false?'Ligado':'Desligado')),
       h('button',{class:'menu-op',onclick:()=>{ S.cfg.unidade = (S.cfg.unidade==='lb'?'kg':'lb'); salva('cfg'); UI.refaz(); }},
         'Unidade de peso padrão', h('span',{class:'esp'}), h('span',{class:'chip on'}, (S.cfg.unidade==='lb'?'lb':'kg'))),
-      h('button',{class:'menu-op',onclick:()=>{ S.cfg.push? PUSH.desativa() : PUSH.ativa(); }},
+      h('button',{class:'menu-op',onclick:()=>{ PUSHDEV.on()? PUSH.desativa() : PUSH.ativa(); }},
         'Notificações push', h('span',{class:'esp'}),
-        h('span',{class:'chip'+(S.cfg.push?' on':'')}, S.cfg.push?'Ligado':'Desligado')),
+        h('span',{class:'chip'+(PUSHDEV.on()?' on':'')}, PUSHDEV.on()?'Ligado':'Desligado')),
       h('button',{class:'menu-op',onclick:async function(){
         await RESTAURA.tudo(this, {silencioso:false});
       }},'Sincronizar agora', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'enviar tudo')),
@@ -6598,30 +6623,32 @@ const PUSH = {
       const reg = await navigator.serviceWorker.ready;
       const tok = await m.getToken({vapidKey:FB.vapid, serviceWorkerRegistration:reg});
       if(!tok){ UI.toast('Não consegui registrar. Tenta de novo em instantes.'); return; }
-      S.cfg.push=1; S.cfg.pushTok=tok; salva('cfg');
+      PUSHDEV.set({on:1, tok});
       await NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, {ts:agora(), ua:(navigator.userAgent||'').slice(0,80)});
       UI.toast('Notificações ativadas ✓', true); UI.refaz();
     }catch(e){ if(DEBUG)console.log('push', e); UI.toast('Falhou ao ativar. Tenta de novo.'); }
   },
   async desativa(){
-    const tok=S.cfg.pushTok;
+    const tok=PUSHDEV.tok();
     try{ if(tok && S.auth) await NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, null); }catch(e){}
     try{ const m=await PUSH.sdk(); await m.deleteToken(); }catch(e){}
-    S.cfg.push=0; delete S.cfg.pushTok; salva('cfg');
+    PUSHDEV.set({on:0});
     UI.toast('Notificações desativadas', true); UI.refaz();
   },
   async renova(){
-    if(!S.cfg.push || !S.auth || !PUSH.suportado()) return;
-    if(Notification.permission!=='granted'){ S.cfg.push=0; delete S.cfg.pushTok; salva('cfg'); return; }
+    if(!PUSHDEV.on() || !S.auth || !PUSH.suportado()) return;
+    if(Notification.permission!=='granted'){ PUSHDEV.set({on:0}); return; }
     try{
       const m=await PUSH.sdk();
       const reg=await navigator.serviceWorker.ready;
       const tok=await m.getToken({vapidKey:FB.vapid, serviceWorkerRegistration:reg});
-      if(tok && tok!==S.cfg.pushTok){
-        if(S.cfg.pushTok) NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+S.cfg.pushTok, null).catch(()=>{});
-        S.cfg.pushTok=tok; salva('cfg');
-        NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, {ts:agora(), ua:(navigator.userAgent||'').slice(0,80)});
-      }
+      if(!tok) return;
+      const velho=PUSHDEV.tok();
+      // so apaga o token antigo se ele era DESTE aparelho
+      if(velho && velho!==tok) NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+velho, null).catch(()=>{});
+      PUSHDEV.set({on:1, tok});
+      // registra SEMPRE: se outro aparelho apagou este token por engano, conserta sozinho
+      NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, {ts:agora(), ua:(navigator.userAgent||'').slice(0,80)}).catch(()=>{});
     }catch(e){}
   }
 };
@@ -7509,8 +7536,8 @@ const CONTA = {
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},'Os dados continuam salvos na conta e voltam quando você entrar de novo. Este aparelho recomeça zerado.'),
       h('button',{class:'btn btn-err',onclick:async function(){
         this.disabled=true; this.textContent='Saindo...';
-        if(S.cfg.pushTok && S.auth){
-          try{ await Promise.race([ NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+S.cfg.pushTok, null),
+        if(PUSHDEV.tok() && S.auth){
+          try{ await Promise.race([ NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+PUSHDEV.tok(), null),
                                     new Promise(r=>setTimeout(r,4000)) ]); }catch(e){}
         }
         Object.keys(localStorage).filter(k=>k.startsWith('tg_')).forEach(k=>localStorage.removeItem(k));

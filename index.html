@@ -226,6 +226,23 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
   border-radius:14px;color:var(--tx3);font-size:15px}
 .acad-ed:active{background:var(--surf3)}
 .nov-l{display:flex;gap:12px;align-items:flex-start;padding:11px 2px;border-top:1px solid var(--line)}
+/* galeria do perfil: faixa que sangra ate a borda, estilo rede social */
+.galeria{display:flex;gap:4px;overflow-x:auto;margin:0 -16px 14px;padding:0 16px;scroll-padding:0 16px;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.galeria::-webkit-scrollbar{display:none}
+.gal-it{flex:0 0 auto;width:30%;max-width:156px;aspect-ratio:3/4;border-radius:12px;overflow:hidden;background:var(--surf2);position:relative;scroll-snap-align:start;cursor:pointer;border:0;padding:0;-webkit-tap-highlight-color:transparent}
+.gal-it img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .35s ease}
+.gal-it img.ok{opacity:1}
+.gal-it::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 58%,rgba(0,0,0,.55));pointer-events:none}
+.gal-d{position:absolute;left:8px;bottom:7px;z-index:1;font-size:11px;font-weight:800;color:#fff;letter-spacing:.2px;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.gal-vazia{display:flex;align-items:center;gap:12px;border:1.5px dashed var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;color:var(--tx2);font-size:13px;line-height:1.45}
+/* bio e link ocupam a largura toda: texto longo quebra em vez de vazar */
+.pf-bio{font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px}
+.pf-link{display:flex;align-items:center;gap:7px;margin-top:8px;max-width:100%;color:var(--brand2);font-weight:700;font-size:13.5px;text-decoration:none}
+.pf-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pf-link svg{flex:0 0 auto}
+canvas.graf{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.med-hist{display:flex;align-items:center;gap:6px;margin-top:10px;padding:10px 0 0;border:0;border-top:1px solid var(--line);color:var(--brand2);font-weight:700;font-size:13.5px;width:100%;background:none;text-align:left;cursor:pointer;font-family:inherit}
+.med-row.toca{cursor:pointer}
 .nov-l:first-of-type{border-top:none}
 .nov-i{font-size:19px;line-height:1.2;flex-shrink:0;width:26px;text-align:center}
 .nov-t{font-weight:700;font-size:14.5px}
@@ -473,7 +490,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.22.1';
+const APP_VER='11.23';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1681,45 +1698,166 @@ function grafBarras(canvas, dados, formata){
     UI.toast((lbl?lbl+': ':'')+(g.formata?g.formata(d.v):String(d.v)), true);
   };
 }
-function grafLinhaClicavel(cv, pontos, formata){
-  grafLinhaClicavel(cv, pontos, formata);
-  const W=cv.clientWidth||320, pad=18;
-  cv.style.cursor='pointer';
-  cv.onclick=ev=>{
-    if(!pontos.length) return;
-    const r=cv.getBoundingClientRect();
-    const x=ev.clientX-r.left;
-    const X=i=>pad+(W-pad*2)*(pontos.length===1?0.5:i/(pontos.length-1));
-    let bi=-1, bd=1e9;
-    pontos.forEach((p,i)=>{ const d=Math.abs(X(i)-x); if(d<bd){bd=d; bi=i;} });
-    if(bi<0||bd>28) return;
-    const p=pontos[bi];
-    UI.toast((p.rot?p.rot+': ':'')+(formata?formata(p.v):String(p.v)), true);
-  };
-}
-function grafLinha(canvas, pontos, formata){
-  const dpr=window.devicePixelRatio||1, W=canvas.clientWidth||320, H=canvas.clientHeight||170;
-  canvas.width=W*dpr; canvas.height=H*dpr;
-  const c=canvas.getContext('2d'); const T=temaCanvas(); c.scale(dpr,dpr); c.clearRect(0,0,W,H);
-  if(!pontos.length) return;
-  const vs=pontos.map(p=>p.v), max=Math.max(...vs), min=Math.min(...vs);
-  const pad=18, base=H-26, topo=14, span=(max-min)||1;
-  const X=i=>pad+ (W-pad*2)*(pontos.length===1?0.5:i/(pontos.length-1));
-  const Y=v=>base-(base-topo)*(v-min)/span;
-  c.strokeStyle=T.vazio; c.lineWidth=1;
-  [0,.5,1].forEach(f=>{ const y=topo+(base-topo)*f; c.beginPath(); c.moveTo(pad,y); c.lineTo(W-pad,y); c.stroke(); });
-  c.strokeStyle='#FF5A00'; c.lineWidth=2.4; c.lineJoin='round'; c.beginPath();
-  pontos.forEach((p,i)=>{ const x=X(i),y=Y(p.v); i?c.lineTo(x,y):c.moveTo(x,y); }); c.stroke();
-  c.fillStyle='#FF7A2E';
-  pontos.forEach((p,i)=>{ c.beginPath(); c.arc(X(i),Y(p.v),3.4,0,7); c.fill(); });
-  c.fillStyle=T.txt; c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif'; c.textAlign='left';
-  c.fillText(formata?formata(max):String(max), 4, 12);
-  c.fillText(formata?formata(min):String(min), 4, base+4);
-  c.fillStyle=T.rot; c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
-  c.textAlign='center';
-  if(pontos[0].rot) c.fillText(pontos[0].rot, X(0)+10, H-8);
-  const u=pontos.length-1;
-  if(u>0 && pontos[u].rot) c.fillText(pontos[u].rot, X(u)-10, H-8);
+const GRAFL = {
+  // layout comum a desenho e toque
+  layout(cv){
+    const W=cv.clientWidth||320, H=cv.clientHeight||170, g=cv._g;
+    const vs=g.pontos.map(p=>p.v), max=Math.max(...vs), min=Math.min(...vs);
+    const padL=14, padR=14, topo=24, base=H-30, span=(max-min)||1;
+    const n=g.pontos.length, plano=(max===min);
+    const X=i=>padL+(W-padL-padR)*(n===1?0.5:i/(n-1));
+    // sem variacao (ou um ponto so): a linha fica no meio, nao colada no fundo
+    const Y=v=>plano? (topo+base)/2 : base-(base-topo)*(v-min)/span;
+    return {W,H,max,min,padL,padR,topo,base,X,Y,n,plano, iMax:vs.indexOf(max), iMin:vs.lastIndexOf(min)};
+  },
+  // curva monotona (Fritsch-Carlson): suave e sem inventar picos entre os pontos
+  curva(c, P){
+    const n=P.length; c.moveTo(P[0].x,P[0].y); if(n<2) return;
+    const dx=[], m=[];
+    for(let i=0;i<n-1;i++){ dx[i]=P[i+1].x-P[i].x; m[i]=dx[i]? (P[i+1].y-P[i].y)/dx[i] : 0; }
+    const tg=[m[0]];
+    for(let i=1;i<n-1;i++) tg[i]=(m[i-1]*m[i]<=0)? 0 : (m[i-1]+m[i])/2;
+    tg[n-1]=m[n-2];
+    for(let i=0;i<n-1;i++){
+      if(m[i]===0){ tg[i]=0; tg[i+1]=0; continue; }
+      const a=tg[i]/m[i], b=tg[i+1]/m[i], s=a*a+b*b;
+      if(s>9){ const k=3/Math.sqrt(s); tg[i]=k*a*m[i]; tg[i+1]=k*b*m[i]; }
+    }
+    for(let i=0;i<n-1;i++){
+      const q=dx[i]/3;
+      c.bezierCurveTo(P[i].x+q, P[i].y+q*tg[i], P[i+1].x-q, P[i+1].y-q*tg[i+1], P[i+1].x, P[i+1].y);
+    }
+  },
+  bolha(c, x, y, w, h, r){
+    c.beginPath(); c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.arcTo(x+w,y,x+w,y+r,r); c.lineTo(x+w,y+h-r);
+    c.arcTo(x+w,y+h,x+w-r,y+h,r); c.lineTo(x+r,y+h); c.arcTo(x,y+h,x,y+h-r,r); c.lineTo(x,y+r); c.arcTo(x,y,x+r,y,r); c.closePath();
+  },
+  desenha(cv, prog){
+    const g=cv._g; if(!g) return;
+    const dpr=window.devicePixelRatio||1, L=GRAFL.layout(cv), T=temaCanvas();
+    const claro=document.body.classList.contains('claro');
+    cv.width=L.W*dpr; cv.height=L.H*dpr;
+    const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,L.W,L.H);
+    const fmt=v=>g.formata? g.formata(v) : String(v);
+    // grade
+    c.strokeStyle=T.vazio; c.lineWidth=1; c.setLineDash([3,4]);
+    [0,.5,1].forEach(f=>{ const y=L.topo+(L.base-L.topo)*f; c.beginPath(); c.moveTo(L.padL,y); c.lineTo(L.W-L.padR,y); c.stroke(); });
+    c.setLineDash([]);
+    // rotulos de maximo e minimo: cada um vai pro lado OPOSTO de onde o extremo
+    // acontece, pra nunca ficar em cima da linha; contorno na cor do cartao
+    const fundo=(getComputedStyle(cv).getPropertyValue('--surf')||'').trim() || (claro?'#FFFFFF':'#161619');
+    c.font='700 11px -apple-system,Segoe UI,Roboto,sans-serif'; c.lineJoin='round';
+    const rotulo=(txt, y, iExt)=>{
+      const naEsq = L.X(iExt) > L.W/2;
+      c.textAlign = naEsq? 'left' : 'right';
+      const x = naEsq? L.padL : L.W-L.padR;
+      c.lineWidth=4; c.strokeStyle=fundo; c.strokeText(txt,x,y);
+      c.fillStyle=T.txt; c.fillText(txt,x,y);
+    };
+    if(L.plano) rotulo(fmt(L.max), L.Y(L.max)-10, L.n-1);
+    else { rotulo(fmt(L.max), L.topo-7, L.iMax); rotulo(fmt(L.min), L.base-6, L.iMin); }
+    // datas
+    c.fillStyle=T.rot; c.font='10.5px -apple-system,Segoe UI,Roboto,sans-serif';
+    const p0=g.pontos[0], pu=g.pontos[L.n-1];
+    c.textAlign='left'; if(p0.rot) c.fillText(p0.rot, L.padL, L.H-9);
+    c.textAlign='right'; if(L.n>1 && pu.rot) c.fillText(pu.rot, L.W-L.padR, L.H-9);
+    const P=g.pontos.map((p,i)=>({x:L.X(i), y:L.Y(p.v)}));
+    // animacao: revela da esquerda pra direita
+    const xCorte=L.padL+(L.W-L.padL-L.padR+4)*prog;
+    c.save(); c.beginPath(); c.rect(0,0,xCorte,L.H); c.clip();
+    // area em degrade
+    const gr=c.createLinearGradient(0,L.topo,0,L.base);
+    gr.addColorStop(0,'rgba(255,90,0,'+(claro?.20:.32)+')'); gr.addColorStop(1,'rgba(255,90,0,0)');
+    c.beginPath(); GRAFL.curva(c,P); c.lineTo(P[P.length-1].x,L.base); c.lineTo(P[0].x,L.base); c.closePath();
+    c.fillStyle=gr; c.fill();
+    // linha com brilho
+    const gl=c.createLinearGradient(L.padL,0,L.W-L.padR,0); gl.addColorStop(0,'#FF7A2E'); gl.addColorStop(1,'#FF5A00');
+    c.strokeStyle=gl; c.lineWidth=2.6; c.lineJoin='round'; c.lineCap='round';
+    c.shadowColor='rgba(255,90,0,.45)'; c.shadowBlur=8;
+    c.beginPath(); GRAFL.curva(c,P); c.stroke();
+    c.shadowBlur=0;
+    // pontos pequenos so quando cabem
+    if(L.n<=24){ c.fillStyle='#FF7A2E'; P.forEach((q,i)=>{ if(i===L.n-1) return; c.beginPath(); c.arc(q.x,q.y,2.6,0,7); c.fill(); }); }
+    c.restore();
+    // ponto final em destaque (aparece no fim da animacao)
+    if(prog>=1){
+      const q=P[L.n-1];
+      c.fillStyle='rgba(255,90,0,.20)'; c.beginPath(); c.arc(q.x,q.y,9,0,7); c.fill();
+      c.fillStyle='#FF5A00'; c.beginPath(); c.arc(q.x,q.y,4.6,0,7); c.fill();
+      c.strokeStyle=claro?'#fff':'#0B0B0E'; c.lineWidth=2; c.stroke();
+    }
+    // selecao: guia vertical + bolha com valor e data
+    const s=g.sel;
+    if(prog>=1 && s>=0 && s<L.n){
+      const q=P[s], p=g.pontos[s];
+      c.strokeStyle=claro?'rgba(0,0,0,.18)':'rgba(255,255,255,.22)'; c.lineWidth=1;
+      c.beginPath(); c.moveTo(q.x,L.topo-4); c.lineTo(q.x,L.base); c.stroke();
+      c.fillStyle='#FF5A00'; c.beginPath(); c.arc(q.x,q.y,6,0,7); c.fill();
+      c.strokeStyle=claro?'#fff':'#0B0B0E'; c.lineWidth=2.2; c.stroke();
+      const l1=fmt(p.v), l2=p.dica||p.rot||'';
+      const l3=(g.opts.onPonto && s===g.selFixa)? 'toque de novo para editar' : '';
+      c.font='800 13px -apple-system,Segoe UI,Roboto,sans-serif'; const w1=c.measureText(l1).width;
+      c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif'; const w2=c.measureText(l2).width, w3=l3? c.measureText(l3).width : 0;
+      const bw=Math.max(w1,w2,w3)+20, bh=l3? 56 : 42;
+      let bx=q.x-bw/2; bx=Math.max(2,Math.min(L.W-bw-2,bx));
+      let by=q.y-bh-12; if(by<2) by=q.y+12;
+      c.fillStyle=claro?'#101014':'#F4F4F6'; GRAFL.bolha(c,bx,by,bw,bh,10); c.fill();
+      c.textAlign='left'; c.fillStyle=claro?'#fff':'#0B0B0E';
+      c.font='800 13px -apple-system,Segoe UI,Roboto,sans-serif'; c.fillText(l1,bx+10,by+18);
+      c.fillStyle=claro?'rgba(255,255,255,.7)':'rgba(0,0,0,.62)';
+      c.font='600 11px -apple-system,Segoe UI,Roboto,sans-serif'; c.fillText(l2,bx+10,by+33);
+      if(l3){ c.fillStyle='#FF5A00'; c.fillText(l3,bx+10,by+48); }
+    }
+  },
+  anima(cv){
+    const t0=performance.now(), dur=750, id=(cv._gAnim=(cv._gAnim||0)+1);
+    const passo=(t)=>{
+      if(cv._gAnim!==id || !cv.isConnected) return;
+      const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3);
+      GRAFL.desenha(cv,e);
+      if(k<1) requestAnimationFrame(passo);
+    };
+    requestAnimationFrame(passo);
+  },
+  liga(cv){
+    let toque=null, moveu=false, t0=0, antes=-1;
+    const indice=ev=>{
+      const g=cv._g; if(!g||!g.pontos.length) return -1;
+      const r=cv.getBoundingClientRect(), x=ev.clientX-r.left, L=GRAFL.layout(cv);
+      let bi=0, bd=1e9; g.pontos.forEach((p,i)=>{ const d=Math.abs(L.X(i)-x); if(d<bd){ bd=d; bi=i; } });
+      return bi;
+    };
+    const mostra=i=>{ const g=cv._g; if(!g || i<0) return; if(i!==g.sel){ g.sel=i; GRAFL.desenha(cv,1); } };
+    const some=()=>{ clearTimeout(cv._gT); cv._gT=setTimeout(()=>{ const g=cv._g; if(g){ g.sel=-1; g.selFixa=-1; GRAFL.desenha(cv,1); } }, 3200); };
+    cv.addEventListener('pointerdown', ev=>{
+      const g=cv._g; if(!g) return;
+      clearTimeout(cv._gT); toque={x:ev.clientX}; moveu=false; t0=Date.now(); antes=g.selFixa;
+      mostra(indice(ev));
+    });
+    cv.addEventListener('pointermove', ev=>{
+      if(!toque){ if(ev.pointerType==='mouse') mostra(indice(ev)); return; }
+      if(Math.abs(ev.clientX-toque.x)>6) moveu=true;
+      mostra(indice(ev));
+    });
+    cv.addEventListener('pointerup', ev=>{
+      const g=cv._g; if(!toque || !g) return;
+      const i=g.sel, foiToque=!moveu && (Date.now()-t0)<450; toque=null;
+      // 1o toque mostra o valor; tocar de novo no MESMO ponto abre a edicao
+      if(foiToque && g.opts.onPonto && i>=0 && i===antes){ g.selFixa=-1; g.sel=-1; GRAFL.desenha(cv,1); g.opts.onPonto(i); return; }
+      g.selFixa=i; GRAFL.desenha(cv,1); some();
+    });
+    cv.addEventListener('pointercancel', ()=>{ toque=null; some(); });
+    cv.addEventListener('pointerleave', ev=>{ if(ev.pointerType==='mouse'){ const g=cv._g; if(g){ g.sel=-1; GRAFL.desenha(cv,1); } } });
+  }
+};
+function grafLinha(canvas, pontos, formata, opts){
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  if(!pontos || !pontos.length){ canvas.width=canvas.width; return; }
+  canvas._g={pontos, formata, opts:opts||{}, sel:-1, selFixa:-1};
+  if(!canvas._gLigado){ canvas._gLigado=true; GRAFL.liga(canvas); }
+  const calmo = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(calmo) GRAFL.desenha(canvas,1); else GRAFL.anima(canvas);
 }
 
 /* ---------- picker de exercícios ---------- */
@@ -3096,18 +3234,18 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
 
 /* ---------- o que mudou desde a ultima vez ---------- */
 const NOVIDADES = {
-  V: 3,     // subir este numero faz a folha aparecer de novo
+  V: 4,     // subir este numero faz a folha aparecer de novo
   ITENS: [
-    ['📍','Academia no treino',
-     'Registre onde treinou. O app acha as academias perto de voce, e tocar no nome abre o mapa.'],
-    ['\ud83e\udd47','Recordes mais claros',
-     'A medalha ficou dourada e agora aparece a serie exata que gerou cada recorde.'],
-    ['\u23F1','Cronometro na prancha',
-     'Exercicio de tempo ganhou play, e tudo passou a aparecer em minutos e segundos.'],
-    ['\u21B6','Desfazer',
-     'Excluiu treino, ficha ou exercicio sem querer? Tem 6 segundos pra voltar atras.'],
-    ['\u270E','Editar treino salvo',
-     'Esqueceu uma serie? Da pra ajustar carga, repeticoes e exercicios depois de concluir.']
+    ['\ud83d\udd14','Aviso do descanso que chega',
+     'O fim do descanso agora avisa mesmo com o app minimizado ou o celular bloqueado. E a tela fica acesa durante o treino.'],
+    ['\ud83d\uddbc\ufe0f','Galeria no perfil',
+     'As fotos dos seus treinos aparecem no topo do perfil, como numa rede social. Toque numa foto para abrir o treino.'],
+    ['\ud83d\udccf','Medi\u00e7\u00f5es edit\u00e1veis',
+     'Errou um peso? Toque no gr\u00e1fico ou no hist\u00f3rico para corrigir o valor, a data, ou apagar.'],
+    ['\ud83d\udd00','Pr\u00f3xima ficha certa',
+     'Se voc\u00ea pulou uma ficha da sequ\u00eancia, o app sugere ela antes de seguir em frente.'],
+    ['\u270f\ufe0f','Organize do seu jeito',
+     'Toque no nome de um treino salvo para renomear. As pastas lembram se estavam abertas e d\u00e1 para reorden\u00e1-las.']
   ],
   deveMostrar(){
     if(!S.perfil || !S.perfil.nome) return false;          // quem nunca usou nao tem novidade
@@ -3117,7 +3255,7 @@ const NOVIDADES = {
   marca(){ S.cfg.novid=NOVIDADES.V; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); },
   folha(){
     const corpo=[h('div',{class:'f14 mut',style:'padding:2px 2px 14px;line-height:1.6'},
-      'Umas coisas novas entraram desde a ultima vez que voce abriu:')];
+      'Umas coisas novas entraram desde a \u00faltima vez que voc\u00ea abriu:')];
     NOVIDADES.ITENS.forEach(([ico,tit,txt])=>{
       corpo.push(h('div',{class:'nov-l'},
         h('span',{class:'nov-i'}, ico),
@@ -3858,6 +3996,76 @@ TELAS.exercicio = function({id}){
 };
 
 /* ---------- PERFIL ---------- */
+/* ---------- link da bio ----------
+   Links de rede social viram "@usuario" e perdem os parametros de rastreio
+   (?igsh=, ?stkn=, utm_...). So http/https: nada de javascript:. */
+function linkBonito(url){
+  url=String(url||'').trim(); if(!url) return null;
+  let u; try{ u=new URL(/^https?:\/\//i.test(url)? url : 'https://'+url); }catch(e){ return null; }
+  if(u.protocol!=='https:' && u.protocol!=='http:') return null;
+  if(!/\./.test(u.hostname)) return null;
+  const host=u.hostname.replace(/^www\./i,'').toLowerCase();
+  const segs=u.pathname.split('/').filter(Boolean);
+  if(host==='instagram.com' && segs.length===1 && /^[A-Za-z0-9._]{1,30}$/.test(segs[0]))
+    return {href:'https://www.instagram.com/'+segs[0]+'/', rotulo:'@'+segs[0], rede:'Instagram'};
+  if(host==='tiktok.com' && segs.length===1 && /^@[A-Za-z0-9._]{1,30}$/.test(segs[0]))
+    return {href:'https://www.tiktok.com/'+segs[0], rotulo:segs[0], rede:'TikTok'};
+  if((host==='x.com'||host==='twitter.com') && segs.length===1 && /^[A-Za-z0-9_]{1,15}$/.test(segs[0]))
+    return {href:'https://x.com/'+segs[0], rotulo:'@'+segs[0], rede:'X'};
+  let rot=host+(segs.length? '/'+segs.join('/') : '');
+  try{ rot=decodeURIComponent(rot); }catch(e){}
+  return {href:u.href, rotulo:rot, rede:null};
+}
+function linkEl(url){
+  const L=linkBonito(url); if(!L) return null;
+  return h('a',{class:'pf-link', href:L.href, target:'_blank', rel:'noopener noreferrer',
+    html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>'},
+    h('span',{}, (L.rede? L.rede+' \u00b7 ' : '')+L.rotulo));
+}
+
+/* ---------- galeria do perfil (estilo rede social) ----------
+   So fotos de TREINO. Foto de progresso (prefixo prog_) nunca entra.
+   Do amigo, so o que ele publicou no feed. */
+const GALERIA = {
+  MAX: 12,
+  obs: (typeof IntersectionObserver!=='undefined') ? new IntersectionObserver(ents=>{
+    ents.forEach(en=>{ if(!en.isIntersecting) return; GALERIA.obs.unobserve(en.target); GALERIA.carrega(en.target); });
+  },{rootMargin:'200px'}) : null,
+  carrega(el){
+    FOTOS.pega(el.dataset.dono, el.dataset.tid).then(f=>{
+      if(!f){ el.remove(); return; }
+      const img=h('img',{alt:'', src:f});
+      img.onload=()=>img.classList.add('ok');
+      el.prepend(img);
+    }).catch(()=>{});
+  },
+  item(dono, tid, quando, abrir){
+    const dia=new Date(quando).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}).replace('.','').replace(' de ',' ');
+    const b=h('button',{class:'gal-it', 'aria-label':'Foto do treino de '+dia, onclick:abrir}, h('span',{class:'gal-d'}, dia));
+    b.dataset.dono=dono; b.dataset.tid=tid;
+    if(GALERIA.obs) GALERIA.obs.observe(b); else GALERIA.carrega(b);
+    return b;
+  },
+  minha(){
+    if(!S.auth) return null;
+    const ts=Object.values(S.treinos).filter(t=>!t.apagado && t.temFoto && t.id && String(t.id).indexOf('prog_')!==0)
+      .sort((a,b)=>b.inicio-a.inicio).slice(0, GALERIA.MAX);
+    if(!ts.length) return h('div',{class:'gal-vazia'},
+      h('span',{style:'font-size:24px'},'\ud83d\udcf8'),
+      h('div',{}, h('b',{style:'color:var(--tx)'},'Sua galeria come\u00e7a aqui. '),
+        'Adicione uma foto ao concluir o pr\u00f3ximo treino e ela aparece no topo do seu perfil.'));
+    return h('div',{class:'galeria'}, ...ts.map(t=>GALERIA.item(S.auth.uid, t.id, t.inicio, ()=>UI.vai('treinoDet',{id:t.id}))));
+  },
+  amigo(alvo, its){
+    const cs=(its||[]).filter(r=>r && r.f && r.id && String(r.id).indexOf('prog_')!==0).slice(0, GALERIA.MAX);
+    if(!cs.length) return null;
+    return h('div',{class:'galeria'}, ...cs.map(r=>GALERIA.item(alvo, r.id, r.inicio, ()=>{
+      if((r.v||0)>=2) UI.vai('treinoAmigo',{dono:alvo, tid:r.id});
+      else FOTOS.pega(alvo, r.id).then(f=>{ if(f) FOTOVIEW.abre(f); });
+    })));
+  }
+};
+
 TELAS.perfil = function(){
   UI.topo(h('div',{class:'topo-tit'},'Perfil'),
     h('button',{class:'btn btn-mini',style:'width:46px;height:44px',onclick:()=>UI.vai('config'),
@@ -3868,6 +4076,7 @@ TELAS.perfil = function(){
   const nestaSemana=ts.filter(t=>CORE.semanaKey(t.inicio)===semanaAtu);
   const horasSemana=nestaSemana.reduce((a,t)=>a+(t.fim-t.inicio)/3600e3,0);
 
+  { const g=GALERIA.minha(); if(g) m.appendChild(g); }
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'linha',style:'gap:14px'},
       avatarEl(S.perfil?.foto, S.perfil?.nome, 60, '18px'),
@@ -3876,8 +4085,9 @@ TELAS.perfil = function(){
         h('div',{class:'f12',style:'color:var(--tx2);margin-top:2px'},ts.length+' treinamentos · ',
           h('span',{id:'pf-segrs',style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguidores', S.auth&&S.auth.uid)},'… seguidores'),' · ',
           h('span',{style:'text-decoration:underline',onclick:()=>SOCIALVIEW.folha('seguindo', S.auth&&S.auth.uid)},Object.keys(S.social.seguindo||{}).length+' seguindo')),
-        S.perfil?.bio? h('div',{class:'f13',style:'margin-top:8px;line-height:1.5;white-space:pre-wrap'},S.perfil.bio):null,
-        S.perfil?.link? h('a',{href:S.perfil.link,target:'_blank',rel:'noopener',class:'f13',style:'color:var(--brand2);font-weight:700;display:inline-block;margin-top:4px;text-decoration:none'},S.perfil.link.replace(/^https?:\/\//,'')):null)),
+        null)),
+    S.perfil?.bio? h('div',{class:'pf-bio'},S.perfil.bio):null,
+    linkEl(S.perfil?.link),
     h('div',{class:'stats3',style:'margin-top:14px'},
       h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v',style:'font-size:16px'},nestaSemana.length+'x')),
       h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v',style:'font-size:16px'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
@@ -3986,7 +4196,9 @@ TELAS.config = function(){
     h('div',{class:'f13 mut',style:'margin:12px 0 6px'},'Link (opcional)'),
     h('input',{value:S.perfil?.link||'',placeholder:'instagram.com/voce',autocapitalize:'off',
       oninput:e=>{ if(!S.perfil) S.perfil={criado:agora()}; S.perfil.link=e.target.value; },
-      onblur:()=>{ let v=(S.perfil?.link||'').trim(); if(v && !/^https?:\/\//i.test(v)) v='https://'+v; S.perfil.link=v.slice(0,120); salvaPerfil(); UI.refaz(); }})));
+      onblur:()=>{ const v=(S.perfil?.link||'').trim(); const L=v? linkBonito(v) : null;
+        if(v && !L) UI.toast('Esse link n\u00e3o parece v\u00e1lido');
+        S.perfil.link = L? L.href.slice(0,120) : ''; salvaPerfil(); UI.refaz(); }})));
 
   const cardConta=h('div',{class:'card'}, h('div',{class:'secao',style:'margin:0 0 8px'},'Conta'));
   if(S.perfil?.email){
@@ -5354,14 +5566,14 @@ TELAS.perfilAmigo = function({uid:alvo}){
     const corte=agora()-30*864e5;
     const vol30=its.filter(r=>r.inicio>=corte).reduce((a,r)=>a+(r.volume||0),0);
     const recs=its.reduce((a,r)=>a+(r.recordes||0),0);
+    { const g=GALERIA.amigo(alvo, its); if(g) m.appendChild(g); }
     m.appendChild(h('div',{class:'card'},
       h('div',{class:'linha',style:'gap:14px'},
         avatarEl(p.foto, p.nome||p.user, 60),
         h('div',{class:'esp',style:'min-width:0'},
           h('div',{class:'b800',style:'font-size:18px'},p.nome||'Atleta'),
           p.user? h('div',{class:'f13 mut2'},'@'+p.user):null,
-          p.bio? h('div',{class:'f13',style:'margin-top:6px;line-height:1.5;white-space:pre-wrap'},String(p.bio).slice(0,150)):null,
-          (p.link && /^https:\/\//.test(p.link))? h('a',{href:p.link,target:'_blank',rel:'noopener',class:'f13',style:'color:var(--brand2);font-weight:700;display:inline-block;margin-top:4px;text-decoration:none'},String(p.link).replace(/^https?:\/\//,'').slice(0,40)):null),
+          null),
         h('button',{class:'btn btn-mini'+(sigo?'':' btn-p'),style:'width:auto;padding:9px 14px',onclick:async function(){
           this.disabled=true;
           try{
@@ -5370,6 +5582,8 @@ TELAS.perfilAmigo = function({uid:alvo}){
             await FEED.carrega(); if(UI.telaAtual==='perfilAmigo') UI.refaz();
           }catch(e){ UI.toast('Sem conexão agora'); this.disabled=false; }
         }}, sigo?'Seguindo ✓':'Seguir')),
+      p.bio? h('div',{class:'pf-bio'},String(p.bio).slice(0,150)):null,
+      linkEl(p.link),
       h('div',{class:'stats3',style:'margin-top:14px'},
         h('div',{},h('div',{class:'k'},'Treinamentos'),h('div',{class:'v'},its.length+(its.length>=40?'+':''))),
         h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v'},recs+' 🥇')),
@@ -5745,8 +5959,13 @@ TELAS.medidas = function(){
       h('div',{class:'esp'}), h('div',{class:'f12 mut2'},new Date(u.data).toLocaleDateString('pt-BR'))));
     if(pesos.length>=2){
       const cv=h('canvas',{class:'graf'}); card.append(cv);
-      requestAnimationFrame(()=>grafLinha(cv,pesos.map(x=>({v:x.peso,rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})})),v=>(Math.round(v*10)/10)+'kg'));
+      requestAnimationFrame(()=>grafLinha(cv,pesos.map(x=>({v:x.peso,rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),
+        dica:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})})),
+        v=>(Math.round(v*10)/10).toLocaleString('pt-BR')+' kg', {onPonto:i=>MED.edita(pesos[i],'peso')}));
     }
+    card.append(h('button',{class:'med-hist',onclick:()=>UI.vai('medidaDet',{campo:'peso'})},
+      'Hist\u00f3rico e edi\u00e7\u00e3o', h('span',{class:'esp'}),
+      h('span',{html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
     m.appendChild(card);
   } else {
     m.appendChild(h('div',{class:'vazio'},'Registre peso, gordura e circunferências para acompanhar a evolução física junto com a de carga.'));
@@ -5801,6 +6020,7 @@ TELAS.medidas = function(){
   else {
     grade.append(h('div',{class:'f13 mut2',style:'grid-column:1/-1'},'Carregando…'));
     NET.get('fotosProg').then(v=>{ MED._fotos=v||{}; if(UI.telaAtual==='medidas') desenhaFotos(); }).catch(()=>{ if(UI.telaAtual==='medidas'){ MED._fotos={}; desenhaFotos(); } });
+  }
 
   const card2=h('div',{class:'card'});
   Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
@@ -5812,7 +6032,6 @@ TELAS.medidas = function(){
       h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
   });
   m.appendChild(card2);
-  }
 };
 TELAS.medidaDet = function({campo}){
   const [rot,un]=MED_CAMPOS[campo];
@@ -5823,22 +6042,56 @@ TELAS.medidaDet = function({campo}){
   if(!com.length){ m.appendChild(h('div',{class:'vazio'},'Nenhum registro de '+rot.toLowerCase()+' ainda.')); return; }
   if(com.length>=2){
     const card=h('div',{class:'card'}); const cv=h('canvas',{class:'graf'}); card.append(cv); m.appendChild(card);
-    requestAnimationFrame(()=>grafLinha(cv,com.map(x=>({v:x[campo],rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})})),v=>(Math.round(v*10)/10)+un));
+    requestAnimationFrame(()=>grafLinha(cv,com.map(x=>({v:x[campo],rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),
+      dica:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})})),
+      v=>(Math.round(v*10)/10).toLocaleString('pt-BR')+' '+un, {onPonto:i=>MED.edita(com[i],campo)}));
   }
+  m.appendChild(h('div',{class:'f12 mut2',style:'margin:0 2px 8px'},'Toque num registro para corrigir o valor, a data ou apagar.'));
   const card2=h('div',{class:'card'});
   com.slice().reverse().forEach(x=>{
-    card2.append(h('div',{class:'med-row'},
+    card2.append(h('div',{class:'med-row toca',onclick:()=>MED.edita(x,campo)},
       h('div',{class:'f13 mut',style:'flex:1'},new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})),
       h('div',{class:'b800'},x[campo].toLocaleString('pt-BR')+' '+un),
-      h('button',{class:'btn btn-mini',style:'width:34px;padding:6px',onclick:()=>{
-        UI.folha('Excluir registro de '+new Date(x.data).toLocaleDateString('pt-BR')+'?',[
-          h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'Todos os valores desse dia serão removidos.'),
-          h('button',{class:'btn btn-err',onclick:()=>{ x.apagada=true; x.atualizado=agora(); salva('medidas'); NET.agenda('medidas/'+x.id,x); UI.fechaFolha(); UI.refaz(); }},'Excluir')]);
-      }},'✕')));
+      h('div',{class:'mut2',style:'margin-left:8px',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
   });
   m.appendChild(card2);
 };
 const MED = {
+  // corrigir ou apagar UM valor de um registro (cada registro guarda varias medidas do mesmo dia)
+  edita(x, campo){
+    if(!x || !MED_CAMPOS[campo]) return;
+    const [rot,un]=MED_CAMPOS[campo];
+    const d=new Date(x.data); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+    const dataInp=h('input',{type:'date', value:d.toISOString().slice(0,10)});
+    const valInp=h('input',{type:'text', inputmode:'decimal', value:String(x[campo]).replace('.',','), placeholder:un});
+    const outros=Object.keys(MED_CAMPOS).filter(k=>k!==campo && x[k]!=null);
+    const grava=(msg)=>{ x.atualizado=agora(); salva('medidas'); NET.agenda('medidas/'+x.id, x); UI.fechaFolha(); UI.refaz(); UI.toast(msg, true); };
+    UI.folha(rot, [
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Valor ('+un+')'), valInp,
+      h('div',{style:'height:12px'}),
+      h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Data'), dataInp,
+      outros.length? h('div',{class:'f12 mut2',style:'margin-top:6px;line-height:1.5'},
+        'A data vale para as '+(outros.length+1)+' medidas desse registro.') : null,
+      h('div',{style:'height:14px'}),
+      h('button',{class:'btn btn-p',onclick:()=>{
+        const bruto=String(valInp.value).trim().replace(',','.');
+        const v=Number(bruto);
+        if(!bruto || !isFinite(v) || v<=0){ UI.toast('Digite um valor v\u00e1lido'); return; }
+        x[campo]=v;
+        if(dataInp.value) x.data=new Date(dataInp.value+'T12:00:00').getTime();
+        grava('Registro corrigido');
+      }},'Salvar'),
+      h('div',{style:'height:8px'}),
+      h('button',{class:'btn btn-err',onclick:()=>{
+        delete x[campo];
+        if(!outros.length) x.apagada=true;
+        grava(outros.length? rot+' removido desse dia' : 'Registro exclu\u00eddo');
+      }}, outros.length? 'Apagar s\u00f3 '+rot.toLowerCase() : 'Excluir registro'),
+      outros.length? h('button',{class:'btn',style:'margin-top:8px',onclick:()=>{
+        x.apagada=true; grava('Registro do dia exclu\u00eddo');
+      }},'Excluir o dia inteiro ('+(outros.length+1)+' medidas)') : null
+    ]);
+  },
   registrar(){
     const hoje=new Date(); hoje.setMinutes(hoje.getMinutes()-hoje.getTimezoneOffset());
     const dataInp=h('input',{type:'date', value:hoje.toISOString().slice(0,10)});

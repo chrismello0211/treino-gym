@@ -490,7 +490,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.23';
+const APP_VER='11.23.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2595,9 +2595,10 @@ const ATIVO = {
       }
     };
     pintaFoto();
-    // ultima academia usada entra pre-selecionada: quase sempre e' a mesma
-    let acad = (R.acad!==undefined) ? R.acad
-      : (t.academia || (function(){ const c=ACAD.conhecidas(); return c.length? {n:c[0].n,id:c[0].id,lat:c[0].lat,lon:c[0].lon} : null; })());
+    // academia comeca VAZIA: preencher sozinho com a ultima puxava a errada
+    // quando a pessoa treinava em outro lugar e nao corrigia. A lista de
+    // conhecidas continua a um toque, dentro da folha.
+    let acad = (R.acad!==undefined) ? R.acad : (t.academia || null);
     R.acad = acad;
     const acadArea=h('button',{class:'menu-op',style:'margin-bottom:10px',onclick:()=>{
       // 'true' = nao fecha a folha; volta pra conclusao no lugar, sem piscar
@@ -3328,7 +3329,40 @@ function diagnostico(){
 
 /* ===== FOTOS DE PROGRESSO ===== */
 const FPROG={
-  lista(){ return Object.entries(S.fotosProg||{}).filter(([,mm])=>mm&&!mm.apagado).map(([id,mm])=>({id, data:mm.data||0})).sort((a,b)=>b.data-a.data); },
+  // Dois formatos convivem no mesmo no 'fotosProg':
+  //   novo:   {data, atualizado}  + a imagem em /fotos/<uid>/prog_<id> (privada)
+  //   antigo: {b64, quando}       (secao antiga das Medicoes, imagem embutida)
+  // O antigo era lido como novo: sem 'data' virava 31/12/1969, e a imagem nao
+  // era achada no caminho novo. Agora os dois sao lidos, e o antigo e' migrado.
+  dataDe(mm){ const d=Number(mm && (mm.data || mm.quando)) || 0; return d>0? d : 0; },
+  rotData(mm, op){ const d=FPROG.dataDe(mm); return d? new Date(d).toLocaleDateString('pt-BR', op||{day:'2-digit',month:'2-digit',year:'2-digit'}) : 'Sem data'; },
+  lista(){ return Object.entries(S.fotosProg||{}).filter(([,mm])=>mm&&!mm.apagado).map(([id,mm])=>({id, data:FPROG.dataDe(mm)})).sort((a,b)=>b.data-a.data); },
+  imagem(id){
+    const mm=(S.fotosProg||{})[id];
+    if(mm && mm.b64) return Promise.resolve(mm.b64);          // formato antigo: a imagem esta no registro
+    if(!S.auth) return Promise.resolve(null);
+    return FOTOS.pega(S.auth.uid,'prog_'+id);
+  },
+  // migra o formato antigo: grava a imagem no lugar novo e SO DEPOIS enxuga o
+  // registro. Se qualquer passo falhar, nada se perde e tenta na proxima vez.
+  async migra(){
+    if(!S.auth || FPROG._migrando) return 0;
+    const pend=Object.entries(S.fotosProg||{}).filter(([,mm])=>mm && !mm.apagado && mm.b64);
+    if(!pend.length) return 0;
+    FPROG._migrando=true; let n=0;
+    try{
+      for(const [id,mm] of pend){
+        try{
+          await NET.putD('/fotos/'+S.auth.uid+'/prog_'+id, mm.b64);
+          FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid]['prog_'+id]=mm.b64;
+          const meta={data: FPROG.dataDe(mm) || agora(), atualizado: agora()};
+          await NET.putD('fotosProg/'+id, meta);
+          S.fotosProg[id]=meta; salva('fotosProg'); n++;
+        }catch(e){ /* sem rede: o registro antigo continua inteiro */ }
+      }
+    } finally { FPROG._migrando=false; }
+    return n;
+  },
   async add(){
     if(!S.auth){ UI.toast('Crie sua conta pra guardar fotos de progresso'); return; }
     const f=await IMG.escolhe(); if(!f) return;
@@ -3342,29 +3376,35 @@ const FPROG={
   },
   apaga(id){
     const mm=S.fotosProg[id]; if(!mm) return;
-    mm.apagado=true; mm.atualizado=agora(); salva('fotosProg');
-    NET.agenda('fotosProg/'+id, mm);
+    // marca apagada sem carregar a imagem antiga junto
+    const meta={data:FPROG.dataDe(mm)||agora(), atualizado:agora(), apagado:true};
+    S.fotosProg[id]=meta; salva('fotosProg');
+    NET.agenda('fotosProg/'+id, meta);
     if(S.auth){ NET.agenda('/fotos/'+S.auth.uid+'/prog_'+id, null); if(FOTOS.cache[S.auth.uid]) FOTOS.cache[S.auth.uid]['prog_'+id]=null; }
     UI.fechaFolha(); UI.refaz(); UI.toast('Foto apagada');
   },
   thumb(id){
     const box=h('div',{style:'width:100%;aspect-ratio:3/4;background:var(--surf3);border-radius:12px;overflow:hidden'});
-    if(S.auth) FOTOS.pega(S.auth.uid,'prog_'+id).then(f=>{ if(f && box.isConnected){ box.innerHTML=''; box.appendChild(h('img',{src:f,loading:'lazy',style:'width:100%;height:100%;object-fit:cover;display:block'})); } });
+    FPROG.imagem(id).then(f=>{ if(f && box.isConnected){ box.innerHTML=''; box.appendChild(h('img',{src:f,loading:'lazy',style:'width:100%;height:100%;object-fit:cover;display:block'})); } }).catch(()=>{});
     return box;
   },
   ver(id){
-    const mm=S.fotosProg[id]; const dt=mm? new Date(mm.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}):'';
+    const mm=S.fotosProg[id];
+    const dt=mm? FPROG.rotData(mm,{day:'2-digit',month:'long',year:'numeric'}) : '';
     const ph=h('div',{class:'skel',style:'width:100%;aspect-ratio:3/4;border-radius:14px'});
-    if(S.auth) FOTOS.pega(S.auth.uid,'prog_'+id).then(f=>{ if(f && ph.replaceWith) ph.replaceWith(h('img',{class:'fzoom', src:f, style:'width:100%;border-radius:14px;display:block;cursor:zoom-in'})); });
-    UI.folha(dt||'Foto de progresso',[ ph, h('div',{style:'height:12px'}),
+    FPROG.imagem(id).then(f=>{
+      if(f && ph.isConnected) ph.replaceWith(h('img',{class:'fzoom', src:f, style:'width:100%;border-radius:14px;display:block;cursor:zoom-in'}));
+      else if(ph.isConnected) ph.replaceWith(h('div',{class:'vazio',style:'margin:0'},'Não consegui carregar esta foto agora. Confira a conexão e tente de novo.'));
+    }).catch(()=>{});
+    UI.folha(dt && dt!=='Sem data'? dt : 'Foto de progresso',[ ph, h('div',{style:'height:12px'}),
       h('button',{class:'btn btn-err',onclick:()=>FPROG.apaga(id)},'Apagar esta foto')]);
   },
   comparar(idA, idB){
     const mk=(id)=>{ const wrap=h('div',{style:'flex:1;min-width:0'});
       const ph=h('div',{class:'skel',style:'width:100%;aspect-ratio:3/4;border-radius:12px'});
       wrap.append(ph, h('div',{class:'f12 mut2',style:'text-align:center;margin-top:6px'},
-        S.fotosProg[id]? new Date(S.fotosProg[id].data).toLocaleDateString('pt-BR'):''));
-      if(S.auth) FOTOS.pega(S.auth.uid,'prog_'+id).then(f=>{ if(f && ph.replaceWith) ph.replaceWith(h('img',{class:'fzoom', src:f, style:'width:100%;border-radius:12px;display:block;cursor:zoom-in'})); });
+        S.fotosProg[id]? FPROG.rotData(S.fotosProg[id],{day:'2-digit',month:'2-digit',year:'numeric'}) : ''));
+      FPROG.imagem(id).then(f=>{ if(f && ph.isConnected) ph.replaceWith(h('img',{class:'fzoom', src:f, style:'width:100%;border-radius:12px;display:block;cursor:zoom-in'})); }).catch(()=>{});
       return wrap; };
     UI.folha('Antes e depois',[ h('div',{style:'display:flex;gap:10px'}, mk(idA), mk(idB)) ]);
   }
@@ -5907,6 +5947,7 @@ TELAS.fotosProg = function(){
     return;
   }
   m.appendChild(h('div',{class:'f13 mut',style:'margin-bottom:10px'}, ls.length+' foto'+(ls.length>1?'s':'')+' · toque pra abrir'));
+  FPROG.migra().catch(()=>{});
   let selecionando=false; const sel=[];
   const btComp=h('button',{class:'btn',style:'margin-bottom:12px'},'🆚 Comparar duas fotos');
   btComp.onclick=()=>{ selecionando=!selecionando; sel.length=0; btComp.textContent=selecionando?'Toque em 2 fotos… (cancelar)':'🆚 Comparar duas fotos'; };
@@ -5915,7 +5956,7 @@ TELAS.fotosProg = function(){
   ls.forEach(it=>{
     const cel=h('div',{style:'cursor:pointer'});
     const th=FPROG.thumb(it.id);
-    cel.append(th, h('div',{class:'f11 mut2',style:'text-align:center;margin-top:4px'}, new Date(it.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})));
+    cel.append(th, h('div',{class:'f11 mut2',style:'text-align:center;margin-top:4px'}, FPROG.rotData(S.fotosProg[it.id])));
     cel.onclick=()=>{
       if(!selecionando){ FPROG.ver(it.id); return; }
       if(sel.includes(it.id)) return;
@@ -5923,7 +5964,7 @@ TELAS.fotosProg = function(){
       if(sel.length===2){
         selecionando=false; btComp.textContent='🆚 Comparar duas fotos';
         const A=sel[0], B=sel[1];
-        const antiga=(S.fotosProg[A].data<=S.fotosProg[B].data)?A:B, nova=(antiga===A)?B:A;
+        const antiga=(FPROG.dataDe(S.fotosProg[A])<=FPROG.dataDe(S.fotosProg[B]))?A:B, nova=(antiga===A)?B:A;
         sel.length=0; FPROG.comparar(antiga, nova);
         setTimeout(()=>{ if(UI.telaAtual==='fotosProg') UI.refaz(); }, 300);
       }
@@ -5939,12 +5980,18 @@ TELAS.medidas = function(){
   const m=$('#main'); m.innerHTML='';
   (function(){
     const ls=FPROG.lista();
-    m.appendChild(h('div',{class:'card',style:'cursor:pointer',onclick:()=>UI.vai('fotosProg')},
+    const card=h('div',{class:'card',style:'cursor:pointer',onclick:()=>UI.vai('fotosProg')},
       h('div',{class:'linha'},
         h('div',{class:'esp'},
           h('div',{class:'secao',style:'margin:0 0 3px'},'📸 Fotos de progresso'),
-          h('div',{class:'f13 mut'}, ls.length? (ls.length+' foto'+(ls.length>1?'s':'')+' guardada'+(ls.length>1?'s':'')) : 'O espelho engana, a foto não. Comece hoje.')),
-        h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'}))));
+          h('div',{class:'f13 mut'}, ls.length? (ls.length+' foto'+(ls.length>1?'s':'')+' · só você vê') : 'O espelho engana, a foto não. Comece hoje.')),
+        h('div',{class:'mut2',html:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>'})));
+    if(ls.length){
+      const fila=h('div',{style:'display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px'});
+      ls.slice(0,4).forEach(it=>fila.append(FPROG.thumb(it.id)));
+      card.append(fila);
+    }
+    m.appendChild(card);
   })();
   const lst=medLista();
   const pesos=lst.filter(x=>x.peso!=null);
@@ -5970,58 +6017,6 @@ TELAS.medidas = function(){
   } else {
     m.appendChild(h('div',{class:'vazio'},'Registre peso, gordura e circunferências para acompanhar a evolução física junto com a de carga.'));
   }
-  // fotos de progresso (antes e depois) — privadas
-  const fpgCard=h('div',{class:'card',style:'border-color:var(--brand-dim)'},
-    h('div',{class:'linha',style:'margin-bottom:6px'},
-      h('div',{class:'secao',style:'margin:0'},'Fotos de progresso'),
-      h('span',{style:'font-size:10px;font-weight:800;letter-spacing:.5px;color:var(--brand2);background:var(--brand-dim);padding:3px 8px;border-radius:20px;margin-left:8px'},'ANTES E DEPOIS'),
-      h('div',{class:'esp'}),
-      h('button',{class:'btn btn-mini btn-p',onclick:()=>{
-        const inp=h('input',{type:'file',accept:'image/*',style:'display:none'});
-        inp.onchange=async()=>{
-          const f=inp.files&&inp.files[0]; if(!f){ inp.remove(); return; }
-          UI.toast('Preparando foto…');
-          try{
-            let b64=await IMG.comprime(f, 1200, 0.8);
-            if(b64.length>240000) b64=await IMG.comprime(f, 1000, 0.72);
-            const id='fp_'+uid();
-            MED._fotos=MED._fotos||{}; MED._fotos[id]={b64, quando:agora()};
-            NET.agenda('fotosProg/'+id, MED._fotos[id]); NET.despacha();
-            UI.refaz(); UI.toast('Foto adicionada ✓', true);
-          }catch(e){ UI.toast('Não consegui ler a imagem'); }
-          inp.remove();
-        };
-        document.body.appendChild(inp); inp.click();
-      }},'＋ Foto')),
-    h('div',{class:'f13 mut',style:'margin-bottom:10px'},'Seu antes e depois, na linha do tempo. Só você vê.'));
-  const grade=h('div',{class:'fpg'});
-  fpgCard.append(grade);
-  m.appendChild(fpgCard);
-  const desenhaFotos=()=>{
-    grade.innerHTML='';
-    const ents=Object.entries(MED._fotos||{}).sort((a,b)=>(b[1].quando||0)-(a[1].quando||0));
-    if(!ents.length){ grade.append(h('div',{class:'f13 mut2',style:'grid-column:1/-1'},'Nenhuma foto ainda.')); return; }
-    ents.forEach(([id,f])=>{
-      grade.append(h('div',{},
-        h('img',{src:f.b64, loading:'lazy', onclick:()=>{
-          UI.folha(new Date(f.quando).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'}), [
-            h('img',{src:f.b64, style:'width:100%;border-radius:14px'}),
-            h('div',{style:'height:12px'}),
-            h('button',{class:'btn btn-err',onclick:()=>{
-              delete MED._fotos[id];
-              NET.agenda('fotosProg/'+id, null); NET.despacha();
-              UI.fechaFolha(); UI.refaz();
-            }},'Excluir foto')]);
-        }}),
-        h('div',{class:'f12 mut2',style:'text-align:center;margin-top:3px'}, new Date(f.quando).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}))));
-    });
-  };
-  if(MED._fotos) desenhaFotos();
-  else {
-    grade.append(h('div',{class:'f13 mut2',style:'grid-column:1/-1'},'Carregando…'));
-    NET.get('fotosProg').then(v=>{ MED._fotos=v||{}; if(UI.telaAtual==='medidas') desenhaFotos(); }).catch(()=>{ if(UI.telaAtual==='medidas'){ MED._fotos={}; desenhaFotos(); } });
-  }
-
   const card2=h('div',{class:'card'});
   Object.entries(MED_CAMPOS).forEach(([campo,[rot,un]])=>{
     const com=lst.filter(x=>x[campo]!=null);
@@ -6574,11 +6569,10 @@ const RESTAURA = {
       }
       // 5) exercícios personalizados visíveis no perfil
       try{ EXSPUB.sincronizaTodos(); }catch(e){}
-      // 6) fotos de progresso (medições) — essas ficam locais em MED._fotos
+      // 6) fotos de progresso: migra as do formato antigo e reenvia as fichas de data
       try{
-        if(MED._fotos && Object.keys(MED._fotos).length){
-          for(const [id,f] of Object.entries(MED._fotos)){ if(f){ try{ await NET.putD('fotosProg/'+id, f); n++; }catch(e){} } }
-        }
+        n += await FPROG.migra();
+        for(const [id,mm] of Object.entries(S.fotosProg||{})){ if(mm && !mm.b64){ try{ await NET.putD('fotosProg/'+id, mm); n++; }catch(e){} } }
       }catch(e){}
       // 7) rotinas públicas
       try{ if(S.cfg.rotPub!==false) ROTPUB.syncTudo(); }catch(e){}
@@ -8209,7 +8203,8 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();
 </script>

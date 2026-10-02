@@ -425,7 +425,7 @@ body.kb .folha .folha-corpo{max-height:38vh}
 .skel{background:var(--surf3);animation:skel-p 1.1s ease-in-out infinite}
 
 /* ---------- acabamento de lançamento ---------- */
-html{background:var(--bg);scroll-behavior:smooth}
+html{background:var(--bg)}
 body{min-height:100vh;min-height:100dvh;
   background:radial-gradient(ellipse 120% 42% at 50% -12%,rgba(255,90,0,.11),transparent 68%),var(--bg);
   background-attachment:fixed}
@@ -508,6 +508,14 @@ body.claro .boas-hero{background:linear-gradient(180deg,rgba(232,80,0,.07),rgba(
   body.tela-boas-vindas main{padding-top:calc(var(--sat) + 12px)}
 }
 @media (max-height:700px){.boas-vindas{padding-top:4px!important}.boas-hero{padding-top:8px;padding-bottom:12px}}
+/* iPhone: campo com fonte < 16px faz o Safari dar zoom sozinho ao tocar, e o
+   app instalado nao volta. 16px so no iOS; o zoom com pinca continua livre. */
+@supports (-webkit-touch-callout:none){
+  input:not([type=number]):not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}
+  @media (max-width:370px){ .srow input[type=number]{font-size:16px!important} }
+}
+/* o foco vai para o proprio dialogo quando ele nao tem "Fechar": sem anel nele */
+#folha:focus,.folha:focus{outline:none}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
@@ -587,7 +595,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.24.0';
+const APP_VER='11.24.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1425,6 +1433,7 @@ function h(tag, attrs, ...filhos){
     if(!el.hasAttribute('role')) el.setAttribute('role','button');
     if(!el.hasAttribute('tabindex')) el.tabIndex=0;
     el.addEventListener('keydown',ev=>{
+      if(ev.target!==el) return;   // tecla vinda de um campo filho e' texto, nao clique
       if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); el.click(); }
     });
   }
@@ -1475,9 +1484,17 @@ function focaveisDoDialogo(modal){
     .filter(el=>!el.disabled && el.getAttribute('aria-hidden')!=='true' && el.getClientRects().length>0);
 }
 function focaDialogo(modal, preferido){
+  let primeira=true;
   const aplicar=()=>{
     if(!modal || !modal.isConnected) return;
-    const alvo=(preferido&&preferido.isConnected?preferido:null)||focaveisDoDialogo(modal)[0]||modal;
+    // as repeticoes so servem se o 1o foco falhou; se ja ha foco DENTRO do
+    // dialogo (ex.: um campo que o codigo focou pra abrir o teclado), respeita
+    const at=document.activeElement;
+    if(!primeira && at && at!==modal && modal.contains(at)) return;
+    primeira=false;
+    // sem "Fechar", o foco vai para o proprio dialogo (leitor de tela anuncia, e
+    // nenhum botao parece selecionado); Tab entra no conteudo normalmente
+    const alvo=(preferido&&preferido.isConnected?preferido:null)||modal;
     if(!modal.hasAttribute('tabindex')) modal.tabIndex=-1;
     try{ alvo.focus({preventScroll:true}); }catch(e){}
   };
@@ -1493,7 +1510,9 @@ const UI = {
     if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0]);
     UI.telaAtual = tela; UI.args = args||null;
     TELAS[tela](args||{});
-    try{ const mm=$('#main'); mm.classList.remove('fx-tela'); void mm.offsetWidth; mm.classList.add('fx-tela'); }catch(e){}
+    try{ const mm=$('#main'); mm.classList.remove('fx-tela'); void mm.offsetWidth; mm.classList.add('fx-tela');
+      // a entrada anima SO na navegacao; redesenhar a tela nao repete a animacao
+      clearTimeout(UI._fxT); UI._fxT=setTimeout(()=>{ try{ mm.classList.remove('fx-tela'); }catch(e){} }, 420); }catch(e){}
     if(rolagem){
       // a tela acabou de ser montada; espera o layout assentar antes de rolar
       const alvo=rolagem;
@@ -8048,19 +8067,36 @@ const CONTA = {
       if(!r.ok) throw new Error('Não foi possível preparar a exclusão. Tente novamente.');
       return await r.json();
     };
+    const leRaso=async p=>{
+      const r=await NET.fetchT(NET.caminho(p)+'?shallow=true&auth='+tk,{},15000);
+      if(!r.ok) throw new Error('Não foi possível preparar a exclusão. Tente novamente.');
+      return await r.json();
+    };
     const seguindo=await leEstrito('/seguindo/'+u)||{};
-    const seguidores=await leEstrito('/seguidores/'+u)||{};
-    // PATCH multipath: o Realtime Database valida e aplica esta limpeza pública
-    // como uma única operação, evitando metade dos caminhos apagados.
+    const seguidores=await leRaso('/seguidores/'+u)||{};
+    const coms=await leEstrito('/comentarios/'+u)||{};          // {tid:{cid:{...}}}
+    // PATCH multipath (atomico): leva SO o que as regras permitem ao dono. Uma
+    // unica recusa derrubaria a operacao inteira e ninguem conseguiria sair.
     const limpa={};
-    ['perfis','feed','fotos','rotinasPub','exsPub','curtidas','comentarios','descansos','seguindo','seguidores','usuarios']
+    ['perfis','feed','rotinasPub','exsPub','descansos','seguindo','usuarios']
       .forEach(raiz=>{ limpa[raiz+'/'+u]=null; });
     if(meu.user) limpa['usernames/'+meu.user]=null;
+    // fotos: a permissao e' por foto, nao pelo no pai. Os ids vem do aparelho:
+    // foto de treino usa o id do treino; foto de progresso, prog_<id>.
+    Object.keys(S.treinos||{}).forEach(tid=>{ limpa['fotos/'+u+'/'+tid]=null; });
+    Object.keys(S.fotosProg||{}).forEach(id=>{ limpa['fotos/'+u+'/prog_'+id]=null; });
+    // comentarios nos meus treinos: o dono pode apagar um por um
+    Object.entries(coms).forEach(([tid,cs])=>Object.keys(cs||{}).forEach(cid=>{ limpa['comentarios/'+u+'/'+tid+'/'+cid]=null; }));
+    // sai da lista de seguidores de quem eu sigo
     Object.keys(seguindo).forEach(alvo=>{ limpa['seguidores/'+alvo+'/'+u]=null; });
-    Object.keys(seguidores).forEach(alvo=>{ limpa['seguindo/'+alvo+'/'+u]=null; });
     const limpaR=await NET.fetchT(FB.db+'/.json?auth='+tk,{
       method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(limpa)},25000);
     if(!limpaR.ok) throw new Error('Não foi possível apagar os dados da conta. Nada foi limpo deste aparelho.');
+    // O que pertence a terceiros (curtidas que recebi, a lista de quem me
+    // segue, a lista "seguindo" dos meus seguidores) as regras atuais nao
+    // deixam o dono apagar. Tenta um por um, sem travar a exclusao.
+    const terceiros=['/curtidas/'+u, '/seguidores/'+u].concat(Object.keys(seguidores).map(f=>'/seguindo/'+f+'/'+u));
+    for(const p of terceiros){ try{ await NET.fetchT(NET.caminho(p)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){} }
     // apaga a credencial no Firebase Auth (a conta deixa de existir)
     const r=await NET.fetchT('https://identitytoolkit.googleapis.com/v1/accounts:delete?key='+FB.key,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:tk})},20000);

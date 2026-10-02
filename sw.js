@@ -3,7 +3,7 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v11.24.0', GCACHE='tg-gifs-v1';
+const CACHE='tg-v11.24.1', GCACHE='tg-gifs-v1';
 const CACHE_PREFIX='tg-';
 const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./privacidade.html','./termos.html','./excluir-conta.html','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
 
@@ -100,12 +100,12 @@ self.addEventListener('notificationclick', e=>{
   e.waitUntil((async()=>{
     const target=notificationUrl(e.notification.data);
     const list=await clients.matchAll({type:'window', includeUncontrolled:true});
+    // o app ja aberto so volta pra frente: navegar a janela recarregaria a
+    // pagina e perderia o que esta na memoria (folha aberta, rascunho, rolagem)
     for(const c of list){
-      if(!('navigate' in c) || !('focus' in c)) continue;
       try{
-        if(new URL(c.url).origin!==self.location.origin) continue;
-        const navigated=await c.navigate(target);
-        if(navigated && 'focus' in navigated) return navigated.focus();
+        if(new URL(c.url).origin!==self.location.origin || !('focus' in c)) continue;
+        return await c.focus();
       }catch(_){ /* a janela pode ter sido fechada; tenta a proxima */ }
     }
     return clients.openWindow(target);

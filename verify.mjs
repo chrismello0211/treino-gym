@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.24.0';
+const EXPECTED_VERSION = '11.24.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -184,6 +184,20 @@ check(indexHtml.includes('feedPub:!!pubAgora') && indexHtml.includes('function t
 check(indexHtml.includes('async function migraVisibilidadeFeed(') && indexHtml.includes('await migraVisibilidadeFeed();'), 'migracao segura da visibilidade do feed');
 
 check(!/user-scalable\s*=\s*["']?\s*no\b/i.test(indexHtml), 'viewport permite zoom', 'user-scalable=no ainda esta presente');
+check(!/maximum-scale\s*=\s*1(?![\d.])/i.test(indexHtml), 'viewport nao trava o zoom', 'maximum-scale=1 bloqueia a pinca no Android');
+check(indexHtml.includes('@supports (-webkit-touch-callout:none)') && /input:not\(\[type=number\]\)[^{]*\{font-size:16px!important\}/.test(indexHtml), 'campos sem zoom automatico no iPhone', 'fonte < 16px faz o iOS dar zoom ao tocar no campo');
+
+// guardas da revisao 11.24.1 (bugs reais encontrados na 11.24.0)
+check(!/html\s*\{[^}]*scroll-behavior\s*:\s*smooth/i.test(indexHtml), 'rolagem instantanea ao navegar', 'scroll-behavior:smooth faz a tela descer sozinha ao voltar');
+check(indexHtml.includes("mm.classList.remove('fx-tela')") && indexHtml.includes('UI._fxT'), 'animacao de entrada so ao navegar', 'sem remover fx-tela, cada redesenho reanima os cartoes');
+check(!/\.navigate\s*\(/.test(swSource), 'notificacao nao recarrega o app', 'clients.navigate recarrega a pagina e perde o que esta na memoria');
+{
+  const atomico = (indexHtml.match(/\[([^\]]*)\]\s*\n?\s*\.forEach\(raiz=>\{ limpa\[raiz\+'\/'\+u\]=null; \}\)/) || [])[1] || '';
+  const recusados = ['fotos','curtidas','comentarios','seguidores'].filter(r => new RegExp("'" + r + "'").test(atomico));
+  check(atomico && recusados.length === 0, 'exclusao de conta so com caminhos que as regras permitem',
+    'as regras recusam ao dono o no inteiro de: ' + recusados.join(', ') + ' (a operacao atomica falharia)');
+  check(indexHtml.includes("limpa['fotos/'+u+'/'+tid]=null") && indexHtml.includes("limpa['fotos/'+u+'/prog_'+id]=null"), 'fotos apagadas uma por uma na exclusao');
+}
 
 const dialogTags = Array.from(indexHtml.matchAll(/<[a-z][^>]*\brole\s*=\s*(["'])dialog\1[^>]*>/gi), match => match[0]);
 const semanticDialog = dialogTags.some(tag =>

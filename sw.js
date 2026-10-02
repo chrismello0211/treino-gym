@@ -3,14 +3,19 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v11.23.1', GCACHE='tg-gifs-v1';
-const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
+const CACHE='tg-v11.24.0', GCACHE='tg-gifs-v1';
+const CACHE_PREFIX='tg-';
+const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./privacidade.html','./termos.html','./excluir-conta.html','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
 
 self.addEventListener('install',e=>{ self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{})); });
+  // Um arquivo temporariamente indisponível não deve impedir os demais de
+  // entrarem no cache nem bloquear a atualização inteira.
+  e.waitUntil(caches.open(CACHE).then(c=>Promise.all(SHELL.map(url=>c.add(url).catch(()=>null))))); });
 
 self.addEventListener('activate',e=>{
-  e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>![CACHE,GCACHE].includes(k)).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
+  e.waitUntil(caches.keys().then(ks=>Promise.all(ks
+    .filter(k=>k.startsWith(CACHE_PREFIX) && ![CACHE,GCACHE].includes(k))
+    .map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
 
 self.addEventListener('fetch',e=>{
   const req=e.request; if(req.method!=='GET') return;
@@ -25,15 +30,28 @@ self.addEventListener('fetch',e=>{
     }));
     return;
   }
-  const doc = req.mode==='navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html') || url.pathname.endsWith('exercicios.json');
-  if(doc){
+  const navegacao = req.mode==='navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
+  const catalogo = url.pathname.endsWith('/exercicios.json');
+  if(navegacao || catalogo){
     const fresco = new Request(req, {cache:'reload'});
-    e.respondWith(fetch(fresco).then(res=>{ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); return res; })
-      .catch(()=>caches.match(req).then(r=>r||caches.match('./index.html'))));
+    e.respondWith(fetch(fresco).then(res=>{
+      if(res.ok){ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); }
+      return res;
+    }).catch(()=>caches.match(req).then(async r=>{
+      if(r) return r;
+      if(navegacao){
+        const app=await caches.match('./index.html');
+        if(app) return app;
+      }
+      return new Response('Indisponível sem conexão',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
+    })));
     return;
   }
   e.respondWith(caches.match(req).then(hit=>{
-    const net=fetch(req).then(res=>{ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); return res; }).catch(()=>hit);
+    const net=fetch(req).then(res=>{
+      if(res.ok){ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(req,cp)).catch(()=>{}); }
+      return res;
+    }).catch(()=>hit||new Response('Indisponível sem conexão',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}}));
     return hit||net;
   }));
 });
@@ -65,11 +83,31 @@ self.addEventListener('push', e=>{
     }
   })());
 });
+function notificationUrl(data){
+  const fallback=new URL('./',self.registration.scope);
+  const raw=data&&data.url;
+  if(typeof raw!=='string') return fallback.href;
+  try{
+    const target=new URL(raw,fallback);
+    return target.origin===self.location.origin && !target.username && !target.password
+      ? target.href
+      : fallback.href;
+  }catch(_){ return fallback.href; }
+}
+
 self.addEventListener('notificationclick', e=>{
   e.notification.close();
-  const url=(e.notification.data&&e.notification.data.url)||'./';
-  e.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(list=>{
-    for(const c of list){ if('focus' in c) return c.focus(); }
-    return clients.openWindow(url);
-  }));
+  e.waitUntil((async()=>{
+    const target=notificationUrl(e.notification.data);
+    const list=await clients.matchAll({type:'window', includeUncontrolled:true});
+    for(const c of list){
+      if(!('navigate' in c) || !('focus' in c)) continue;
+      try{
+        if(new URL(c.url).origin!==self.location.origin) continue;
+        const navigated=await c.navigate(target);
+        if(navigated && 'focus' in navigated) return navigated.focus();
+      }catch(_){ /* a janela pode ter sido fechada; tenta a proxima */ }
+    }
+    return clients.openWindow(target);
+  })());
 });

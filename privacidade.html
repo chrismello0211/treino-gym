@@ -1,48 +1,115 @@
-<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0A0A0C">
 <title>Política de Privacidade — ForgeX</title>
-<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;background:#0D0D0F;color:#ECECEE;max-width:680px;margin:0 auto;padding:32px 20px 60px;line-height:1.7}
-h1{font-size:26px;margin-bottom:4px}h2{font-size:18px;margin-top:30px;color:#FF7A2E}
-p,li,td{color:#B8C0CB;font-size:15px}a{color:#4CC3FF}
-.data{color:#66666E;font-size:13px}
-table{width:100%;border-collapse:collapse;margin:14px 0}
-td,th{border-bottom:1px solid #2C2C33;padding:9px 6px;text-align:left;vertical-align:top;font-size:14px}
-th{color:#ECECEE;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
-.box{background:#161619;border:1px solid #2C2C33;border-radius:14px;padding:14px 18px;margin:18px 0}
-.box p{color:#ECECEE;margin:0}
-strong{color:#ECECEE}</style></head><body>
-
-<h1>Política de Privacidade — ForgeX</h1>
-<p class="data">Última atualização: setembro de 2026</p>
+<style>
+:root{color-scheme:dark;--bg:#0A0A0C;--surface:#121316;--surface-2:#181A1F;--line:#34373F;--text:#F7F7F8;--muted:#C5C8CF;--subtle:#A5A9B2;--brand:#FF7A2E;--brand-strong:#FF8C4A;--brand-ink:#1A0C03;--focus:#FFD166}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-padding-top:88px}
+body{margin:0;min-width:0;background:radial-gradient(circle at 50% -220px,rgba(255,122,46,.16),transparent 520px),var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-strong);text-decoration-thickness:.08em;text-underline-offset:.2em}
+a:hover{text-decoration-thickness:.14em}
+.document-card p a,.document-card li a{display:inline-flex;align-items:center;min-height:44px;vertical-align:middle}
+a:focus-visible,.table-wrap:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:8px}
+.skip-link{position:fixed;z-index:20;top:8px;left:8px;transform:translateY(-160%);min-height:44px;padding:10px 14px;border-radius:10px;background:var(--focus);color:#171002;font-weight:800}
+.skip-link:focus{transform:translateY(0)}
+.topbar{position:sticky;z-index:10;top:0;border-bottom:1px solid rgba(255,255,255,.09);background:rgba(10,10,12,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.topbar-inner,.page-shell{width:min(760px,calc(100% - 32px));margin-inline:auto}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:68px}
+.brand,.back-link{display:inline-flex;align-items:center;min-height:44px;text-decoration:none;font-weight:800}
+.brand{color:var(--text);font-size:19px;letter-spacing:-.03em}
+.brand strong{color:var(--brand);font-size:1.14em}
+.back-link{gap:8px;padding-inline:12px;border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:14px}
+.back-link:hover{border-color:var(--brand);background:rgba(255,122,46,.08)}
+.page-shell{padding-block:40px 72px}
+.document-card{padding:clamp(24px,5vw,48px);border:1px solid var(--line);border-radius:24px;background:linear-gradient(180deg,rgba(24,26,31,.96),rgba(18,19,22,.98));box-shadow:0 24px 70px rgba(0,0,0,.32)}
+.document-header{padding-bottom:26px;border-bottom:1px solid var(--line);margin-bottom:30px}
+h1,h2{color:var(--text);line-height:1.2;text-wrap:balance}
+h1{margin:0 0 8px;font-size:clamp(1.85rem,6vw,2.7rem);letter-spacing:-.04em}
+h2{margin:38px 0 12px;font-size:1.18rem;letter-spacing:-.015em}
+h2::before{display:inline-block;width:4px;height:1em;margin-right:10px;border-radius:999px;background:var(--brand);content:"";vertical-align:-.1em}
+p,li,td{color:var(--muted);overflow-wrap:anywhere}
+p{margin:0 0 16px}
+ul{margin:8px 0 18px;padding-left:1.35rem}
+li{padding-left:.25rem;margin-block:7px}
+li::marker{color:var(--brand)}
+.data{margin:0;color:var(--subtle);font-size:.875rem}
+.table-wrap{max-width:100%;margin:18px 0 22px;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:rgba(10,10,12,.34);overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
+table{width:100%;min-width:570px;border-collapse:collapse}
+td,th{padding:13px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:.9rem;line-height:1.5}
+tr:last-child td{border-bottom:0}
+th{background:rgba(255,255,255,.025);color:var(--text);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+.box{margin:22px 0;padding:18px 20px;border:1px solid #4A3A31;border-left:4px solid var(--brand);border-radius:14px;background:rgba(255,122,46,.07)}
+.box p{margin:0;color:var(--text)}
+strong{color:var(--text)}
+.page-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:42px;padding-top:24px;border-top:1px solid var(--line)}
+.page-nav a{display:flex;align-items:center;justify-content:center;min-height:48px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:.86rem;font-weight:700;line-height:1.25;text-align:center;text-decoration:none}
+.page-nav a:hover{border-color:var(--brand);background:rgba(255,122,46,.08)}
+@media (max-width:520px){
+  .topbar-inner,.page-shell{width:min(100% - 24px,760px)}
+  .topbar-inner{min-height:64px}
+  .page-shell{padding-block:24px 48px}
+  .document-card{padding:22px 18px;border-radius:18px}
+  .document-header{padding-bottom:22px;margin-bottom:24px}
+  h1{font-size:clamp(1.7rem,9vw,2.15rem)}
+  h2{margin-top:32px}
+  .back-link{padding-inline:10px}
+  .page-nav{grid-template-columns:1fr}
+  .page-nav a{justify-content:flex-start;text-align:left}
+}
+@media (max-width:340px){.topbar-inner,.page-shell{width:calc(100% - 16px)}.document-card{padding-inline:14px}.brand{font-size:18px}.back-link{font-size:13px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="./" aria-label="ForgeX — voltar ao app"><span>Forge</span><strong>X</strong></a>
+<a class="back-link" href="./"><span aria-hidden="true">←</span> Voltar ao app</a>
+</div>
+</header>
+<main id="conteudo" class="page-shell">
+<article class="document-card" aria-labelledby="titulo-pagina">
+<header class="document-header">
+<h1 id="titulo-pagina">Política de Privacidade — ForgeX</h1>
+<p class="data">Última atualização: outubro de 2026</p>
+</header>
 
 <p>Esta política explica o que o ForgeX guarda, onde guarda, o que fica visível para outras pessoas e como apagar tudo.</p>
 
 <h2>1. O que o app guarda</h2>
+<div class="table-wrap" role="region" aria-label="Dados armazenados pelo ForgeX" tabindex="0">
 <table>
-<tr><th>Dado</th><th>Quando</th></tr>
+<tr><th scope="col">Dado</th><th scope="col">Quando</th></tr>
 <tr><td>Nome ou apelido que você escolhe</td><td>Sempre</td></tr>
 <tr><td>Rotinas, exercícios, séries, cargas, repetições, tempos, notas e recordes</td><td>Sempre</td></tr>
 <tr><td>Preferências do app (tema, unidade de peso, meta semanal, tempo de descanso, exercícios que você costuma trocar)</td><td>Sempre</td></tr>
 <tr><td>Identificador anônimo da conta gerado automaticamente</td><td>Sempre</td></tr>
-<tr><td>E-mail e senha</td><td>Só se você criar conta com e-mail</td></tr>
+<tr><td>E-mail e credencial de acesso gerenciada pelo Firebase Authentication</td><td>Só se você criar conta com e-mail; o ForgeX não lê nem guarda sua senha em texto</td></tr>
 <tr><td>Nome de usuário, foto de perfil, bio e link</td><td>Só se você preencher</td></tr>
 <tr><td>Medições corporais (peso, percentual de gordura, circunferências)</td><td>Só se você registrar</td></tr>
 <tr><td>Fotos de treino e fotos de progresso corporal</td><td>Só se você adicionar</td></tr>
 <tr><td>Foto que você adiciona a um exercício criado por você</td><td>Só se você adicionar</td></tr>
-<tr><td>Nome da academia do treino</td><td>Só se você preencher</td></tr>
+<tr><td>Nome da academia e, quando escolhida no mapa, identificador e coordenadas públicas do estabelecimento</td><td>Só se você preencher ou escolher uma academia próxima</td></tr>
 <tr><td>Lista de pessoas que você bloqueou</td><td>Só se você bloquear alguém</td></tr>
 <tr><td>Identificador do aparelho e o tipo dele (iPhone, Android, PC)</td><td>Enquanto há um treino em andamento, para continuá-lo em outro aparelho</td></tr>
 <tr><td>Token de notificação e modelo do aparelho</td><td>Só se você ativar notificações</td></tr>
 <tr><td>Treinos importados de outro app de treino, quando você importa um arquivo</td><td>Só se você importar</td></tr>
 </table>
+</div>
 <p>O ForgeX <strong>não</strong> coleta contatos, agenda, microfone, câmera em segundo plano nem identificadores de publicidade.</p>
 
 <div class="box">
-<p><strong>Localização:</strong> o app só acessa sua localização se você tocar em <strong>“Buscar academias perto de mim”</strong>, ao registrar a academia de um treino. A coordenada é usada naquele instante para consultar o mapa e <strong>não é gravada no aparelho, não é enviada para os nossos servidores e não fica no seu histórico</strong>. O que fica salvo é apenas o nome da academia que você escolher. Você pode escrever o nome à mão e nunca conceder essa permissão: o recurso funciona igual.</p>
+<p><strong>Localização:</strong> o app só acessa sua localização se você tocar em <strong>“Buscar academias perto de mim”</strong>, ao registrar a academia de um treino. A coordenada atual é usada naquele instante para consultar o mapa e <strong>não é gravada pelo ForgeX nem fica no seu histórico</strong>. Se você escolher uma academia do resultado, podem ficar salvos o nome, o identificador e as coordenadas públicas daquele estabelecimento — não a sua posição. Você pode escrever apenas o nome e nunca conceder essa permissão.</p>
 </div>
 
 <h2>2. Onde os dados ficam</h2>
-<p>Os dados ficam salvos no seu aparelho e sincronizados com o <strong>Firebase Realtime Database</strong>, da Google, que atua como operador dos dados. A conta é criada de forma anônima na primeira vez que você abre o app. Se você criar conta com e-mail, ela deixa de ser anônima e passa a poder ser acessada de outro aparelho.</p>
+<p>Os dados ficam salvos no seu aparelho e sincronizados com o <strong>Firebase Realtime Database</strong>, da Google, que atua como operador dos dados. O acesso por e-mail é processado pelo <strong>Firebase Authentication</strong>. A conta é criada de forma anônima na primeira vez que você abre o app. Se você criar conta com e-mail, ela deixa de ser anônima e passa a poder ser acessada de outro aparelho.</p>
 <p>Regras de segurança no servidor limitam quem lê o quê. Suas <strong>fotos de progresso corporal, medições, notas e histórico de treinos ficam privados</strong> e só a sua conta consegue acessá-los.</p>
 
 <h2>3. O que outras pessoas veem</h2>
@@ -53,23 +120,25 @@ strong{color:#ECECEE}</style></head><body>
 <li>A foto que você anexa a um treino publicado</li>
 <li>Suas rotinas, se "Rotinas públicas no perfil" estiver ligada</li>
 <li>Os exercícios que você criou, com a foto que você tiver colocado neles, se não estiverem ocultos</li>
-<li>O nome da academia, nos treinos que você publica no feed</li>
+<li>O nome da academia e um link para o ponto público dela no mapa, nos treinos que você publica no feed</li>
 <li>Seus comentários e curtidas nos treinos de outras pessoas</li>
 <li>Quem você segue e quem segue você</li>
 </ul>
 <p>Você pode desligar a publicação no feed e as rotinas públicas em Ajustes, e escolher treino a treino se ele vai ou não para o feed, na hora de concluir.</p>
 
 <h2>4. Com quem compartilhamos</h2>
-<p>Além do Firebase (Google), que hospeda o serviço, apenas em um caso: quando você usa a busca por proximidade de academias, a sua coordenada aproximada é enviada ao <strong>OpenStreetMap</strong> (serviço público e gratuito de mapas) somente para obter a lista de academias próximas. Nenhum dado seu acompanha essa consulta: nem nome, nem conta, nem identificador. Não registramos essa consulta.</p>
+<p>Além do Firebase (Google), que hospeda o serviço, há um caso opcional: quando você usa a busca por proximidade de academias, a sua coordenada aproximada é enviada a um endpoint público do <strong>Overpass API</strong>, que consulta dados do OpenStreetMap. O ForgeX não acrescenta nome, conta nem identificador à consulta e não a registra. Como em qualquer acesso à internet, o operador do endpoint pode receber dados técnicos da conexão, como endereço IP, conforme a política dele.</p>
 <p><strong>Não vendemos dados, não há anúncios e não usamos rastreadores de publicidade ou analytics de terceiros.</strong></p>
 
 <h2>5. Permissões que o app pede</h2>
+<div class="table-wrap" role="region" aria-label="Permissões solicitadas pelo ForgeX" tabindex="0">
 <table>
-<tr><th>Permissão</th><th>Para quê</th><th>Obrigatória?</th></tr>
+<tr><th scope="col">Permissão</th><th scope="col">Para quê</th><th scope="col">Obrigatória?</th></tr>
 <tr><td>Fotos / câmera</td><td>Anexar foto ao treino, ao perfil, a um exercício ou registrar progresso</td><td>Não</td></tr>
 <tr><td>Notificações</td><td>Avisar quando o descanso acaba e receber recados do app</td><td>Não</td></tr>
 <tr><td>Localização aproximada</td><td>Listar academias perto de você, só quando você toca no botão</td><td>Não</td></tr>
 </table>
+</div>
 <p>Todas são opcionais e pedidas apenas no momento em que você usa o recurso. Negar qualquer uma delas não impede o uso do app.</p>
 
 <h2>6. Notificações</h2>
@@ -86,7 +155,7 @@ strong{color:#ECECEE}</style></head><body>
 <p>Antes de apagar, dá para baixar uma cópia de tudo em Ajustes, Seus dados, Backup completo (JSON), ou exportar os treinos em CSV.</p>
 
 <h2>9. O que pode continuar depois de apagar</h2>
-<p>Curtidas e comentários que você deixou no treino de outra pessoa podem permanecer no conteúdo dela, sem o seu nome ou foto associados. Denúncias enviadas ficam guardadas pelo tempo necessário à moderação. Cópias em backup do provedor podem levar até 30 dias para expirar.</p>
+<p>Curtidas e comentários que você deixou no treino de outra pessoa podem permanecer naquele conteúdo e ainda mostrar o nome ou @ registrado no momento da publicação, embora o perfil deixe de existir. Se quiser remover também uma interação específica, envie o link ou a identificação do conteúdo ao contato abaixo. Denúncias enviadas ficam guardadas pelo tempo necessário à moderação e ao cumprimento de obrigações legais. Cópias técnicas de segurança podem permanecer temporariamente conforme o ciclo de retenção do provedor, sem voltar ao uso normal do serviço.</p>
 
 <h2>10. Seus direitos</h2>
 <p>Pela LGPD, você pode confirmar o tratamento, acessar, corrigir, portar e excluir seus dados, e revogar o consentimento. O acesso e a portabilidade estão no próprio app pelo backup em JSON e pela exportação em CSV. A exclusão está no botão descrito acima. Para qualquer outro pedido, escreva para <a href="mailto:christopherhallan@gmail.com">christopherhallan@gmail.com</a>.</p>
@@ -100,5 +169,12 @@ strong{color:#ECECEE}</style></head><body>
 <h2>13. Contato</h2>
 <p>Responsável pelo tratamento dos dados: o desenvolvedor do ForgeX. Contato: <a href="mailto:christopherhallan@gmail.com">christopherhallan@gmail.com</a>.</p>
 
-<p style="margin-top:34px"><a href="termos.html">Termos de uso</a> · <a href="excluir-conta.html">Excluir minha conta</a> · <a href="./">Voltar ao app</a></p>
-</body></html>
+<nav class="page-nav" aria-label="Documentos e navegação">
+<a href="termos.html">Termos de uso</a>
+<a href="excluir-conta.html">Excluir minha conta</a>
+<a href="./">Voltar ao app</a>
+</nav>
+</article>
+</main>
+</body>
+</html>

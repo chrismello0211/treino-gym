@@ -1,32 +1,101 @@
-<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0A0A0C">
 <title>Excluir minha conta — ForgeX</title>
-<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;background:#0D0D0F;color:#ECECEE;max-width:680px;margin:0 auto;padding:32px 20px 60px;line-height:1.7}
-h1{font-size:26px;margin-bottom:4px}h2{font-size:18px;margin-top:30px;color:#FF7A2E}
-p,li,td{color:#B8C0CB;font-size:15px}a{color:#4CC3FF}
-.data{color:#66666E;font-size:13px}
-.box{background:#161619;border:1px solid #2C2C33;border-radius:14px;padding:16px 18px;margin:18px 0}
-.box p,.box li{color:#ECECEE}
-.bt{display:inline-block;background:#FF5A00;color:#fff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:12px;margin-top:8px}
-table{width:100%;border-collapse:collapse;margin:14px 0}
-td,th{border-bottom:1px solid #2C2C33;padding:9px 6px;text-align:left;vertical-align:top;font-size:14px}
-th{color:#ECECEE;font-size:13px;text-transform:uppercase;letter-spacing:.04em}
-strong{color:#ECECEE}</style></head><body>
-
-<h1>Excluir minha conta do ForgeX</h1>
-<p class="data">Aplicativo: ForgeX — Gym Workout Tracker. Última atualização: julho de 2026.</p>
+<style>
+:root{color-scheme:dark;--bg:#0A0A0C;--surface:#121316;--surface-2:#181A1F;--line:#34373F;--text:#F7F7F8;--muted:#C5C8CF;--subtle:#A5A9B2;--brand:#FF7A2E;--brand-strong:#FF8C4A;--brand-ink:#1A0C03;--focus:#FFD166}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-padding-top:88px}
+body{margin:0;min-width:0;background:radial-gradient(circle at 50% -220px,rgba(255,122,46,.16),transparent 520px),var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-strong);text-decoration-thickness:.08em;text-underline-offset:.2em}
+a:hover{text-decoration-thickness:.14em}
+.document-card p a:not(.bt),.document-card li a{display:inline-flex;align-items:center;min-height:44px;vertical-align:middle}
+a:focus-visible,.table-wrap:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:8px}
+.skip-link{position:fixed;z-index:20;top:8px;left:8px;transform:translateY(-160%);min-height:44px;padding:10px 14px;border-radius:10px;background:var(--focus);color:#171002;font-weight:800}
+.skip-link:focus{transform:translateY(0)}
+.topbar{position:sticky;z-index:10;top:0;border-bottom:1px solid rgba(255,255,255,.09);background:rgba(10,10,12,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.topbar-inner,.page-shell{width:min(760px,calc(100% - 32px));margin-inline:auto}
+.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:68px}
+.brand,.back-link{display:inline-flex;align-items:center;min-height:44px;text-decoration:none;font-weight:800}
+.brand{color:var(--text);font-size:19px;letter-spacing:-.03em}
+.brand strong{color:var(--brand);font-size:1.14em}
+.back-link{gap:8px;padding-inline:12px;border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:14px}
+.back-link:hover{border-color:var(--brand);background:rgba(255,122,46,.08)}
+.page-shell{padding-block:40px 72px}
+.document-card{padding:clamp(24px,5vw,48px);border:1px solid var(--line);border-radius:24px;background:linear-gradient(180deg,rgba(24,26,31,.96),rgba(18,19,22,.98));box-shadow:0 24px 70px rgba(0,0,0,.32)}
+.document-header{padding-bottom:26px;border-bottom:1px solid var(--line);margin-bottom:30px}
+h1,h2{color:var(--text);line-height:1.2;text-wrap:balance}
+h1{margin:0 0 8px;font-size:clamp(1.85rem,6vw,2.7rem);letter-spacing:-.04em}
+h2{margin:38px 0 12px;font-size:1.18rem;letter-spacing:-.015em}
+h2::before{display:inline-block;width:4px;height:1em;margin-right:10px;border-radius:999px;background:var(--brand);content:"";vertical-align:-.1em}
+p,li,td{color:var(--muted);overflow-wrap:anywhere}
+p{margin:0 0 16px}
+.data{margin:0;color:var(--subtle);font-size:.875rem}
+.box{margin:22px 0;padding:18px 20px;border:1px solid #4A3A31;border-left:4px solid var(--brand);border-radius:14px;background:rgba(255,122,46,.07)}
+.box p,.box li{color:var(--text)}
+.steps{margin:0;padding-left:1.45rem}
+.steps li{padding-left:.3rem;margin-block:6px}
+.steps li::marker{color:var(--brand);font-weight:800}
+.bt{display:inline-flex;align-items:center;justify-content:center;min-height:48px;margin-top:8px;padding:11px 20px;border:1px solid #FFA066;border-radius:12px;background:var(--brand);color:var(--brand-ink);font-weight:800;line-height:1.35;text-align:center;text-decoration:none;box-shadow:0 8px 24px rgba(255,122,46,.16)}
+.bt:hover{background:#FF8C4A;text-decoration:none}
+.table-wrap{max-width:100%;margin:18px 0 22px;overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:rgba(10,10,12,.34);overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
+table{width:100%;min-width:570px;border-collapse:collapse}
+td,th{padding:13px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;font-size:.9rem;line-height:1.5}
+tr:last-child td{border-bottom:0}
+th{background:rgba(255,255,255,.025);color:var(--text);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+strong{color:var(--text)}
+.page-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:42px;padding-top:24px;border-top:1px solid var(--line)}
+.page-nav a{display:flex;align-items:center;justify-content:center;min-height:48px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;color:var(--text);font-size:.86rem;font-weight:700;line-height:1.25;text-align:center;text-decoration:none}
+.page-nav a:hover{border-color:var(--brand);background:rgba(255,122,46,.08)}
+@media (max-width:520px){
+  .topbar-inner,.page-shell{width:min(100% - 24px,760px)}
+  .topbar-inner{min-height:64px}
+  .page-shell{padding-block:24px 48px}
+  .document-card{padding:22px 18px;border-radius:18px}
+  .document-header{padding-bottom:22px;margin-bottom:24px}
+  h1{font-size:clamp(1.7rem,9vw,2.15rem)}
+  h2{margin-top:32px}
+  .back-link{padding-inline:10px}
+  .bt{width:100%}
+  .page-nav{grid-template-columns:1fr}
+  .page-nav a{justify-content:flex-start;text-align:left}
+}
+@media (max-width:340px){.topbar-inner,.page-shell{width:calc(100% - 16px)}.document-card{padding-inline:14px}.brand{font-size:18px}.back-link{font-size:13px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="./" aria-label="ForgeX — voltar ao app"><span>Forge</span><strong>X</strong></a>
+<a class="back-link" href="./"><span aria-hidden="true">←</span> Voltar ao app</a>
+</div>
+</header>
+<main id="conteudo" class="page-shell">
+<article class="document-card" aria-labelledby="titulo-pagina">
+<header class="document-header">
+<h1 id="titulo-pagina">Excluir minha conta do ForgeX</h1>
+<p class="data">Aplicativo: ForgeX — Gym Workout Tracker. Última atualização: outubro de 2026.</p>
+</header>
 
 <p>Existem duas formas de apagar a sua conta e todos os dados dela. As duas apagam a mesma coisa.</p>
 
 <h2>Opção 1 — pelo app, na hora</h2>
 <div class="box">
-<p>1. Abra o ForgeX<br>
-2. Toque em <strong>Perfil</strong> e depois no ícone de <strong>Ajustes</strong><br>
-3. Desça até o card <strong>Conta</strong><br>
-4. Toque em <strong>Apagar minha conta</strong><br>
-5. Escreva <strong>APAGAR</strong> para confirmar</p>
+<ol class="steps">
+<li>Abra o ForgeX</li>
+<li>Toque em <strong>Perfil</strong> e depois no ícone de <strong>Ajustes</strong></li>
+<li>Desça até o card <strong>Conta</strong></li>
+<li>Toque em <strong>Apagar meus dados e esta conta</strong></li>
+<li>Escreva <strong>APAGAR</strong> para confirmar</li>
+</ol>
 </div>
-<p>A exclusão acontece na hora, sem espera e sem precisar falar com ninguém.</p>
+<p>Com o aparelho conectado, o app solicita a exclusão imediatamente e só remove a cópia local depois que o servidor confirma a limpeza. Se houver falha, o app informa o problema e permite tentar de novo sem apagar silenciosamente os dados deste aparelho.</p>
 
 <h2>Opção 2 — pela web, se você já desinstalou</h2>
 <p>Mande um e-mail com o assunto <strong>Excluir minha conta</strong> informando o e-mail cadastrado ou o seu nome de usuário do app (o @).</p>
@@ -34,8 +103,9 @@ strong{color:#ECECEE}</style></head><body>
 <p>Confirmamos a titularidade e concluímos a exclusão em <strong>até 30 dias</strong>, normalmente em menos de 7. Você recebe um e-mail confirmando quando terminar.</p>
 
 <h2>O que é apagado</h2>
+<div class="table-wrap" role="region" aria-label="Dados excluídos da conta ForgeX" tabindex="0">
 <table>
-<tr><th>Dado</th><th>O que acontece</th></tr>
+<tr><th scope="col">Dado</th><th scope="col">O que acontece</th></tr>
 <tr><td>Conta e credencial de acesso</td><td>Apagada de vez</td></tr>
 <tr><td>Treinos, rotinas, séries, cargas e recordes</td><td>Apagados</td></tr>
 <tr><td>Medições corporais</td><td>Apagadas</td></tr>
@@ -45,9 +115,10 @@ strong{color:#ECECEE}</style></head><body>
 <tr><td>Lista de quem você segue e quem te segue</td><td>Apagada</td></tr>
 <tr><td>Token de notificação</td><td>Apagado</td></tr>
 </table>
+</div>
 
 <h2>O que pode continuar</h2>
-<p>Curtidas e comentários que você deixou em treinos de outras pessoas podem permanecer no conteúdo delas, sem o seu nome, foto ou perfil associados. Denúncias que você enviou ficam guardadas pelo tempo necessário para a moderação, conforme os <a href="termos.html">Termos de uso</a>. Cópias em backup do provedor de hospedagem expiram em até 30 dias.</p>
+<p>Curtidas e comentários que você deixou em treinos de outras pessoas podem permanecer naquele conteúdo e ainda mostrar o nome ou @ registrado no momento da publicação, embora o seu perfil deixe de existir. Para remover também uma interação específica, informe o conteúdo no pedido por e-mail. Denúncias que você enviou ficam guardadas pelo tempo necessário para a moderação e para obrigações legais, conforme os <a href="termos.html">Termos de uso</a>. Cópias técnicas de segurança podem permanecer temporariamente conforme o ciclo de retenção do provedor, sem voltar ao uso normal do serviço.</p>
 
 <h2>Quer só uma cópia dos dados, sem apagar?</h2>
 <p>No app: <strong>Ajustes</strong>, card <strong>Seus dados</strong>. Ali dá para baixar o backup completo em JSON ou exportar os treinos em CSV, que abre no Excel.</p>
@@ -55,5 +126,12 @@ strong{color:#ECECEE}</style></head><body>
 <h2>Contato</h2>
 <p><a href="mailto:christopherhallan@gmail.com">christopherhallan@gmail.com</a></p>
 
-<p style="margin-top:34px"><a href="privacidade.html">Política de privacidade</a> · <a href="termos.html">Termos de uso</a> · <a href="./">Voltar ao app</a></p>
-</body></html>
+<nav class="page-nav" aria-label="Documentos e navegação">
+<a href="privacidade.html">Política de privacidade</a>
+<a href="termos.html">Termos de uso</a>
+<a href="./">Voltar ao app</a>
+</nav>
+</article>
+</main>
+</body>
+</html>

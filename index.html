@@ -587,7 +587,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.24.2';
+const APP_VER='11.24.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -762,6 +762,43 @@ CORE.recomputaPRs = function(lista, resets){
   });
   return prs;
 };
+// Zerar os recordes de um exercicio. Feito NO MEIO de um treino, a data do
+// zerar vira o INICIO desse treino: ele passa a ser a 1a sessao depois do
+// zerar (estreia: define a marca, sem medalha). Antes, a estreia ja tinha sido
+// decidida ao comecar o treino e a 1a carga lancada virava recorde automatico.
+// A mesma data faz a marcacao de serie, o recalculo e a sincronizacao (que so
+// aproveita marcas com data >= zerar) concordarem entre si.
+CORE.zeraRecordes = function(exId){
+  const at=S.ativo;
+  const rE=(at && at.inicio) ? Math.min(agora(), at.inicio) : agora();
+  S.prs[exId]={resetEm:rE};
+  if(at){
+    at._estr=at._estr||{}; at._estr[exId]=true;
+    (at.ex||[]).forEach(e=>{ if(e.exId===exId) (e.series||[]).forEach(s=>{ delete s.pr; delete s._prBackup; }); });
+    salva('ativo');
+  }
+  salva('prs');
+  CORE.reconciliaPRs();          // series ja feitas hoje viram a marca de partida
+};
+// Zerar feito no meio de um treino ANTES da 11.24.3: aquele treino ficou fora
+// da regra de estreia e pode ter ganho medalha indevida. Leva a data do zerar
+// pro inicio dele e refaz o placar. Idempotente: corrigido, nao casa de novo.
+function migraZerarNoTreino(){
+  try{
+    const lista=Object.values(S.treinos||{}).filter(t=>t && !t.apagado).concat(S.ativo? [S.ativo] : []);
+    let mudou=false;
+    Object.entries(S.prs||{}).forEach(([ex,p])=>{
+      if(!p || !p.resetEm) return;
+      const w=lista.find(t=>t.inicio < p.resetEm && p.resetEm <= (t===S.ativo? agora() : (t.fim||t.inicio))
+        && (t.ex||[]).some(e=>e.exId===ex));
+      if(!w) return;
+      p.resetEm=w.inicio; mudou=true;
+      if(w===S.ativo){ w._estr=w._estr||{}; w._estr[ex]=true; salva('ativo'); }
+    });
+    if(mudou){ salva('prs'); CORE.reconciliaPRs(); }
+    return mudou;
+  }catch(e){ return false; }
+}
 // Reconstrói o placar a partir da fonte da verdade. É usado quando uma série,
 // exercício ou treino é removido/editado; restaurar backups pontuais fora de
 // ordem podia apagar um recorde válido gravado depois.
@@ -4171,16 +4208,16 @@ TELAS.exercicio = function({id}){
           UI.fechaFolha();
           UI.folha('Zerar recordes deste exercício?',[
             h('div',{class:'f14 mut',style:'padding:4px 2px 14px;line-height:1.6'},
-              'Os recordes de carga, 1RM, série e repetições recomeçam do zero a partir de hoje. Útil quando você troca de academia e os pesos não batem. O histórico e os gráficos permanecem. Essa ação não tem volta.'),
+              'Os recordes de carga, 1RM, série e repetições recomeçam do zero a partir de hoje. Útil quando você troca de academia e os pesos não batem. O histórico e os gráficos permanecem. Como na primeira vez com um exercício, o primeiro treino depois de zerar só define a nova marca, sem medalha'+((S.ativo && (S.ativo.ex||[]).some(e=>e.exId===id))? ' (se você está treinando agora, é este).' : '.')+' Essa ação não tem volta.'),
             h('button',{class:'btn btn-err',onclick:()=>{
               const bkPR = S.prs[id] ? JSON.parse(JSON.stringify(S.prs[id])) : null;
-              S.prs[id]={resetEm:agora()};
-              salva('prs'); NET.agenda('prs/'+id, S.prs[id]);
+              const bkEstr = (S.ativo && S.ativo._estr) ? S.ativo._estr[id] : undefined;
+              CORE.zeraRecordes(id);
               UI.fechaFolha(); UI.refaz();
               UI.desfazer('Recordes zerados', ()=>{
-                if(bkPR){ S.prs[id]=bkPR; NET.agenda('prs/'+id, bkPR); }
-                else { delete S.prs[id]; NET.agenda('prs/'+id, null); }
-                salva('prs'); UI.refaz(); UI.toast('Recordes restaurados ✓', true);
+                if(bkPR) S.prs[id]=bkPR; else delete S.prs[id];
+                if(S.ativo && S.ativo._estr){ if(bkEstr===undefined) delete S.ativo._estr[id]; else S.ativo._estr[id]=bkEstr; salva('ativo'); }
+                salva('prs'); CORE.reconciliaPRs(); UI.refaz(); UI.toast('Recordes restaurados ✓', true);
               });
             }},'Zerar recordes')]);
         }},'Zerar recordes deste exercício')]);
@@ -4254,7 +4291,7 @@ TELAS.exercicio = function({id}){
   const p=S.prs[id];
   if(p && p.resetEm && !(p.kg||p.vol||p.rm||p.reps)){
     m.appendChild(h('div',{class:'card'},
-      h('div',{class:'f13 mut',style:'line-height:1.6'},'Recordes zerados em '+new Date(p.resetEm).toLocaleDateString('pt-BR')+'. O próximo treino define as novas marcas.')));
+      h('div',{class:'f13 mut',style:'line-height:1.6'},'Recordes zerados em '+new Date(p.resetEm).toLocaleDateString('pt-BR')+'. O primeiro treino depois disso define as novas marcas, sem medalha; a partir do seguinte, recorde vale medalha.')));
   }
   if(p && (p.kg||p.vol||p.rm||p.reps)){
     m.appendChild(h('div',{class:'card'},
@@ -8595,7 +8632,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); await migraVisibilidadeFeed(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); await migraVisibilidadeFeed(); migraZerarNoTreino(); NET.despacha(); ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
 setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();

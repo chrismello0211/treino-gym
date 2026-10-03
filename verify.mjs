@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.24.2';
+const EXPECTED_VERSION = '11.24.3';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -198,6 +198,8 @@ check(!/\.navigate\s*\(/.test(swSource), 'notificacao nao recarrega o app', 'cli
     'as regras recusam ao dono o no inteiro de: ' + recusados.join(', ') + ' (a operacao atomica falharia)');
   check(indexHtml.includes("limpa['fotos/'+u+'/'+tid]=null") && indexHtml.includes("limpa['fotos/'+u+'/prog_'+id]=null"), 'fotos apagadas uma por uma na exclusao');
 }
+check(indexHtml.includes('CORE.zeraRecordes = function') && /onclick:\(\)=>\{[^}]*CORE\.zeraRecordes\(id\)/.test(indexHtml) && indexHtml.includes('migraZerarNoTreino(); NET.despacha()'),
+  'zerar no meio do treino vira estreia (sem medalha automatica)', 'o treino em que se zerou precisa ser a 1a sessao depois do zerar');
 
 const dialogTags = Array.from(indexHtml.matchAll(/<[a-z][^>]*\brole\s*=\s*(["'])dialog\1[^>]*>/gi), match => match[0]);
 const semanticDialog = dialogTags.some(tag =>

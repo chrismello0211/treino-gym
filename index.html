@@ -241,6 +241,10 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .gal-d{position:absolute;left:8px;bottom:7px;z-index:1;font-size:11px;font-weight:800;color:#fff;letter-spacing:.2px;text-shadow:0 1px 2px rgba(0,0,0,.5)}
 .gal-vazia{display:flex;align-items:center;gap:12px;border:1.5px dashed var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;color:var(--tx2);font-size:13px;line-height:1.45}
 /* bio e link ocupam a largura toda: texto longo quebra em vez de vazar */
+/* estatisticas do perfil: colunas do tamanho do conteudo, rotulo numa linha so */
+.stats3.pf-stats{justify-content:space-between}
+.stats3.pf-stats>div,.stats3.pf-stats>div:first-child{flex:0 1 auto;min-width:0}
+.stats3.pf-stats .k{white-space:nowrap}
 .pf-bio{font-size:14px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px}
 .pf-link{display:flex;align-items:center;gap:7px;margin-top:8px;max-width:100%;color:var(--brand2);font-weight:700;font-size:13.5px;text-decoration:none}
 .pf-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -435,37 +439,25 @@ button,.btn,.chip,.item{-webkit-tap-highlight-color:transparent;touch-action:man
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[role="button"]:focus-visible{
   outline:3px solid var(--brand);outline:3px solid color-mix(in srgb,var(--brand) 72%,white);outline-offset:3px}
 input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,90,0,.14)}
-input,select,textarea{min-height:46px;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
+input,select,textarea{transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
 #topo{border-bottom:1px solid transparent;transition:background .2s ease,border-color .2s ease}
-main{padding-bottom:calc(var(--sab) + 112px)}
 .card{box-shadow:0 1px 0 rgba(255,255,255,.018),var(--shadow-sm);transition:transform .16s var(--ease),border-color .16s ease,box-shadow .16s ease}
-.btn{min-height:48px;transition:transform .13s var(--ease),filter .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease}
+.btn{transition:transform .13s var(--ease),filter .16s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease}
 .btn-p{background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 9px 22px rgba(255,90,0,.20)}
 .btn-ok{box-shadow:0 9px 22px rgba(46,204,113,.16)}
-.btn-mini{min-width:44px;min-height:44px;padding-top:9px;padding-bottom:9px}
-.btn:active,.chip:active,.tab:active,[role="button"]:active{transform:scale(.975)}
+.btn:active,.chip:active,.tab:active{transform:scale(.975)}
 button:disabled,.btn:disabled{opacity:.52;cursor:not-allowed;filter:saturate(.55);transform:none!important;box-shadow:none}
-.tabbar{width:calc(100% - 28px);max-width:360px;justify-content:space-between;box-shadow:0 14px 38px rgba(0,0,0,.42)}
-.tab{flex:1;min-width:0;min-height:56px;padding:8px 12px;transition:color .18s ease,background .18s ease,transform .13s var(--ease)}
+.tabbar{box-shadow:0 14px 38px rgba(0,0,0,.42)}
+.tab{transition:color .18s ease,background .18s ease,transform .13s var(--ease)}
 .tab.on{box-shadow:inset 0 0 0 1px rgba(255,122,46,.10),0 5px 16px rgba(255,90,0,.10)}
 .folha{max-width:640px;margin:0 auto;box-shadow:0 -18px 54px rgba(0,0,0,.46);transition:transform .26s var(--ease),visibility .26s}
 .veu{backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
-.folha-cab{min-height:58px}
 .alca{width:44px;background:var(--tx3);opacity:.55}
-.chip{min-width:44px;min-height:44px;transition:transform .13s var(--ease),border-color .16s ease,background .16s ease,color .16s ease}
+.chip{transition:transform .13s var(--ease),border-color .16s ease,background .16s ease,color .16s ease}
 .chip.on{box-shadow:inset 0 0 0 1px rgba(255,122,46,.12)}
-.stipo,.scheck,.numstep button{min-width:44px;min-height:44px;width:44px;height:44px}
-.heart,.feed-mais,.sug-x{min-width:44px;min-height:44px;justify-content:center}
-.topo-tit[role="button"],button.topo-tit{min-height:44px;display:flex;align-items:center}
-.cab-ta button,.cab-ta [role="button"],#ta-musc{min-height:44px}
-.stats3 button{min-width:44px;min-height:44px}
 #ta-musc{align-items:center}
-.srow .anterior[role="button"]{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
-.gtab.cab [role="button"]{min-height:44px;display:flex;align-items:center;justify-content:center}
-.drag-cab>.esp[role="button"]{min-height:52px;display:flex;flex-direction:column;justify-content:center}
-.drag-cab+.folha-nota,.drag-cab~.linha[role="button"]{min-height:44px;align-items:center}
-.social-link{display:inline-flex;align-items:center;min-width:44px;min-height:44px;padding:10px 2px;text-decoration:underline;vertical-align:middle}
-.legal-link{display:inline-flex;align-items:center;min-height:44px;padding:10px 2px;box-sizing:border-box;vertical-align:middle}
+.social-link{text-decoration:underline;cursor:pointer;white-space:nowrap}
+.legal-link{cursor:pointer}
 .vazio{border:1px dashed var(--line);border-radius:var(--r);background:rgba(255,255,255,.018);margin:6px 0 14px}
 #timerbar{box-shadow:0 16px 46px rgba(0,0,0,.48)}
 #toast{box-shadow:var(--shadow-md)}
@@ -595,7 +587,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.24.1';
+const APP_VER='11.24.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4401,13 +4393,13 @@ TELAS.perfil = function(){
       avatarEl(S.perfil?.foto, S.perfil?.nome, 60, '18px'),
       h('div',{class:'esp',style:'min-width:0'},
         h('div',{class:'b800 f20'},S.perfil?.nome||'Atleta'),
-        h('div',{class:'f12',style:'color:var(--tx2);margin-top:2px'},ts.length+' treinamentos · ',
+        h('div',{class:'f12',style:'color:var(--tx2);margin-top:2px'},ts.length+' treinos · ',
           h('span',{id:'pf-segrs',class:'social-link',onclick:()=>SOCIALVIEW.folha('seguidores', S.auth&&S.auth.uid)},'… seguidores'),' · ',
           h('span',{class:'social-link',onclick:()=>SOCIALVIEW.folha('seguindo', S.auth&&S.auth.uid)},Object.keys(S.social.seguindo||{}).length+' seguindo')),
         null)),
     S.perfil?.bio? h('div',{class:'pf-bio'},S.perfil.bio):null,
     linkEl(S.perfil?.link),
-    h('div',{class:'stats3',style:'margin-top:14px'},
+    h('div',{class:'stats3 pf-stats',style:'margin-top:14px'},
       h('div',{},h('div',{class:'k'},'Esta semana'),h('div',{class:'v',style:'font-size:16px'},nestaSemana.length+'x')),
       h('div',{},h('div',{class:'k'},'Horas na semana'),h('div',{class:'v',style:'font-size:16px'},horasSemana? (Math.round(horasSemana*10)/10).toLocaleString('pt-BR')+'h':'0h')),
       h('div',{},h('div',{class:'k'},'Recordes'),h('div',{class:'v',style:'font-size:16px'},ts.reduce((a,t)=>a+(t.recordes||0),0)+' 🥇')))));
@@ -8092,11 +8084,14 @@ const CONTA = {
     const limpaR=await NET.fetchT(FB.db+'/.json?auth='+tk,{
       method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(limpa)},25000);
     if(!limpaR.ok) throw new Error('Não foi possível apagar os dados da conta. Nada foi limpo deste aparelho.');
-    // O que pertence a terceiros (curtidas que recebi, a lista de quem me
-    // segue, a lista "seguindo" dos meus seguidores) as regras atuais nao
-    // deixam o dono apagar. Tenta um por um, sem travar a exclusao.
-    const terceiros=['/curtidas/'+u, '/seguidores/'+u].concat(Object.keys(seguidores).map(f=>'/seguindo/'+f+'/'+u));
-    for(const p of terceiros){ try{ await NET.fetchT(NET.caminho(p)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){} }
+    // Nos inteiros que as regras (desde 10/2026) deixam o dono SO APAGAR:
+    // fotos e comentarios (pega ate o que veio de outro aparelho), curtidas
+    // recebidas, a lista de quem me segue e eu na lista "seguindo" de cada
+    // seguidor. Ficam fora do PATCH atomico: se as regras voltarem atras, a
+    // exclusao principal continua funcionando.
+    const completa=['/fotos/'+u, '/comentarios/'+u, '/curtidas/'+u, '/seguidores/'+u]
+      .concat(Object.keys(seguidores).map(f=>'/seguindo/'+f+'/'+u));
+    for(const p of completa){ try{ await NET.fetchT(NET.caminho(p)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){} }
     // apaga a credencial no Firebase Auth (a conta deixa de existir)
     const r=await NET.fetchT('https://identitytoolkit.googleapis.com/v1/accounts:delete?key='+FB.key,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:tk})},20000);

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.24.3';
+const EXPECTED_VERSION = '11.24.4';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -200,6 +200,8 @@ check(!/\.navigate\s*\(/.test(swSource), 'notificacao nao recarrega o app', 'cli
 }
 check(indexHtml.includes('CORE.zeraRecordes = function') && /onclick:\(\)=>\{[^}]*CORE\.zeraRecordes\(id\)/.test(indexHtml) && indexHtml.includes('migraZerarNoTreino(); NET.despacha()'),
   'zerar no meio do treino vira estreia (sem medalha automatica)', 'o treino em que se zerou precisa ser a 1a sessao depois do zerar');
+check(!indexHtml.includes("(!s.kg||!s.reps)){ UI.toast('Preencha kg e reps") && indexHtml.includes('semCargaExterna'),
+  'serie sem carga pode ser marcada e nao gera recorde', 'como no Hevy: carga opcional, mas sem medalha de repeticao em exercicio de carga');
 
 const dialogTags = Array.from(indexHtml.matchAll(/<[a-z][^>]*\brole\s*=\s*(["'])dialog\1[^>]*>/gi), match => match[0]);
 const semanticDialog = dialogTags.some(tag =>

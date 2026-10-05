@@ -587,7 +587,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.24.3';
+const APP_VER='11.24.4';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -620,7 +620,9 @@ const CORE = {
     if(kg>0 && kg > (p.kg?p.kg.v:0)) bate.push(['kg',kg]);
     if(vol>0 && vol > (p.vol?p.vol.v:0)) bate.push(['vol',vol]);
     if(rm>0 && rm > (p.rm?p.rm.v:0)) bate.push(['rm',rm]);
-    if(kg===0 && reps>0 && reps > (p.reps?p.reps.v:0)) bate.push(['reps',reps]);
+    const xe=(typeof BIB!=='undefined' && BIB.ex)? BIB.ex(exId) : null;
+    const semCargaExterna = !xe || xe.t!=='peso_reps' || xe.e==='peso-corporal';
+    if(kg===0 && reps>0 && semCargaExterna && reps > (p.reps?p.reps.v:0)) bate.push(['reps',reps]);
     return bate;
   },
   // conta recorde: tipos UNICOS por exercicio (carga, volume, 1RM e reps
@@ -2696,8 +2698,9 @@ const ATIVO = {
       const refReps0 = (ant0 && ant0.reps!=null && ant0.reps!=='') ? ant0.reps : (s._planReps!=null? s._planReps : null);
       if((s.kg===''||s.kg==null) && refKg0!=null && !pcEx) s.kg=refKg0;
       if((s.reps===''||s.reps==null) && refReps0!=null) s.reps=refReps0;
-      if(x.t==='peso_reps' && !pcEx && (!s.kg||!s.reps)){ UI.toast('Preencha kg e reps antes de concluir'); return; }
-      if(x.t==='peso_reps' && pcEx && !s.reps){ UI.toast('Preencha as repetições antes de concluir'); return; }
+      // carga e' opcional, como no Hevy: tem quem so acompanhe repeticoes. Serie
+      // sem carga conta no treino, mas nao no placar de recordes (detectaPR).
+      if(x.t==='peso_reps' && !s.reps){ UI.toast('Preencha as repetições antes de concluir'); return; }
       if(x.t!=='peso_reps' && !s.reps){ UI.toast('Preencha o valor antes de concluir'); return; }
       if(pcEx){ const pc=pesoCorporalAtual(); if(pc>0) s.pc=pc; if(!s.kg) s.kg=''; }
       delete s._sugKg; delete s._sugReps;
@@ -3029,7 +3032,8 @@ TELAS.ativo = function(){
     const refReps = (ant && ant.reps!=null && ant.reps!=='') ? ant.reps : (s._planReps!=null? s._planReps : null);
     const phKg = refKg!=null ? String(fmtPeso(refKg, unEx(e))) : (pcEx?('+'+unEx(e)):unEx(e));
     const phReps = refReps!=null ? (ehTempo?fmtTempoCampo(refReps):String(refReps)) : (ehTempo?'0:00':'reps');
-    const antTxt = ant ? (x.t==='peso_reps' ? fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps : (ehTempo? fmtTempoCampo(ant.reps) : ant.reps+' reps')) : '—';
+    const antSemCarga = ant && (ant.kg==null || ant.kg==='' || !(Number(ant.kg)>0));
+    const antTxt = ant ? (x.t==='peso_reps' ? (antSemCarga? ant.reps+' reps' : fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps) : (ehTempo? fmtTempoCampo(ant.reps) : ant.reps+' reps')) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
       h('button',{class:'stipo '+s.tipo,'aria-label':'Série '+(numerada||1)+(s.pr&&s.pr.length?' com recorde; ver detalhes':'; ajustar tipo e RPE'),onclick:()=>{ if(s.pr && s.pr.length) folhaPRSerie(x,s,e); else if(!s.ok) tipoRpe(s); }},
         s.tipo==='N'?String(numerada||1):s.tipo,
@@ -3990,7 +3994,7 @@ TELAS.treinoDet = function({id}){
       card.append(h('div',{class:'gtab srow'+(si%2?' zeb':'')},
         h('div',{class:'stipo '+s.tipo},s.tipo==='N'?String(num||1):s.tipo),
         h('div'),
-        h('div',{style:'text-align:center;font-weight:700'}, x.t==='peso_reps'? CORE.fmtKg(s.kg)+' kg':'—'),
+        h('div',{style:'text-align:center;font-weight:700'}, (x.t==='peso_reps' && Number(s.kg)>0)? CORE.fmtKg(s.kg)+' kg':'—'),
         h('div',{style:'text-align:center;font-weight:700'}, x.t==='tempo'? fmtTempoEx(s.reps) : String(s.reps), s.rpe? h('span',{class:'rpe-tag'},'@'+s.rpe):null),
         h('div',{style:'text-align:center'}, s.pr?'🥇':'')));
       if(s.pr && s.pr.length) card.append(h('div',{class:'f12 b700',style:'color:var(--brand2);margin:-2px 0 6px 12px'},
@@ -4335,7 +4339,7 @@ TELAS.exercicio = function({id}){
       cardH.append(h('div',{style:'padding:8px 0;border-bottom:1px solid var(--surf2)'},
         h('div',{class:'linha'},h('div',{class:'f13 b700'},dataCurta(t.inicio)),h('div',{class:'esp'}),h('div',{class:'f12 mut2'},t.titulo)),
         h('div',{class:'f14 mut',style:'margin-top:4px'},
-          e.series.map(s=> x.t==='peso_reps'? CORE.fmtKg(s.kg)+'×'+s.reps : s.reps+(x.t==='tempo'?'s':'')).join('  ·  '))));
+          e.series.map(s=> x.t==='peso_reps'? (Number(s.kg)>0? CORE.fmtKg(s.kg)+'×'+s.reps : s.reps+' reps') : s.reps+(x.t==='tempo'?'s':'')).join('  ·  '))));
     });
     m.appendChild(cardH);
   } else {

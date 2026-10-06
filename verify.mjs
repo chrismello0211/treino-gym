@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.25.0';
+const EXPECTED_VERSION = '11.25.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];

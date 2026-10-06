@@ -251,6 +251,12 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .duelo-lider.on{background:rgba(255,90,0,.16);color:var(--brand2)}
 .duelo-op{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--surf2);border:1px dashed var(--line)}
 .duelo-op .q{display:inline-flex;align-items:center;padding:4px 9px;border-radius:9px;background:var(--surf3);margin:5px 6px 0 0;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.duelo-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--surf2)}
+.duelo-seg-b{padding:11px 6px;border-radius:11px;border:0;background:transparent;color:var(--tx2);font-weight:800;font-size:14px;font-family:inherit;cursor:pointer}
+.duelo-seg-b.on{background:var(--brand);color:#111}
+/* rodape fixo da folha de duelo: a lista rola por baixo, o botao fica sempre visivel */
+.duelo-rodape{position:sticky;bottom:-12px;z-index:2;margin:12px -16px -12px;padding:14px 16px 12px;background:linear-gradient(to bottom,rgba(17,20,24,0),rgba(17,20,24,.995) 14px)}
+body.claro .duelo-rodape{background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.995) 14px)}
 .duelo-modo,.duelo-rot{display:block;width:100%;text-align:left;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--surf2);color:var(--tx);font-family:inherit;cursor:pointer}
 .duelo-modo.on,.duelo-rot.on{border-color:var(--brand);background:rgba(255,90,0,.10)}
 .duelo-vs{display:flex;align-items:center;gap:8px}
@@ -602,7 +608,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.25.0';
+const APP_VER='11.25.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4842,31 +4848,43 @@ const DUELO = {
     });
     return box;
   },
-  // folha de desafiar, a partir do perfil do amigo
+  // folha de desafiar, a partir do perfil do amigo. Montada UMA vez: escolher
+  // modo ou ficha so troca o destaque (redesenhar voltava a rolagem pro topo).
+  // O botao fica num rodape fixo: com muitas fichas, ele sumia no fim da lista.
   folhaDesafiar(amigo){
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes de começar um duelo'); return; }
     let modo='superacao', rot=null;
-    const desenhar=()=>{
-      const op=(k)=>{ const M=DUELO.MODOS[k];
-        return h('button',{class:'duelo-modo'+(modo===k?' on':''),onclick:()=>{ modo=k; desenhar(); }},
-          h('div',{class:'b800'}, M.ic+' '+M.n), h('div',{class:'f12 mut',style:'margin-top:3px;line-height:1.45'}, M.d)); };
-      const pastas=Object.values(S.pastas||{}).filter(p=>p && !p.apagada && !p.apagado).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
-      const rots=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada && !r.apagado && (r.ex||[]).length);
-      const item=(id, titulo, sub)=>h('button',{class:'duelo-rot'+(rot===id?' on':''),onclick:()=>{ rot=id; desenhar(); }},
+    const desc=h('div',{class:'f12 mut',style:'margin:8px 2px 0;line-height:1.45'}, DUELO.MODOS[modo].d);
+    const segs={};
+    const seg=h('div',{class:'duelo-seg',role:'radiogroup','aria-label':'Modo do duelo'}, ...['superacao','mano'].map(k=>{
+      const M=DUELO.MODOS[k];
+      segs[k]=h('button',{class:'duelo-seg-b'+(modo===k?' on':''),role:'radio','aria-checked':String(modo===k),onclick:()=>{
+        modo=k; desc.textContent=M.d;
+        Object.entries(segs).forEach(([kk,b])=>{ b.classList.toggle('on', kk===k); b.setAttribute('aria-checked', String(kk===k)); });
+      }}, M.ic+' '+M.n);
+      return segs[k];
+    }));
+    const itens=[];
+    const item=(id, titulo, sub)=>{
+      const b=h('button',{class:'duelo-rot'+(rot===id?' on':''),onclick:()=>{ rot=id; itens.forEach(x=>x.el.classList.toggle('on', x.id===id)); }},
         h('div',{class:'b800',style:'font-size:14px'}, titulo), sub? h('div',{class:'f12 mut2',style:'margin-top:2px'}, sub) : null);
-      const lista=[item(null,'Treino livre','Vocês montam juntos: o que um adicionar aparece pro outro')];
-      const ordem=pastas.map(p=>p.id).concat([undefined]);
-      ordem.forEach(pid=>{ rots.filter(r=>(r.pasta||undefined)===pid || (pid===undefined && r.pasta && !S.pastas[r.pasta]))
-        .sort((a,b)=>(a.ordem||0)-(b.ordem||0)).forEach(r=>lista.push(item(r.id, r.titulo, (pid && S.pastas[pid]? S.pastas[pid].nome+' · ' : '')+r.ex.length+' exercícios'))); });
-      UI.folha('Duelo com '+(amigo.user? '@'+amigo.user : (amigo.nome||'amigo')),[
-        h('div',{class:'f13 mut',style:'margin:0 2px 8px'},'Modo'),
-        h('div',{style:'display:grid;gap:8px'}, op('superacao'), op('mano')),
-        h('div',{class:'f13 mut',style:'margin:16px 2px 8px'},'Treino'),
-        h('div',{style:'display:grid;gap:6px;max-height:38vh;overflow:auto'}, ...lista),
-        h('button',{class:'btn btn-p',style:'margin-top:14px',onclick:()=>DUELO.desafiar(amigo, modo, rot)},'Enviar desafio ⚔️'),
-        h('div',{class:'f12 mut2',style:'text-align:center;margin-top:8px'},'O convite vale por '+DUELO.CONVITE_MIN+' minutos.')]);
+      itens.push({id, el:b}); return b;
     };
-    desenhar();
+    const pastas=Object.values(S.pastas||{}).filter(p=>p && !p.apagada && !p.apagado).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+    const rots=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada && !r.apagado && (r.ex||[]).length);
+    const lista=[item(null,'Treino livre','Vocês montam juntos: o que um adicionar aparece pro outro')];
+    pastas.map(p=>p.id).concat([undefined]).forEach(pid=>{
+      rots.filter(r=>(r.pasta||undefined)===pid || (pid===undefined && r.pasta && !S.pastas[r.pasta]))
+        .sort((a,b)=>(a.ordem||0)-(b.ordem||0))
+        .forEach(r=>lista.push(item(r.id, r.titulo, (pid && S.pastas[pid]? S.pastas[pid].nome+' · ' : '')+r.ex.length+' exercícios')));
+    });
+    UI.folha('Duelo com '+(amigo.user? '@'+amigo.user : (amigo.nome||'amigo')),[
+      h('div',{class:'f13 mut',style:'margin:0 2px 8px'},'Modo'), seg, desc,
+      h('div',{class:'f13 mut',style:'margin:16px 2px 8px'},'Treino'),
+      h('div',{style:'display:grid;gap:6px'}, ...lista),
+      h('div',{class:'duelo-rodape'},
+        h('button',{class:'btn btn-p',onclick:()=>DUELO.desafiar(amigo, modo, rot)},'Enviar desafio ⚔️'),
+        h('div',{class:'f12 mut2',style:'text-align:center;margin-top:6px'},'O convite vale por '+DUELO.CONVITE_MIN+' minutos.'))]);
   },
   // resultado, convite e andamento
   tela(id){

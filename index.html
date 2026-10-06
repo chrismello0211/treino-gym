@@ -451,14 +451,14 @@ body.kb .folha .folha-corpo{max-height:38vh}
 
 /* ---------- acabamento de lançamento ---------- */
 html{background:var(--bg)}
-body{min-height:100vh;min-height:100dvh;
+body{min-height:100vh;min-height:100vh;min-height:100dvh;
   background:radial-gradient(ellipse 120% 42% at 50% -12%,rgba(255,90,0,.11),transparent 68%),var(--bg);
   background-attachment:fixed}
 body.claro{background:radial-gradient(ellipse 120% 42% at 50% -12%,rgba(232,80,0,.08),transparent 68%),var(--bg)}
 ::selection{background:var(--brand);color:#fff}
 button,.btn,.chip,.item{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[role="button"]:focus-visible{
-  outline:3px solid var(--brand);outline:3px solid color-mix(in srgb,var(--brand) 72%,white);outline-offset:3px}
+  outline:3px solid var(--brand);outline:3px solid var(--brand2);outline:3px solid color-mix(in srgb,var(--brand) 72%,white);outline-offset:3px}
 input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,90,0,.14)}
 input,select,textarea{transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
 #topo{border-bottom:1px solid transparent;transition:background .2s ease,border-color .2s ease}
@@ -492,7 +492,7 @@ body.claro .boas-hero{background:linear-gradient(180deg,rgba(232,80,0,.07),rgba(
 
 @media (hover:hover){
   .btn:not(:disabled):hover{filter:brightness(1.07);transform:translateY(-1px)}
-  .card[role="button"]:hover,.rotpub-l:hover{border-color:color-mix(in srgb,var(--line) 50%,var(--brand));transform:translateY(-1px)}
+  .card[role="button"]:hover,.rotpub-l:hover{border-color:var(--brand);border-color:color-mix(in srgb,var(--line) 50%,var(--brand));transform:translateY(-1px)}
   .tab:hover{color:var(--tx)}
 }
 @media (max-width:400px){
@@ -573,6 +573,10 @@ body.claro .boas-hero{background:linear-gradient(180deg,rgba(232,80,0,.07),rgba(
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
+/* compatibilidade: .at() chegou no Safari 15.4 e no Chrome 92 */
+(function(){ const at=function(n){ n=Math.trunc(n)||0; if(n<0) n+=this.length; return (n<0||n>=this.length)? undefined : this[n]; };
+  [Array, String].forEach(C=>{ if(!C.prototype.at) Object.defineProperty(C.prototype,'at',{value:at,writable:true,configurable:true}); }); })();
+
 /* ============================================================
    TREINO GYM — núcleo
    ============================================================ */
@@ -608,7 +612,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.25.1';
+const APP_VER='11.25.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4971,6 +4975,49 @@ document.addEventListener('focusout', ()=>DUELO.aoSairDoCampo());
   const marca0=ATIVO.marca;
   ATIVO.marca=function(e, s, row){ const r=marca0.apply(this, arguments); try{ DUELO.serieMudou(e, s); }catch(_){} return r; };
 })();
+
+/* ---------- botao/gesto de voltar ----------
+   O app nao usava o historico do navegador: no Android, o voltar FECHAVA o app
+   mesmo com uma folha aberta ou dentro de uma tela. Agora, enquanto houver algo
+   pra voltar, existe uma "guarda" no historico; o voltar fecha a camada de
+   cima ou volta uma tela. So no Inicio, sem nada aberto, ele sai do app. */
+const VOLTAR = {
+  guarda:false,
+  folhaAberta(){ const f=document.getElementById('folha'); return !!(f && f.classList.contains('on')); },
+  temAlgo(){
+    try{
+      if(FOTOVIEW.el || FOLHA2.el) return true;
+      if(VOLTAR.folhaAberta() && !UI._folhaObrigatoria) return true;
+      return UI.pilha.length>0 || (!!UI.telaAtual && UI.telaAtual!=='inicio');
+    }catch(e){ return false; }
+  },
+  sync(){
+    if(VOLTAR.guarda || !VOLTAR.temAlgo()) return;
+    try{ history.pushState({fxVoltar:1}, ''); VOLTAR.guarda=true; }catch(e){}
+  },
+  aoVoltar(){
+    VOLTAR.guarda=false;
+    try{
+      if(FOTOVIEW.el) FOTOVIEW.fecha();
+      else if(FOLHA2.el) FOLHA2.fecha();
+      else if(VOLTAR.folhaAberta()){ if(!UI._folhaObrigatoria) UI.fechaFolha(); }
+      else if(UI.pilha.length) UI.volta();
+      else if(UI.telaAtual && UI.telaAtual!=='inicio') UI.vai('inicio', null, false);   // Treino/Perfil/treino em andamento -> Inicio
+    }catch(e){}
+    VOLTAR.sync();
+  }
+};
+window.addEventListener('popstate', ()=>VOLTAR.aoVoltar());
+// toda mudanca de tela ou de camada confere se precisa da guarda. Instalado
+// DEPOIS que o script inteiro carregou: FOTOVIEW e outros sao definidos mais
+// abaixo, e toca-los agora interromperia o carregamento do app.
+setTimeout(()=>{ try{
+  ['vai','volta','folha','fechaFolha'].forEach(n=>{ const f=UI[n]; if(typeof f!=='function') return;
+    UI[n]=function(){ const r=f.apply(this, arguments); setTimeout(VOLTAR.sync, 0); return r; }; });
+  [FOLHA2, FOTOVIEW].forEach(o=>['abre','fecha'].forEach(n=>{ const f=o[n]; if(typeof f!=='function') return;
+    o[n]=function(){ const r=f.apply(this, arguments); setTimeout(VOLTAR.sync, 0); return r; }; }));
+  VOLTAR.sync();
+}catch(e){} }, 0);
 
 TELAS.perfil = function(){
   UI.topo(h('div',{class:'topo-tit'},'Perfil'),

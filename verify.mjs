@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.25.1';
+const EXPECTED_VERSION = '11.25.2';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -204,6 +204,9 @@ check(!indexHtml.includes("(!s.kg||!s.reps)){ UI.toast('Preencha kg e reps") && 
   'serie sem carga pode ser marcada e nao gera recorde', 'como no Hevy: carga opcional, mas sem medalha de repeticao em exercicio de carga');
 check(indexHtml.includes('const DUELO =') && indexHtml.includes("DUELO.serieMudou(e, s)") && indexHtml.includes("DUELO.fimDoTreino('concluiu', salvo)") && indexHtml.includes("DUELO.fimDoTreino('desistiu')"),
   'duelo ligado a marcacao, conclusao e descarte do treino', 'sem os ganchos, o adversario nao ve as series ou o duelo nao termina');
+check(indexHtml.includes("window.addEventListener('popstate'") && indexHtml.includes('const VOLTAR'), 'voltar do Android tratado', 'sem isso o botao/gesto de voltar fecha o app com folha aberta');
+check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
+check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 
 const dialogTags = Array.from(indexHtml.matchAll(/<[a-z][^>]*\brole\s*=\s*(["'])dialog\1[^>]*>/gi), match => match[0]);
 const semanticDialog = dialogTags.some(tag =>

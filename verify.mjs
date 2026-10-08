@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.25.3';
+const EXPECTED_VERSION = '11.26.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -241,8 +241,8 @@ if (exercises !== null) {
     const cardioMatch = indexHtml.match(/const ASSIST_CARDIO = (\{.*\});/);
     if (poolsMatch && cardioMatch) {
       const porId = new Map(exercises.map(e => [e.id, e]));
-      // escondidos de proposito (historico de usuarios): so sai desta lista junto com uma migracao
-      const PERMITIDOS = new Set(['pernas__leg-press', 'pernas__cadeira-extensora', 'pernas__stiff-com-barra']);
+      // desde a v11.26 os duplicados apontam para o canonico (EX_ALIAS): nenhum escondido e' permitido
+      const PERMITIDOS = new Set();
       const citados = new Set();
       try {
         Object.values(JSON.parse(poolsMatch[1])).forEach(loc => Object.values(loc).forEach(l => l.forEach(id => citados.add(id))));
@@ -252,6 +252,25 @@ if (exercises !== null) {
       const escondidos = [...citados].filter(id => porId.has(id) && porId.get(id).oc && !PERMITIDOS.has(id));
       check(inexistentes.length === 0, 'assistente so cita exercicios que existem', inexistentes.slice(0, 6).join(', '));
       check(escondidos.length === 0, 'assistente nao cita exercicios escondidos', escondidos.slice(0, 6).join(', ') + ' (esconder tira do seletor mas o assistente ainda sorteia)');
+    }
+    // EX_ALIAS: codigo antigo (escondido, continua no catalogo) -> canonico (visivel); o app nao cita o antigo
+    const aliasMatch = indexHtml.match(/const EX_ALIAS = (\{.*?\});/);
+    check(!!aliasMatch, 'mapa de exercicios duplicados presente', 'EX_ALIAS nao encontrado no index.html');
+    if (aliasMatch) {
+      const porId = new Map(exercises.map(e => [e.id, e]));
+      let alias = {}; try { alias = JSON.parse(aliasMatch[1]); } catch (erro) { check(false, 'EX_ALIAS legivel', erro.message); }
+      const ruins = [];
+      for (const [de, para] of Object.entries(alias)) {
+        if (!porId.has(de)) ruins.push(de + ' sumiu do catalogo (precisa ficar, escondido)');
+        else if (!porId.get(de).oc) ruins.push(de + ' deveria estar escondido');
+        if (!porId.has(para)) ruins.push(para + ' (canonico) nao existe');
+        else if (porId.get(para).oc) ruins.push(para + ' (canonico) esta escondido');
+        if (alias[para]) ruins.push(para + ' e canonico e alias ao mesmo tempo');
+      }
+      check(ruins.length === 0, 'duplicados apontam para exercicio visivel', ruins.slice(0, 4).join('; '));
+      const semMapa = indexHtml.replace(aliasMatch[0], '');
+      const citados = Object.keys(alias).filter(de => semMapa.includes('"' + de + '"') || semMapa.includes("'" + de + "'"));
+      check(citados.length === 0, 'app nao cita codigo antigo de exercicio', citados.slice(0, 4).join(', '));
     }
   }
 }

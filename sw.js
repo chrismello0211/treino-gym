@@ -3,7 +3,7 @@
    - estáticos (ícones/manifesto): cache primeiro
    - GIFs dos exercícios (g/*.webp): cache primeiro com preenchimento sob demanda (academia sem sinal feliz)
    - Firebase/externos: não intercepta */
-const CACHE='tg-v11.25.2', GCACHE='tg-gifs-v1';
+const CACHE='tg-v11.25.3', GCACHE='tg-gifs-v1';
 const CACHE_PREFIX='tg-';
 const SHELL=['./','./index.html','./exercicios.json','./manifest.webmanifest','./privacidade.html','./termos.html','./excluir-conta.html','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png','./logo-forgex.png','./logo-forgex-claro.png','./logo-word.png','./logo-word-claro.png'];
 

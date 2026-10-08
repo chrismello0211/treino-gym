@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.25.2';
+const EXPECTED_VERSION = '11.25.3';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -235,6 +235,24 @@ if (exercises !== null) {
     check(invalidEntries.length === 0, 'campos obrigatorios do catalogo', invalidEntries.slice(0, 8).join('; '));
     check(duplicateIds.length === 0, 'IDs unicos do catalogo', duplicateIds.slice(0, 8).map(item => item.id + ' nas linhas ' + item.rows.join(',')).join('; '));
     if (!invalidEntries.length && !duplicateIds.length) ok(exercises.length + ' exercicios validados');
+
+    // o assistente de fichas sorteia direto das listas fixas: todo id citado precisa existir e estar visivel
+    const poolsMatch = indexHtml.match(/const ASSIST_POOLS = (\{.*\});/);
+    const cardioMatch = indexHtml.match(/const ASSIST_CARDIO = (\{.*\});/);
+    if (poolsMatch && cardioMatch) {
+      const porId = new Map(exercises.map(e => [e.id, e]));
+      // escondidos de proposito (historico de usuarios): so sai desta lista junto com uma migracao
+      const PERMITIDOS = new Set(['pernas__leg-press', 'pernas__cadeira-extensora', 'pernas__stiff-com-barra']);
+      const citados = new Set();
+      try {
+        Object.values(JSON.parse(poolsMatch[1])).forEach(loc => Object.values(loc).forEach(l => l.forEach(id => citados.add(id))));
+        Object.values(JSON.parse(cardioMatch[1])).forEach(l => l.forEach(id => citados.add(id)));
+      } catch (erro) { check(false, 'listas do assistente legiveis', erro.message); }
+      const inexistentes = [...citados].filter(id => !porId.has(id));
+      const escondidos = [...citados].filter(id => porId.has(id) && porId.get(id).oc && !PERMITIDOS.has(id));
+      check(inexistentes.length === 0, 'assistente so cita exercicios que existem', inexistentes.slice(0, 6).join(', '));
+      check(escondidos.length === 0, 'assistente nao cita exercicios escondidos', escondidos.slice(0, 6).join(', ') + ' (esconder tira do seletor mas o assistente ainda sorteia)');
+    }
   }
 }
 

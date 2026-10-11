@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.27.0';
+const EXPECTED_VERSION = '11.27.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -207,6 +207,7 @@ check(indexHtml.includes('const DUELO =') && indexHtml.includes("DUELO.serieMudo
 check(indexHtml.includes("window.addEventListener('popstate'") && indexHtml.includes('const VOLTAR'), 'voltar do Android tratado', 'sem isso o botao/gesto de voltar fecha o app com folha aberta');
 check(indexHtml.includes('try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }') && indexHtml.includes('function telaComErro('), 'telas protegidas contra erro', 'sem isso uma tela que falha fica em branco');
 check(indexHtml.includes('A._dkFora') && indexHtml.includes('n._dkDe=e._dk'), 'duelo nao ressuscita exercicio removido nem duplica troca', 'exercicio removido voltava e a troca virava exercicio novo pros outros');
+check(indexHtml.includes('P.append=function(...n){ return ap.apply(this, n.filter(x=>x!=null && x!==false)); }'), 'append ignora vazio (sem "null" na tela)', 'o append nativo escreve "null" quando recebe vazio');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

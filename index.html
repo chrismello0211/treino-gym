@@ -640,7 +640,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.27.0';
+const APP_VER='11.27.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1561,6 +1561,10 @@ const PR_ROT = {kg:'Peso', vol:'Volume', rm:'1RM', reps:'Reps'};
 /* ---------- utilidades de UI ---------- */
 const $ = s=>document.querySelector(s);
 const $$ = s=>Array.from(document.querySelectorAll(s));
+// O append nativo escreve o texto "null"/"false" quando recebe vazio (bug do "null" no feed e no
+// placar). No app isso nunca e' desejado: vazio e' ignorado, como ja faz a funcao h().
+(function(){ [Element.prototype, DocumentFragment.prototype].forEach(P=>{ const ap=P.append;
+  P.append=function(...n){ return ap.apply(this, n.filter(x=>x!=null && x!==false)); }; }); })();
 // tela que falha ao desenhar: aviso com o detalhe tecnico, em vez de uma tela vazia
 function telaComErro(tela, e){
   try{ console.error('tela', tela, e); }catch(_){}
@@ -5239,12 +5243,12 @@ const DUELO = {
       h('div',{class:'f12 mut'}, (fim && quem.length>2? DUELO.posicao(d, r, u)+'º · ' : '')+(u===eu? 'Você' : DUELO.nome(d,u))),
       h('div',{class:'duelo-placar'}, fim || d.modo==='mano'? fmtN(r.pts[u]) : '—'),
       h('div',{class:'f12 mut2'}, (function(){ const st=DUELO.estadoDe(d,u); return st==='desistiu'? 'desistiu' : (st==='concluiu'? 'terminou' : (DUELO.entrou(d,u)? 'treinando' : 'convidado')); })()))));
-    cab.append(placar,
+    cab.append(...[placar,
       h('div',{class:'b800',style:'margin-top:10px;font-size:16px'},
         !fim? (DUELO.estadoDe(d,eu)==='concluiu'? 'Aguardando os outros terminarem…' : 'Duelo em andamento') :
         (r.wo? (r.venc===eu? 'Vitória por desistência 🏆' : DUELO.nome(d,r.venc)+' venceu por desistência') : (!r.venc? 'Empate' : (r.venc===eu? 'Você venceu 🏆' : DUELO.nome(d,r.venc)+' venceu')))),
       d.modo==='mano'? h('div',{class:'f12 mut',style:'margin-top:4px'},'Exercícios vencidos. Ganha cada exercício quem fizer a melhor série; empatando, a segunda melhor, depois o volume.')
-                     : (fim? h('div',{class:'f12 mut',style:'margin-top:4px'},'% do próprio normal: 100% é o seu padrão') : null));
+                     : (fim? h('div',{class:'f12 mut',style:'margin-top:4px'},'% do próprio normal: 100% é o seu padrão') : null)].filter(Boolean));
     if(!fim && DUELO.emDuelo() && S.ativo.duelo===d.id) m.append(h('button',{class:'btn btn-p',onclick:()=>UI.vai('ativo',null,false)},'Voltar ao treino'));
     // exercicio a exercicio, todas as series
     const lista=h('div',{class:'card'});
@@ -6659,9 +6663,9 @@ function cartaoFeed(i){
       h('div',{class:'esp'}),
       i.meu? h('button',{class:'feed-mais','aria-label':'Mais opções do treino '+t.titulo,onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
-    (function(){ const du = i.meu? (i.t && i.t.dueloInfo) : (i.r && i.r.duelo); if(!du) return null;
+    ...(function(){ const du = i.meu? (i.t && i.t.dueloInfo) : (i.r && i.r.duelo); if(!du) return [];
       const txt='⚔️ Duelo'+((du.com&&du.com.length)? ' com '+du.com.join(' e ') : '')+(du.res? ' · '+du.res : '');
-      return i.meu? h('button',{class:'feed-duelo',onclick:ev=>{ ev.stopPropagation(); UI.vai('duelo',{id:du.id}); }}, txt) : h('div',{class:'feed-duelo'}, txt); })(),
+      return [i.meu? h('button',{class:'feed-duelo',onclick:ev=>{ ev.stopPropagation(); UI.vai('duelo',{id:du.id}); }}, txt) : h('div',{class:'feed-duelo'}, txt)]; })(),
     ...(function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
       if(!(a && a.n)) return [];
       return [h('button',{class:'feed-acad',title:'Abrir no mapa',

@@ -246,6 +246,9 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .stats3.pf-stats>div,.stats3.pf-stats>div:first-child{flex:0 1 auto;min-width:0}
 .stats3.pf-stats .k{white-space:nowrap}
 /* duelo */
+.rank-linha{width:100%;background:none;border:0;border-radius:10px;color:inherit;font:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.rank-linha:active{background:var(--surf2)}
+.rank-seta{flex-shrink:0;margin-left:8px;font-size:20px;line-height:1;color:var(--tx3)}
 .duelo-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
 .duelo-chip{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--surf2);color:var(--tx2);white-space:nowrap}
 .duelo-chip.on{background:rgba(255,90,0,.18);color:var(--brand2)}
@@ -640,7 +643,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.27.1';
+const APP_VER='11.27.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3927,13 +3930,17 @@ TELAS.ranking = function(){
   const ls=RANK.ordena(RANK.dados(), RANK.met);
   const med=['🥇','🥈','🥉'];
   const card=h('div',{class:'card'});
+  // cada linha abre o perfil da pessoa (atalho pra quem esta na sua rede)
   ls.forEach((x,i)=>{
-    card.append(h('div',{class:'linha',style:'padding:9px 0'+(i?';border-top:1px solid var(--surf2)':'')},
+    card.append(h('button',{class:'linha rank-linha',style:'padding:9px 0'+(i?';border-top:1px solid var(--surf2)':''),
+        'aria-label':(x.eu?'Abrir o seu perfil':'Abrir o perfil de '+x.nome),
+        onclick:()=>{ if(x.eu) UI.vai('perfil'); else UI.vai('perfilAmigo',{uid:x.uid}); }},
       h('div',{style:'width:30px;font-size:16px;text-align:center;flex-shrink:0'},med[i]||(i+1)+'º'),
       avatarEl(x.foto, x.nome, 34),
       h('div',{class:'esp',style:'margin-left:10px;min-width:0'},
         h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(x.eu?';color:var(--brand2)':'')}, x.eu?'Você':x.nome)),
-      h('div',{class:'f13 b700',style:'flex-shrink:0'}, fmt(x))));
+      h('div',{class:'f13 b700',style:'flex-shrink:0'}, fmt(x)),
+      h('span',{class:'rank-seta','aria-hidden':'true'},'›')));
   });
   m.appendChild(card);
   m.appendChild(h('div',{class:'f12 mut2',style:'text-align:center;margin-top:10px;line-height:1.5'},'Semana de segunda a domingo. Conta o que os amigos publicam no feed.'));

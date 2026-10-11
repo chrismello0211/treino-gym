@@ -246,6 +246,34 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .stats3.pf-stats>div,.stats3.pf-stats>div:first-child{flex:0 1 auto;min-width:0}
 .stats3.pf-stats .k{white-space:nowrap}
 /* duelo */
+.duelo-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.duelo-chip{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--surf2);color:var(--tx2);white-space:nowrap}
+.duelo-chip.on{background:rgba(255,90,0,.18);color:var(--brand2)}
+.duelo-aviso{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:8px 10px;margin-bottom:8px;border-radius:10px;background:rgba(255,176,32,.12);color:#ffd9a0;font-size:12.5px;font-weight:700}
+.duelo-tab{display:grid;gap:2px;font-variant-numeric:tabular-nums}
+.duelo-tr{display:grid;grid-template-columns:22px repeat(auto-fit,minmax(0,1fr));gap:6px;align-items:center;padding:3px 0}
+.duelo-tr.cab{font-size:11.5px;font-weight:800;color:var(--tx2);padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:2px}
+.duelo-td{font-size:13px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:7px;padding:3px 4px}
+.duelo-td.n{color:var(--tx3);font-weight:700;text-align:left;padding-left:0}
+.duelo-td.top{background:rgba(255,90,0,.16);color:var(--brand2)}
+.duelo-tr.cab .duelo-td.ganha{color:var(--brand2)}
+.duelo-veredito{margin-top:8px;font-size:12.5px;font-weight:800;color:var(--tx2)}
+.duelo-veredito.on{color:var(--brand2)}
+.duelo-placar-g{display:flex;justify-content:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.duelo-pessoa{flex:1 1 0;min-width:84px;padding:8px 6px;border-radius:12px;background:var(--surf2)}
+.duelo-pessoa.on{background:rgba(255,90,0,.14)}
+.duelo-pessoa.on .duelo-placar{color:var(--brand2)}
+.duelo-bloco{padding:10px 0;border-top:1px solid var(--line)}
+.duelo-bloco:first-child{border-top:0}
+.duelo-linha2{display:flex;gap:8px;align-items:baseline;margin-top:6px;font-size:12.5px}
+.duelo-linha2.on .duelo-quem{color:var(--brand2)}
+.duelo-quem{flex:0 0 auto;max-width:42%;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.duelo-sets{flex:1;min-width:0;color:var(--tx2);font-variant-numeric:tabular-nums;word-break:break-word}
+.duelo-terc{display:flex;flex-wrap:wrap;gap:6px}
+.duelo-item{display:flex;align-items:center;gap:10px;width:100%;padding:11px 2px;border:0;border-top:1px solid var(--line);background:none;color:var(--tx);font-family:inherit;cursor:pointer}
+.duelo-item:first-child{border-top:0}
+.duelo-ok{color:var(--brand2)}
+.feed-duelo{display:block;width:100%;text-align:left;margin:-2px 0 10px;padding:7px 10px;border-radius:10px;border:0;background:rgba(255,90,0,.10);color:var(--brand2);font:inherit;font-size:13px;font-weight:800}
 .duelo-barra{border-color:rgba(255,90,0,.45);background:linear-gradient(135deg,rgba(255,90,0,.12),rgba(255,90,0,.02)),var(--surf)}
 .duelo-lider{margin-top:10px;padding:8px 12px;border-radius:10px;background:var(--surf2);font-weight:800;font-size:14px;text-align:center}
 .duelo-lider.on{background:rgba(255,90,0,.16);color:var(--brand2)}
@@ -612,7 +640,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.26.0';
+const APP_VER='11.27.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1300,7 +1328,10 @@ const NET = {
       m = fun(S.rotinas, nuvem.rotinas, 'rotinas') || m;
       m = fun(S.pastas, nuvem.pastas, 'pastas') || m;
       m = fun(S.treinos, nuvem.treinos, 'treinos') || m;
-      m = fun(S.custom, nuvem.custom, 'custom') || m;
+      const mCustom = fun(S.custom, nuvem.custom, 'custom'); m = mCustom || m;
+      // o indice da biblioteca guardava os objetos antigos: a foto nova de um exercicio
+      // criado (vinda de outro aparelho) so aparecia na proxima abertura do app
+      if(mCustom && BIB.pronta){ BIB.lista=BIB.lista.filter(x=>!x.custom).concat(Object.values(S.custom)); BIB.indexa(); }
       m = fun(S.medidas, nuvem.medidas, 'medidas') || m;
       m = fun(S.exNotas, nuvem.exNotas, 'exNotas') || m;
       if(nuvem.app && nuvem.app.trocas){
@@ -1530,6 +1561,20 @@ const PR_ROT = {kg:'Peso', vol:'Volume', rm:'1RM', reps:'Reps'};
 /* ---------- utilidades de UI ---------- */
 const $ = s=>document.querySelector(s);
 const $$ = s=>Array.from(document.querySelectorAll(s));
+// tela que falha ao desenhar: aviso com o detalhe tecnico, em vez de uma tela vazia
+function telaComErro(tela, e){
+  try{ console.error('tela', tela, e); }catch(_){}
+  try{ localStorage.setItem('tg_ultimoErro', JSON.stringify({tela, msg:String((e&&e.message)||e).slice(0,300), stack:String((e&&e.stack)||'').slice(0,900), v:APP_VER, quando:Date.now()})); }catch(_){}
+  try{
+    const m=document.getElementById('main'); if(!m) return;
+    m.innerHTML='';
+    m.appendChild(h('div',{class:'vazio'},
+      h('div',{class:'b800',style:'font-size:16px;margin-bottom:6px'},'Algo deu errado nesta tela'),
+      h('div',{class:'f13 mut',style:'margin-bottom:12px'},'Seus dados estão salvos. Se puder, tire um print desta mensagem.'),
+      h('div',{class:'f12 mut2',style:'font-family:ui-monospace,Menlo,monospace;word-break:break-word;margin-bottom:14px'}, String(tela||'')+' · '+String((e&&e.message)||e).slice(0,180)+' · v'+APP_VER),
+      h('button',{class:'btn btn-p',onclick:()=>{ UI.pilha=[]; UI.vai('inicio',null,false); }},'Voltar ao início')));
+  }catch(_){}
+}
 function h(tag, attrs, ...filhos){
   const el=document.createElement(tag);
   Object.entries(attrs||{}).forEach(([k,v])=>{
@@ -1631,7 +1676,7 @@ const UI = {
     try{ UI.fechaFolha(); }catch(e){}
     if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0]);
     UI.telaAtual = tela; UI.args = args||null;
-    TELAS[tela](args||{});
+    try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }
     try{ const mm=$('#main'); mm.classList.remove('fx-tela'); void mm.offsetWidth; mm.classList.add('fx-tela');
       // a entrada anima SO na navegacao; redesenhar a tela nao repete a animacao
       clearTimeout(UI._fxT); UI._fxT=setTimeout(()=>{ try{ mm.classList.remove('fx-tela'); }catch(e){} }, 420); }catch(e){}
@@ -1655,7 +1700,7 @@ const UI = {
     // limpeza defensiva: remove qualquer clone de drag preso e reseta opacidades
     if(window.__tgDrag){ window.__tgDrag=false; document.querySelectorAll('[style*="z-index:9999"]').forEach(el=>el.remove()); document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; }
     const y=window.scrollY||0;
-    if(UI.telaAtual) TELAS[UI.telaAtual](UI.args||{});
+    if(UI.telaAtual){ try{ TELAS[UI.telaAtual](UI.args||{}); }catch(e){ telaComErro(UI.telaAtual, e); } }
     if(y>0){ const poe=()=>window.scrollTo(0, Math.min(y, Math.max(0, document.body.scrollHeight-window.innerHeight)));
       poe(); requestAnimationFrame(poe); }
   },
@@ -3642,10 +3687,10 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
 
 /* ---------- o que mudou desde a ultima vez ---------- */
 const NOVIDADES = {
-  V: 5,     // subir este numero faz a folha aparecer de novo
+  V: 6,     // subir este numero faz a folha aparecer de novo
   ITENS: [
-    ['\u2694\ufe0f','Duelo com amigos',
-     'No perfil de um amigo, toque em Desafiar: vocês fazem o mesmo treino e veem as séries um do outro ao vivo. Superação compara cada um com o próprio normal; Mano a mano é carga contra carga.'],
+    ['\u2694\ufe0f','Duelo com até 3 pessoas',
+     'Agora dá pra chamar mais um amigo pro duelo. O placar mostra série por série, o aquecimento conta, e quem troca de exercício avisa os outros. Seus duelos ficam no perfil e no feed.'],
     ['\u2705','Série sem carga',
      'Agora dá pra marcar a série só com as repetições, sem registrar a carga.'],
     ['\ud83d\uddbc\ufe0f','Galeria no perfil',
@@ -4042,6 +4087,9 @@ TELAS.treinoDet = function({id}){
   };
   if(t.academia && t.academia.n){
     const vz=ACAD.vezes(t.academia);
+    if(t.duelo) m.appendChild(h('button',{class:'card duelo-barra',style:'width:100%;text-align:left;cursor:pointer;display:block',onclick:()=>UI.vai('duelo',{id:t.duelo})},
+      h('div',{class:'b800'}, '⚔️ Duelo'+((t.dueloInfo&&t.dueloInfo.com&&t.dueloInfo.com.length)? ' com '+t.dueloInfo.com.join(' e ') : '')),
+      h('div',{class:'f12 mut',style:'margin-top:2px'}, (t.dueloInfo&&t.dueloInfo.res) || 'Ver o placar')));
     m.appendChild(h('div',{class:'acad-linha'},
       h('button',{class:'acad-ir',onclick:()=>ACAD.abreMapa(t.academia)},
         h('span',{class:'acad-pin'},'📍'),
@@ -4516,41 +4564,50 @@ const GALERIA = {
   }
 };
 
-/* ===================== DUELO 1x1 =====================
-   Dois amigos fazem o mesmo treino ao mesmo tempo e veem as series um do outro
-   ao vivo. Modos: Superacao (cada um contra o proprio normal: justo entre
-   niveis diferentes) e Mano a mano (carga e repeticao de igual pra igual).
-   Tempo real: streaming do Realtime Database (EventSource), com consulta
-   periodica de reserva. Escritas pela fila do NET (sai na hora, tenta de novo).
-   /duelos/{id} = {id,a,b,por,modo,titulo,status,criado,expira,inicio,fim,
-     nomes:{uid:{user,nome}}, ex:{k:{exId,o,n,d,por}},
-     j:{uid:{estado,at,b:{k:normal},x:{k:exId},s:{k:{i:{kg,reps,tipo,t}}}}},
-     resultado:{modo,pa,pb,venc}} */
+/* ===================== DUELO (v2: ate 3 pessoas) =====================
+   Amigos fazem o mesmo treino ao mesmo tempo e veem as series uns dos outros
+   ao vivo. Modos: Superacao (cada um contra o proprio normal) e Mano a mano
+   (carga e repeticao de igual pra igual, exercicio a exercicio).
+   v2: aquecimento conta; ate 3 participantes (a, b, c); exercicio removido nao
+   volta; troca de exercicio avisa os outros (com "Trocar tambem"); exercicio
+   criado por outra pessoa aparece com nome; mano a mano desempata por
+   repeticoes; placar serie a serie; duelo no feed e no perfil.
+   /duelos/{id} = {id,a,b,c?,por,modo,titulo,status,criado,expira,inicio,fim,
+     nomes:{uid:{user,nome}}, ex:{k:{exId,o,n,d,por,nm,cx?,troca?}},
+     j:{uid:{estado,at,b:{k:normal},x:{k:exId},xn:{k:nome},xc:{k:def},fora:{k:1},s:{k:{i:{kg,reps,tipo,t}}}}},
+     resultado:{v:2,modo,pts:{uid:n},ordem:[uid],venc,wo}} */
 const DUELO = {
   MODOS:{
-    superacao:{n:'Superação', ic:'📈', d:'Cada um contra o próprio normal. Justo entre níveis diferentes: vence quem treinar melhor em relação a si mesmo.'},
-    mano:{n:'Mano a mano', ic:'🤜', d:'Carga e repetições de igual pra igual. Vence quem levar mais exercícios. Ideal entre pessoas do mesmo nível.'}
+    superacao:{n:'Superação', ic:'📈', d:'Cada um contra o próprio normal. Justo entre níveis diferentes.'},
+    mano:{n:'Mano a mano', ic:'🤜', d:'Carga e repetições de igual pra igual. Ideal entre pessoas do mesmo nível.'}
   },
-  CONVITE_MIN:30, LIMITE_H:4,
-  REPS_MAX:15, TETO:125, PISO:70, SUSPEITO:1.6, BASE_N:5, BASE_MIN:3, EMPATE:1,
+  CONVITE_MIN:30, LIMITE_H:4, MAX:3,
+  REPS_MAX:15, REPS_MAX_MANO:30, TETO:125, PISO:70, SUSPEITO:1.6, BASE_N:5, BASE_MIN:3, EMPATE:1,
   cur:null, es:null, _poll:null, _pend:false, _convites:[], _convT:0,
+  // terceiro participante so com a chave /config/duelo3 ligada (regras do servidor prontas)
+  tres:false,
 
   /* ---------------- nota (funcoes puras) ---------------- */
-  e1rm(kg, reps){ kg=Number(kg)||0; reps=Number(reps)||0; if(kg<=0||reps<=0) return 0; return kg*(1+Math.min(reps,DUELO.REPS_MAX)/30); },
-  // valor de uma serie: carga -> 1RM estimado; peso corporal, repeticoes e tempo -> o numero
-  valor(s, exId){
+  e1rm(kg, reps, cap){ kg=Number(kg)||0; reps=Number(reps)||0; if(kg<=0||reps<=0) return 0; return kg*(1+Math.min(reps, cap||DUELO.REPS_MAX)/30); },
+  // carga -> 1RM estimado; peso corporal, repeticoes e tempo -> o numero. Aquecimento conta.
+  valor(s, exId, modo){
     const x=BIB.ex(exId)||{}, tp=x.t||'peso_reps';
-    if(tp==='peso_reps' && x.e!=='peso-corporal') return Number(s.kg)>0? DUELO.e1rm(s.kg, s.reps) : 0;
+    if(tp==='peso_reps' && x.e!=='peso-corporal') return Number(s.kg)>0? DUELO.e1rm(s.kg, s.reps, modo==='mano'? DUELO.REPS_MAX_MANO : DUELO.REPS_MAX) : 0;
     return Number(s.reps)>0? Number(s.reps) : 0;
   },
-  // series de trabalho validas (sem aquecimento); descarta o que passar de 160% do normal (erro de digitacao)
-  valores(series, exId, ref){
+  volumeSerie(s, exId){
+    const x=BIB.ex(exId)||{};
+    if((x.t||'peso_reps')==='peso_reps' && x.e!=='peso-corporal') return (Number(s.kg)||0)*(Number(s.reps)||0);
+    return Number(s.reps)||0;
+  },
+  // descarta o que passar de 160% do normal (erro de digitacao)
+  valores(series, exId, ref, modo){
     const v=[];
-    (series||[]).forEach(s=>{ if(!s || s.tipo==='W') return; const val=DUELO.valor(s, exId); if(val>0 && !(ref && val>DUELO.SUSPEITO*ref)) v.push(val); });
-    return v.slice(0,10);
+    (series||[]).forEach(s=>{ if(!s) return; const val=DUELO.valor(s, exId, modo); if(val>0 && !(ref && val>DUELO.SUSPEITO*ref)) v.push(val); });
+    return v.slice(0,15);
   },
   media(v){ return v.length? v.reduce((a,b)=>a+b,0)/v.length : 0; },
-  // o "normal" da pessoa num exercicio: ultimas 5 sessoes antes de 'ate' (recentes pesam mais); null com menos de 3
+  // o "normal" da pessoa: ultimas 5 sessoes antes de 'ate' (recentes pesam mais); null com menos de 3
   normal(exId, ate){
     const ss=[];
     Object.values(S.treinos||{}).filter(t=>t && !t.apagado && t.inicio && (!ate || t.inicio<ate))
@@ -4570,15 +4627,28 @@ const DUELO = {
   exDe(d, uid, k){ return ((((d.j||{})[uid]||{}).x)||{})[k] || ((d.ex||{})[k]||{}).exId; },
   setsDe(d, uid, k){
     const o=((((d.j||{})[uid]||{}).s)||{})[k]||{};
-    return Object.keys(o).sort((a,b)=>Number(a)-Number(b)).map(i=>o[i]).filter(s=>s && s.tipo!=='W');
+    return Object.keys(o).sort((a,b)=>Number(a)-Number(b)).map(i=>o[i]).filter(Boolean);
   },
   baseDe(d, uid, k){ const b=((((d.j||{})[uid]||{}).b)||{})[k]; return Number(b)>0? Number(b) : null; },
-  // Superacao: media dos indices dos exercicios em que a pessoa tem "normal" x conclusao do treino
+  foraDe(d, uid, k){ return !!((((d.j||{})[uid]||{}).fora)||{})[k]; },
+  // nome de um exercicio, mesmo criado por outra pessoa
+  nomeEx(d, uid, k){
+    const id=DUELO.exDe(d,uid,k), x=BIB.porId[id];
+    if(x) return x.n;
+    return ((((d.j||{})[uid]||{}).xn)||{})[k] || ((d.ex||{})[k]||{}).nm || 'Exercício';
+  },
+  /* ---------------- participantes ---------------- */
+  jog(d){ return [d.a, d.b, d.c].filter((u,i,a)=>u && a.indexOf(u)===i); },
+  estadoDe(d, uid){ return (((d.j||{})[uid]||{}).estado)||null; },
+  entrou(d, uid){ return ['treinando','concluiu','desistiu'].includes(DUELO.estadoDe(d,uid)); },
+  // quem entra no placar: quem entrou no treino (ou todos, enquanto ninguem entrou)
+  noPlacar(d){ const e=DUELO.jog(d).filter(u=>DUELO.entrou(d,u)); return e.length? e : DUELO.jog(d); },
   superacao(d, uid, final){
     const idx={}; let soma=0, n=0, feitas=0, plan=0;
     DUELO.chaves(d).forEach(k=>{
-      const p=DUELO.planejadas(d,k), ss=DUELO.setsDe(d,uid,k).slice(0,p), base=DUELO.baseDe(d,uid,k);
-      plan+=p; feitas+=ss.length;
+      if(((d.ex||{})[k]||{}).troca) return;                 // pedaco de troca de alguem: conta dentro do original
+      const p=DUELO.planejadas(d,k), ss=DUELO.setsDe(d,uid,k), base=DUELO.baseDe(d,uid,k);
+      plan+=p; feitas+=Math.min(ss.length, p);
       const i=DUELO.indice(DUELO.media(DUELO.valores(ss, DUELO.exDe(d,uid,k), base)), base);
       idx[k]=i; if(i!=null){ soma+=i; n++; }
     });
@@ -4586,95 +4656,150 @@ const DUELO = {
     const nota=final? media*Math.min(1, conclusao) : media;
     return {nota:Math.round(nota*10)/10, idx, conclusao, calibrando:n===0, n};
   },
-  melhor(d, uid, k){
-    const ss=DUELO.setsDe(d,uid,k).slice(0, DUELO.planejadas(d,k));
-    const v=DUELO.valores(ss, DUELO.exDe(d,uid,k), DUELO.baseDe(d,uid,k));
-    return v.length? Math.max(...v) : 0;
+  // mano a mano: melhor serie, depois a 2a melhor... e por fim o volume
+  perfMano(d, uid, k){
+    const ex=DUELO.exDe(d,uid,k), ss=DUELO.setsDe(d,uid,k), base=DUELO.baseDe(d,uid,k);
+    const lista=DUELO.valores(ss, ex, base, 'mano').sort((a,b)=>b-a);
+    const vol=ss.reduce((s,x)=>s+DUELO.volumeSerie(x, ex), 0);
+    let melhor=null; ss.forEach(s=>{ const v=DUELO.valor(s, ex, 'mano'); if(v>0 && (!melhor || v>melhor.v)) melhor={v, s}; });
+    return {lista, vol, melhor};
   },
-  // Mano a mano: exercicio a exercicio, melhor serie (1RM estimado / repeticoes / tempo)
+  cmpMano(a, b){
+    const n=Math.max(a.lista.length, b.lista.length);
+    for(let i=0;i<n;i++){ const x=a.lista[i]||0, y=b.lista[i]||0; if(Math.abs(x-y)>0.01) return x>y? 1 : -1; }
+    if(Math.abs(a.vol-b.vol)>0.01) return a.vol>b.vol? 1 : -1;
+    return 0;
+  },
   mano(d){
-    const a=d.a, b=d.b, por={}; let va=0, vb=0;
+    const P=DUELO.noPlacar(d), por={}, pts={}, perf={};
+    P.forEach(u=>pts[u]=0);
     DUELO.chaves(d).forEach(k=>{
-      if(DUELO.exDe(d,a,k)!==DUELO.exDe(d,b,k)){ por[k]='≠'; return; }      // um dos dois trocou o exercicio
-      const pa=DUELO.melhor(d,a,k), pb=DUELO.melhor(d,b,k);
-      if(!pa && !pb){ por[k]=null; return; }
-      if(Math.abs(pa-pb)<=0.01*Math.max(pa,pb)){ por[k]='='; return; }
-      if(pa>pb){ por[k]=a; va++; } else { por[k]=b; vb++; }
+      if(((d.ex||{})[k]||{}).troca) return;
+      // so compara quem fez o MESMO exercicio
+      const grupos={}; P.forEach(u=>{ if(DUELO.foraDe(d,u,k)) return; const e=DUELO.exDe(d,u,k); (grupos[e]=grupos[e]||[]).push(u); });
+      const sala=((d.ex||{})[k]||{}).exId;
+      const alvo=(grupos[sala] && grupos[sala].length>1)? sala : Object.keys(grupos).sort((a,b)=>grupos[b].length-grupos[a].length)[0];
+      const G=grupos[alvo]||[];
+      perf[k]={}; G.forEach(u=>perf[k][u]=DUELO.perfMano(d,u,k));
+      if(G.length<2){ por[k]='≠'; return; }
+      if(G.every(u=>!perf[k][u].lista.length)){ por[k]=null; return; }
+      const ord=G.slice().sort((x,y)=>DUELO.cmpMano(perf[k][y], perf[k][x]));
+      if(DUELO.cmpMano(perf[k][ord[0]], perf[k][ord[1]])===0){ por[k]='='; return; }
+      por[k]=ord[0]; pts[ord[0]]++;
     });
-    return {por, va, vb};
+    return {por, pts, perf};
   },
-  estadoDe(d, uid){ return (((d.j||{})[uid]||{}).estado)||null; },
   vencido(d){ return d.status==='ativo' && d.inicio && agora()>d.inicio+DUELO.LIMITE_H*3600e3; },
   terminou(d){
     if(!d) return false;
     if(d.status==='fim') return true;
-    const fe=e=>e==='concluiu'||e==='desistiu';
-    return d.status==='ativo' && ((fe(DUELO.estadoDe(d,d.a)) && fe(DUELO.estadoDe(d,d.b))) || DUELO.vencido(d));
+    if(d.status!=='ativo') return false;
+    if(DUELO.vencido(d)) return true;
+    const P=DUELO.jog(d).filter(u=>DUELO.entrou(d,u));
+    return P.length>=2 && P.every(u=>['concluiu','desistiu'].includes(DUELO.estadoDe(d,u)));
   },
-  resultado(d){
-    const a=d.a, b=d.b, ea=DUELO.estadoDe(d,a), eb=DUELO.estadoDe(d,b);
-    const wo = (ea==='desistiu'&&eb!=='desistiu')? b : ((eb==='desistiu'&&ea!=='desistiu')? a : null);
-    if(d.modo==='mano'){
-      const m=DUELO.mano(d);
-      return {modo:'mano', pa:m.va, pb:m.vb, venc: wo || (m.va>m.vb? a : (m.vb>m.va? b : '')), wo:!!wo, por:m.por};
+  calcula(d){
+    const P=DUELO.noPlacar(d), desist=P.filter(u=>DUELO.estadoDe(d,u)==='desistiu'), vivos=P.filter(u=>DUELO.estadoDe(d,u)!=='desistiu');
+    let pts={}, por={}, extra={};
+    if(d.modo==='mano'){ const m=DUELO.mano(d); pts=m.pts; por=m.por; extra=m.perf; }
+    else {
+      const sp={}; P.forEach(u=>{ sp[u]=DUELO.superacao(d,u,true); pts[u]=sp[u].nota; });
+      DUELO.chaves(d).forEach(k=>{
+        if(((d.ex||{})[k]||{}).troca) return;
+        const c=P.filter(u=>sp[u].idx[k]!=null).sort((x,y)=>sp[y].idx[k]-sp[x].idx[k]);
+        if(c.length<2){ por[k]=null; return; }
+        por[k]=(sp[c[0]].idx[k]-sp[c[1]].idx[k]<DUELO.EMPATE)? '=' : c[0];
+      });
+      extra=sp;
     }
-    const sa=DUELO.superacao(d,a,true), sb=DUELO.superacao(d,b,true), por={};
-    DUELO.chaves(d).forEach(k=>{ const ia=sa.idx[k], ib=sb.idx[k];
-      por[k]=(ia==null||ib==null)? null : (Math.abs(ia-ib)<DUELO.EMPATE? '=' : (ia>ib? a : b)); });
-    const venc = wo || (Math.abs(sa.nota-sb.nota)<DUELO.EMPATE? '' : (sa.nota>sb.nota? a : b));
-    return {modo:'superacao', pa:sa.nota, pb:sb.nota, venc, wo:!!wo, por, ca:sa.conclusao, cb:sb.conclusao, calA:sa.calibrando, calB:sb.calibrando};
+    const ordem=vivos.slice().sort((x,y)=>(pts[y]||0)-(pts[x]||0)).concat(desist);
+    let venc='';
+    if(vivos.length===1 && P.length>1) venc=vivos[0];
+    else if(ordem.length>1){ const a=pts[ordem[0]]||0, b=pts[ordem[1]]||0; venc=(d.modo==='mano'? a===b : Math.abs(a-b)<DUELO.EMPATE)? '' : ordem[0]; }
+    return {v:2, modo:d.modo, pts, por, ordem, venc, wo:(vivos.length===1 && desist.length>0), extra};
   },
+  resultado(d){ return DUELO.calcula(d); },
   // ao vivo: so QUEM esta na frente (sem numeros: evita jogar contra a formula)
   lider(d){
-    const a=d.a, b=d.b;
-    if(d.modo==='mano'){ const m=DUELO.mano(d); return m.va>m.vb? a : (m.vb>m.va? b : ''); }
-    const sa=DUELO.superacao(d,a,false), sb=DUELO.superacao(d,b,false);
-    if(!sa.n || !sb.n) return '';
-    return Math.abs(sa.nota-sb.nota)<DUELO.EMPATE? '' : (sa.nota>sb.nota? a : b);
+    const P=DUELO.noPlacar(d); if(P.length<2) return '';
+    let pts={};
+    if(d.modo==='mano') pts=DUELO.mano(d).pts;
+    else { const vs={}; P.forEach(u=>{ const s=DUELO.superacao(d,u,false); if(s.n) vs[u]=s.nota; }); if(Object.keys(vs).length<2) return ''; pts=vs; }
+    const ord=Object.keys(pts).sort((x,y)=>pts[y]-pts[x]);
+    const a=pts[ord[0]], b=pts[ord[1]];
+    return (d.modo==='mano'? a===b : Math.abs(a-b)<DUELO.EMPATE)? '' : ord[0];
   },
-
   /* ---------------- ciclo ---------------- */
   meu(){ return (S.auth && S.auth.uid) || null; },
-  outro(d){ return d.a===DUELO.meu()? d.b : d.a; },
+  outros(d){ return DUELO.jog(d).filter(u=>u!==DUELO.meu()); },
+  outro(d){ return DUELO.outros(d)[0]; },
   nome(d, uid){ const n=((d.nomes||{})[uid])||{}; return n.user? '@'+n.user : (n.nome||'Amigo'); },
   emDuelo(){ return !!(S.ativo && S.ativo.duelo); },
   dados(){ return (DUELO.cur && DUELO.cur.dados) || null; },
-  async desafiar(amigo, modo, rotinaId){
+  // tp: o tipo de cada serie (W aquecimento, N normal...): o treino de cada um nasce igual
+  exSala(x, id, i, series, desc){
+    const tp=(series||[]).map(s=>(s && s.tipo)||'N');
+    const q={exId:id, o:i, n:tp.length||3, d:desc, por:S.auth.uid, nm:x.n||''};
+    if(tp.length) q.tp=tp;
+    if(x.custom) q.cx={n:x.n||'', g:x.g||'corpo-inteiro', t:x.t||'peso_reps', e:x.e||'outro'};
+    return q;
+  },
+  async desafiar(amigos, modo, rotinaId){
     if(!S.auth){ UI.toast('Entre na sua conta pra desafiar'); return; }
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes de começar um duelo'); return; }
     if(!navigator.onLine){ UI.toast('Conecte-se à internet pra desafiar'); return; }
+    amigos=(amigos||[]).filter(a=>a && a.uid && a.uid!==S.auth.uid).slice(0, DUELO.tres? DUELO.MAX-1 : 1);
+    if(!amigos.length) return;
     const r=rotinaId? S.rotinas[rotinaId] : null, t0=agora(), id='d'+uid(), ex={};
-    (r? r.ex : []).forEach((e,i)=>{
-      const n=(e.series||[]).filter(s=>s && s.tipo!=='W').length || 3;
-      ex['k'+uid()]={exId:e.exId, o:i, n, d:(e.descanso!=null? e.descanso : S.cfg.descanso), por:S.auth.uid};
-    });
-    const d={id, a:S.auth.uid, b:amigo.uid, por:S.auth.uid, modo:(modo==='mano'?'mano':'superacao'),
-      titulo:(r? r.titulo : 'Treino livre').slice(0,60), status:'convite', criado:t0, expira:t0+DUELO.CONVITE_MIN*60000,
-      nomes:{[S.auth.uid]:{user:S.perfil?.user||'', nome:(S.perfil?.nome||'').slice(0,40)}, [amigo.uid]:{user:amigo.user||'', nome:(amigo.nome||'').slice(0,40)}}};
+    (r? r.ex : []).forEach((e,i)=>{ const x=BIB.ex(e.exId)||{}; ex['k'+uid()]=DUELO.exSala(x, e.exId, i, e.series, (e.descanso!=null? e.descanso : S.cfg.descanso)); });
+    const nomes={[S.auth.uid]:{user:S.perfil?.user||'', nome:(S.perfil?.nome||'').slice(0,40)}};
+    amigos.forEach(a=>nomes[a.uid]={user:a.user||'', nome:(a.nome||'').slice(0,40)});
+    const d={id, a:S.auth.uid, b:amigos[0].uid, por:S.auth.uid, modo:(modo==='mano'?'mano':'superacao'),
+      titulo:(r? r.titulo : 'Treino livre').slice(0,60), status:'convite', criado:t0, expira:t0+DUELO.CONVITE_MIN*60000, nomes};
+    if(amigos[1]) d.c=amigos[1].uid;
     if(Object.keys(ex).length) d.ex=ex;
     try{ await NET.putD('/duelos/'+id, d); }catch(e){ UI.toast('Não consegui enviar o desafio. Tente de novo.'); return; }
     UI.fechaFolha(); VIB.v(20);
-    UI.toast('Desafio enviado ⚔️', true);
+    UI.toast(amigos.length>1? 'Desafios enviados ⚔️' : 'Desafio enviado ⚔️', true);
     DUELO.conecta(id, d);
     UI.vai('duelo', {id});
   },
+  podeEntrar(d){
+    if(!d || DUELO.estadoDe(d, DUELO.meu())) return false;
+    if(d.status==='convite') return agora()<=(d.expira||0);
+    return d.status==='ativo' && !DUELO.terminou(d);
+  },
   async aceitar(d){
     if(S.ativo && S.ativo.duelo!==d.id){ UI.toast('Conclua ou descarte o treino atual antes de entrar no duelo'); return; }
-    if(d.status!=='convite' || agora()>(d.expira||0)){ UI.toast('Esse desafio expirou'); DUELO.verConvites(true); return; }
-    NET.agenda('/duelos/'+d.id+'/status', 'ativo');
-    NET.agenda('/duelos/'+d.id+'/inicio', agora());
-    d.status='ativo'; d.inicio=agora();
+    if(!DUELO.podeEntrar(d)){ UI.toast('Esse desafio não está mais disponível'); DUELO.verConvites(true); return; }
+    if(d.status==='convite'){ NET.agenda('/duelos/'+d.id+'/status', 'ativo'); NET.agenda('/duelos/'+d.id+'/inicio', agora()); d.status='ativo'; d.inicio=agora(); }
     DUELO.conecta(d.id, d);
     DUELO.comeca(d);
   },
-  recusar(d){ NET.agenda('/duelos/'+d.id+'/status', 'recusado'); DUELO._convites=DUELO._convites.filter(x=>x.id!==d.id); UI.refaz(); },
+  recusar(d){
+    const eu=DUELO.meu();
+    NET.agenda('/duelos/'+d.id+'/j/'+eu+'/estado', 'recusou');
+    d.j=d.j||{}; (d.j[eu]=d.j[eu]||{}).estado='recusou';
+    const convidados=DUELO.jog(d).filter(u=>u!==d.a);
+    if(d.status==='convite' && convidados.every(u=>DUELO.estadoDe(d,u)==='recusou')) NET.agenda('/duelos/'+d.id+'/status', 'recusado');
+    DUELO._convites=DUELO._convites.filter(x=>x.id!==d.id); UI.refaz();
+  },
   cancelar(d){ NET.agenda('/duelos/'+d.id+'/status', 'cancelado'); if(DUELO.cur && DUELO.cur.dados) DUELO.cur.dados.status='cancelado'; UI.refaz(); },
-  // monta o treino ativo a partir dos exercicios do duelo
+  // exercicio criado por outra pessoa: copia escondida, so pra ter nome e tipo
+  garanteEx(id, cx){
+    if(!id || BIB.porId[id] || !cx) return;
+    const c={id, n:String(cx.n||'Exercício').slice(0,60), g:cx.g||'corpo-inteiro', t:cx.t||'peso_reps', e:cx.e||'outro', custom:true, oc:1, deDuelo:1, atualizado:agora()};
+    S.custom[id]=c; salva('custom'); NET.agenda('custom/'+id, c);
+    BIB.lista.push(c); BIB.indexa();
+  },
   comeca(d){
     if(S.ativo && S.ativo.duelo===d.id){ UI.pilha=[]; UI.vai('ativo',null,false); return true; }
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes do duelo'); return false; }
-    S.ativo={ id:uid(), rid:null, titulo:'⚔️ '+(d.titulo||'Duelo'), inicio:agora(), duelo:d.id,
-      ex: DUELO.chaves(d).map(k=>DUELO.novoEx(d.ex[k], k)) };
+    const ks=DUELO.chaves(d).filter(k=>!((d.ex[k]||{}).troca));
+    ks.forEach(k=>DUELO.garanteEx(d.ex[k].exId, d.ex[k].cx));
+    S.ativo={ id:uid(), rid:null, titulo:'⚔️ '+(d.titulo||'Duelo'), inicio:agora(), duelo:d.id, _dkVistos:{}, _dkFora:{},
+      ex: ks.map(k=>DUELO.novoEx(d.ex[k], k)) };
+    S.ativo.ex.forEach(e=>S.ativo._dkVistos[e._dk]=1);
     CORE.marcaEstreias(S.ativo); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
     DUELO.publica(); DUELO.estado('treinando');
     VIB.v(30); setTimeout(()=>{ try{ TELA.pega(); }catch(e){} }, 50);
@@ -4684,26 +4809,32 @@ const DUELO = {
   novoEx(q, k){
     const x=BIB.ex(q.exId)||{};
     return {exId:q.exId, _dk:k, descanso:(q.d!=null? q.d : (x.g==='cardio'?0:S.cfg.descanso)), notas:'',
-      series:Array.from({length:Math.max(1, Number(q.n)||3)}, ()=>({tipo:'N', kg:'', reps:'', ok:false}))};
+      series:(function(){ const tp=Array.isArray(q.tp)? q.tp : (q.tp? Object.values(q.tp) : null);
+        return (tp && tp.length? tp : Array.from({length:Math.max(1, Number(q.n)||3)}, ()=>'N')).map(x=>({tipo:x||'N', kg:'', reps:'', ok:false})); })()};
   },
   caminho(rest){ return '/duelos/'+S.ativo.duelo+'/j/'+DUELO.meu()+rest; },
   estado(st){
     if(!DUELO.emDuelo() || !DUELO.meu()) return;
     NET.agenda(DUELO.caminho('/estado'), st); NET.agenda(DUELO.caminho('/at'), agora());
   },
-  // publica o "normal" de cada exercicio (calculado do meu historico, antes deste treino)
+  // publica o "normal" de cada exercicio e, se eu troquei, o que fiz no lugar (com nome)
   publica(){
     if(!DUELO.emDuelo()) return;
-    const d=DUELO.dados();
+    const d=DUELO.dados(), eu=DUELO.meu(), j=((d && d.j)||{})[eu]||{};
     S.ativo.ex.forEach(e=>{
       if(!e._dk) return;
       const sala=(d && d.ex && d.ex[e._dk]) ? d.ex[e._dk].exId : null;
-      const jaX=d? (((d.j||{})[DUELO.meu()]||{}).x||{})[e._dk] : undefined;
-      const jaB=d? (((d.j||{})[DUELO.meu()]||{}).b||{})[e._dk] : undefined;
-      const precisaX = sala && e.exId!==sala && jaX!==e.exId;
-      if(jaB===undefined || precisaX){
+      const jaX=(j.x||{})[e._dk], jaB=(j.b||{})[e._dk];
+      const trocado = sala && e.exId!==sala;
+      if(jaB===undefined || (trocado && jaX!==e.exId) || (!trocado && jaX)){
         NET.agenda(DUELO.caminho('/b/'+e._dk), DUELO.normal(e.exId, S.ativo.inicio) || 0);
-        if(sala && e.exId!==sala) NET.agenda(DUELO.caminho('/x/'+e._dk), e.exId);
+        if(trocado){
+          const x=BIB.ex(e.exId)||{};
+          NET.agenda(DUELO.caminho('/x/'+e._dk), e.exId);
+          NET.agenda(DUELO.caminho('/xn/'+e._dk), x.n||'');
+          if(x.custom) NET.agenda(DUELO.caminho('/xc/'+e._dk), {n:x.n||'', g:x.g||'corpo-inteiro', t:x.t||'peso_reps', e:x.e||'outro'});
+        } else if(jaX){ NET.agenda(DUELO.caminho('/x/'+e._dk), null); NET.agenda(DUELO.caminho('/xn/'+e._dk), null); }
+        if(d){ d.j=d.j||{}; const m=d.j[eu]=d.j[eu]||{}; m.x=m.x||{}; if(trocado) m.x[e._dk]=e.exId; else delete m.x[e._dk]; m.b=m.b||{}; if(m.b[e._dk]===undefined) m.b[e._dk]=0; }
       }
     });
   },
@@ -4711,52 +4842,114 @@ const DUELO = {
   serieMudou(e, s){
     if(!DUELO.emDuelo() || !e || !e._dk) return;
     const si=e.series.indexOf(s); if(si<0) return;
-    NET.agenda(DUELO.caminho('/s/'+e._dk+'/'+si), s.ok? {kg:(s.kg===''||s.kg==null? '' : Number(s.kg)||0), reps:Number(s.reps)||0, tipo:s.tipo||'N', t:agora()} : null);
+    const v=s.ok? {kg:(s.kg===''||s.kg==null? '' : Number(s.kg)||0), reps:Number(s.reps)||0, tipo:s.tipo||'N', t:agora()} : null;
+    NET.agenda(DUELO.caminho('/s/'+e._dk+'/'+si), v);
     NET.agenda(DUELO.caminho('/at'), agora());
     const d=DUELO.dados();
-    if(d){   // reflete na hora, sem esperar o servidor
-      d.j=d.j||{}; const j=d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}; j.s=j.s||{}; j.s[e._dk]=j.s[e._dk]||{};
-      if(s.ok) j.s[e._dk][si]={kg:s.kg, reps:Number(s.reps)||0, tipo:s.tipo||'N', t:agora()}; else delete j.s[e._dk][si];
-    }
+    if(d){ d.j=d.j||{}; const j=d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}; j.s=j.s||{}; j.s[e._dk]=j.s[e._dk]||{}; if(v) j.s[e._dk][si]=v; else delete j.s[e._dk][si]; }
     DUELO.desenha();
   },
-  // o treino ativo e a sala do duelo sempre com os mesmos exercicios
+  // a ficha e a sala do duelo, sem duplicar nem ressuscitar o que eu removi
   reconcilia(){
     if(!DUELO.emDuelo()) return false;
     const d=DUELO.dados(); if(!d || d.id!==S.ativo.duelo) return false;
+    const A=S.ativo, eu=DUELO.meu(); A._dkVistos=A._dkVistos||{}; A._dkFora=A._dkFora||{};
     let mudou=false;
-    DUELO.chaves(d).forEach(k=>{ if(!S.ativo.ex.some(e=>e._dk===k)){ S.ativo.ex.push(DUELO.novoEx(d.ex[k], k)); mudou=true; } });
-    S.ativo.ex.forEach((e,i)=>{
-      if(e._dk) return;
-      const k='k'+uid();
-      e._dk=k;
-      const n=(e.series||[]).filter(s=>s && s.tipo!=='W').length || 3;
-      const q={exId:e.exId, o:agora()+i, n, d:e.descanso, por:DUELO.meu()};
-      d.ex=d.ex||{}; d.ex[k]=q;
-      NET.agenda('/duelos/'+d.id+'/ex/'+k, q);
-      mudou=true;
+    const locais=new Set(A.ex.map(e=>e._dk).filter(Boolean));
+    // 1) chave que eu ja tive e sumiu da ficha: eu removi. Nao volta, e os outros ficam sabendo.
+    Object.keys(A._dkVistos).forEach(k=>{
+      if(!locais.has(k) && !A._dkFora[k]){ A._dkFora[k]=1; NET.agenda(DUELO.caminho('/fora/'+k), 1); mudou=true; }
     });
+    // 2) exercicio novo na minha ficha
+    A.ex.forEach((e,i)=>{
+      if(e._dk) return;
+      const ks=DUELO.chaves(d);
+      // troca no meio do exercicio: se alguem ja trocou o mesmo pelo mesmo, compartilha a chave
+      const livre = e._dkDe
+        ? ks.find(k=>!locais.has(k) && d.ex[k].troca===e._dkDe && d.ex[k].exId===e.exId)
+        : ks.find(k=>!locais.has(k) && !A._dkFora[k] && !d.ex[k].troca && d.ex[k].exId===e.exId);
+      if(livre){ e._dk=livre; locais.add(livre); mudou=true; return; }
+      const k='k'+uid(); e._dk=k; locais.add(k);
+      const x=BIB.ex(e.exId)||{};
+      const q=DUELO.exSala(x, e.exId, agora()+i, e.series, e.descanso);
+      if(e._dkDe) q.troca=e._dkDe;
+      d.ex=d.ex||{}; d.ex[k]=q; NET.agenda('/duelos/'+d.id+'/ex/'+k, q); mudou=true;
+    });
+    // 3) exercicio da sala que eu nao tenho: entra (menos o que eu removi e a troca dos outros)
+    DUELO.chaves(d).forEach(k=>{
+      if(locais.has(k) || A._dkFora[k]) return;
+      const q=d.ex[k]; if(q.troca && q.por!==eu) return;
+      DUELO.garanteEx(q.exId, q.cx);
+      A.ex.push(DUELO.novoEx(q, k)); locais.add(k); mudou=true;
+    });
+    A.ex.forEach(e=>{ if(e._dk && !A._dkVistos[e._dk]){ A._dkVistos[e._dk]=1; mudou=true; } });
     if(mudou){ salva('ativo'); DUELO.publica(); }
     return mudou;
+  },
+  // "Trocar tambem": passo a fazer o que o outro fez neste exercicio
+  trocaIgual(e, u){
+    const d=DUELO.dados(); if(!d || !e) return;
+    const k=e._dk; let alvo=null, cx=null;
+    const tr=DUELO.chaves(d).find(q=>d.ex[q].troca===k && d.ex[q].por===u);
+    if(tr){ alvo=d.ex[tr].exId; cx=d.ex[tr].cx; }
+    else { alvo=DUELO.exDe(d,u,k); cx=((((d.j||{})[u]||{}).xc)||{})[k] || ((d.ex||{})[k]||{}).cx; }
+    if(!alvo || alvo===e.exId) return;
+    DUELO.garanteEx(alvo, cx);
+    const deEx=e.exId, modo=substituiExAtivo(e, alvo); if(!modo) return;
+    try{ PICKER.registraTroca(deEx, alvo); }catch(_){}
+    salva('ativo'); DUELO.reconcilia(); DUELO.publica(); UI.refaz();
+    UI.toast('Trocado ✓', true);
   },
   // fim do treino de quem esta no duelo
   fimDoTreino(como, salvo){
     if(!DUELO.emDuelo()) return;
-    const id=S.ativo.duelo;
+    const id=S.ativo.duelo, d=DUELO.dados();
     DUELO.estado(como);
-    if(salvo){ salvo.duelo=id; try{ salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo); }catch(e){} }
-    const d=DUELO.dados();
+    if(salvo){
+      salvo.duelo=id;
+      if(d && d.id===id) salvo.dueloInfo={id, modo:d.modo, com:DUELO.outros(d).filter(u=>DUELO.entrou(d,u) || DUELO.estadoDe(d,u)===null).map(u=>DUELO.nome(d,u))};
+      try{ salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo); }catch(e){}
+    }
     if(d && d.id===id){ d.j=d.j||{}; (d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}).estado=como; setTimeout(()=>DUELO.fecha(d), 600); }
   },
-  // os dois terminaram: grava o resultado (os dois aparelhos chegam no mesmo numero)
+  // linha do duelo no feed/treino: "Venceu 4 x 2", "2o lugar"...
+  // posicao com empate: quem empata divide o lugar; quem desistiu fica por ultimo
+  posicao(d, r, u){
+    const P=r.ordem||[]; if(DUELO.estadoDe(d,u)==='desistiu' && P.length>1) return P.length;
+    const meu=Number(r.pts[u])||0, vivos=P.filter(x=>DUELO.estadoDe(d,x)!=='desistiu');
+    return 1+vivos.filter(x=>(Number(r.pts[x])||0)>meu).length;
+  },
+  textoRes(d, r, uid){
+    if(!r || !r.ordem) return '';
+    const P=r.ordem, eu=uid||DUELO.meu(), pos=DUELO.posicao(d, r, eu);
+    const empata=P.some(u=>u!==eu && DUELO.estadoDe(d,u)!=='desistiu' && (Number(r.pts[u])||0)===(Number(r.pts[eu])||0));
+    const fmt=v=> d.modo==='mano'? String(v||0) : Math.round(v||0)+'%';
+    const placar=P.map(u=>fmt(r.pts[u])).join(' × ');
+    if(r.wo) return (r.venc===eu? 'Venceu por desistência' : 'Desistiu');
+    if(!r.venc) return 'Empate · '+placar;
+    if(P.length>2) return pos+'º lugar'+(empata? ' (empate)' : '')+' · '+placar;
+    return (r.venc===eu? 'Venceu ' : 'Perdeu ')+placar;
+  },
+  // os dois (ou tres) terminaram: grava o resultado e atualiza o meu treino/feed
   fecha(d){
-    if(!d || !DUELO.terminou(d) || d.status==='fim') return;
-    const r=DUELO.resultado(d);
-    d.status='fim'; d.fim=d.fim||agora(); d.resultado={modo:r.modo, pa:r.pa, pb:r.pb, venc:r.venc||'', wo:!!r.wo};
-    NET.agenda('/duelos/'+d.id+'/resultado', d.resultado);
-    NET.agenda('/duelos/'+d.id+'/fim', d.fim);
-    NET.agenda('/duelos/'+d.id+'/status', 'fim');
+    if(!d || !DUELO.terminou(d)) return;
+    const r=DUELO.calcula(d), eu=DUELO.meu();
+    const guarda={v:2, modo:r.modo, pts:r.pts, ordem:r.ordem, venc:r.venc||'', wo:!!r.wo};
+    if(d.status!=='fim' || !d.resultado || d.resultado.v!==2){
+      d.status='fim'; d.fim=d.fim||agora(); d.resultado=guarda;
+      NET.agenda('/duelos/'+d.id+'/resultado', guarda);
+      NET.agenda('/duelos/'+d.id+'/fim', d.fim);
+      NET.agenda('/duelos/'+d.id+'/status', 'fim');
+    }
+    DUELO.anotaNoTreino(d, guarda);
     if(UI.telaAtual==='duelo') UI.refaz();
+  },
+  anotaNoTreino(d, r){
+    const t=Object.values(S.treinos||{}).find(t=>t && t.duelo===d.id && !t.apagado); if(!t) return;
+    const info={id:d.id, modo:d.modo, com:DUELO.outros(d).filter(u=>DUELO.entrou(d,u)).map(u=>DUELO.nome(d,u)), res:DUELO.textoRes(d, Object.assign({}, r), DUELO.meu())};
+    if(JSON.stringify(t.dueloInfo||{})===JSON.stringify(info)) return;
+    t.dueloInfo=info; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
+    try{ if(S.perfil?.user && S.auth && treinoPublicado(t)) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); }catch(e){}
   },
 
   /* ---------------- tempo real ---------------- */
@@ -4793,7 +4986,6 @@ const DUELO = {
     DUELO.cur.dados=DUELO.aplica(DUELO.cur.dados, msg.path||'/', msg.data, tipo);
     DUELO.mudou();
   },
-  // aplica um evento do streaming (put substitui; patch junta) numa copia
   aplica(raiz, path, data, tipo){
     const partes=String(path||'/').split('/').filter(Boolean);
     const copia=raiz? JSON.parse(JSON.stringify(raiz)) : {};
@@ -4807,51 +4999,62 @@ const DUELO = {
     let alvo=copia; Object.entries(data||{}).forEach(([k,v])=>{ alvo=poe(alvo, partes.concat(String(k).split('/').filter(Boolean)), v); });
     return alvo;
   },
-  // algo mudou no duelo
+  // algo mudou no duelo (nunca deixa um erro daqui quebrar a tela do treino)
   mudou(){
-    const d=DUELO.dados(); if(!d) return;
-    const eu=DUELO.meu();
-    // criador esperando: o amigo aceitou -> entra no treino
-    if(d.status==='ativo' && d.a===eu && !DUELO.estadoDe(d,eu) && !DUELO.terminou(d) && UI.telaAtual==='duelo' && !S.ativo){ DUELO.comeca(d); return; }
-    if(DUELO.emDuelo() && S.ativo.duelo===d.id){
-      if(DUELO.reconcilia()){
-        const f=document.activeElement, digitando=f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName);
-        if(UI.telaAtual==='ativo'){ if(digitando) DUELO._pend=true; else UI.refaz(); }
+    try{
+      const d=DUELO.dados(); if(!d) return;
+      const eu=DUELO.meu();
+      if(d.status==='ativo' && d.a===eu && !DUELO.estadoDe(d,eu) && !DUELO.terminou(d) && UI.telaAtual==='duelo' && !S.ativo){ DUELO.comeca(d); return; }
+      if(DUELO.emDuelo() && S.ativo.duelo===d.id){
+        if(DUELO.reconcilia()){
+          const f=document.activeElement, digitando=f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName);
+          if(UI.telaAtual==='ativo'){ if(digitando) DUELO._pend=true; else UI.refaz(); }
+        }
+        DUELO.publica();
       }
-      DUELO.publica();
-    }
-    if(DUELO.terminou(d) && d.status!=='fim') DUELO.fecha(d);
-    DUELO.desenha();
-    if(UI.telaAtual==='duelo') UI.refaz();
+      if(DUELO.terminou(d)) DUELO.fecha(d);
+      DUELO.desenha();
+      if(UI.telaAtual==='duelo') UI.refaz();
+    }catch(e){ try{ console.error('duelo', e); }catch(_){} }
   },
   aoSairDoCampo(){ if(DUELO._pend && UI.telaAtual==='ativo'){ DUELO._pend=false; setTimeout(()=>{ const f=document.activeElement; if(!(f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName))) UI.refaz(); else DUELO._pend=true; }, 120); } },
 
-  /* ---------------- convites ---------------- */
+  /* ---------------- convites e historico ---------------- */
   async consulta(campo){
     const tk=await NET.token(); if(!tk || !DUELO.meu()) return {};
     const url=FB.db+'/duelos.json?orderBy='+encodeURIComponent('"'+campo+'"')+'&equalTo='+encodeURIComponent('"'+DUELO.meu()+'"')+'&limitToLast=40&auth='+tk;
     try{ const r=await NET.fetchT(url, {}, 12000); if(!r.ok) return {}; return (await r.json())||{}; }catch(e){ return {}; }
   },
+  async meus(){
+    const [a,b,c]=await Promise.all([DUELO.consulta('a'), DUELO.consulta('b'), DUELO.consulta('c')]);
+    return Object.values(Object.assign({}, a, b, c)).filter(Boolean);
+  },
   async verConvites(forca){
     if(!S.auth || !navigator.onLine) return;
     if(!forca && agora()-DUELO._convT<20000) return;
     DUELO._convT=agora();
-    const [comoB, comoA]=await Promise.all([DUELO.consulta('b'), DUELO.consulta('a')]);
-    const t=agora(), lista=[];
-    Object.values(comoB).forEach(d=>{ if(d && d.status==='convite' && (d.expira||0)>t) lista.push(Object.assign({_tipo:'recebido'}, d)); });
-    Object.values(comoA).forEach(d=>{ if(d && d.status==='ativo' && !DUELO.estadoDe(d, DUELO.meu()) && !DUELO.terminou(d)) lista.push(Object.assign({_tipo:'aceito'}, d)); });
+    const todos=await DUELO.meus(), eu=DUELO.meu(), lista=[];
+    todos.forEach(d=>{
+      if(d.a===eu){ if(d.status==='ativo' && !DUELO.estadoDe(d,eu) && !DUELO.terminou(d)) lista.push(Object.assign({_tipo:'aceito'}, d)); }
+      else if(DUELO.podeEntrar(d)) lista.push(Object.assign({_tipo: d.status==='ativo'? 'andamento' : 'recebido'}, d));
+    });
     const antes=JSON.stringify(DUELO._convites.map(x=>x.id+x._tipo)), depois=JSON.stringify(lista.map(x=>x.id+x._tipo));
     DUELO._convites=lista;
     if(antes!==depois && UI.telaAtual==='inicio') UI.refaz();
+    DUELO.pendentes(todos);
   },
-  async historicoCom(outro){
-    const [comoA, comoB]=await Promise.all([DUELO.consulta('a'), DUELO.consulta('b')]);
-    const eu=DUELO.meu(); let v=0, p=0, e=0;
-    Object.values(Object.assign({}, comoA, comoB)).forEach(d=>{
-      if(!d || d.status!=='fim' || !d.resultado || DUELO.outro(d)!==outro) return;
-      if(!d.resultado.venc) e++; else if(d.resultado.venc===eu) v++; else p++;
+  // treino ja salvo cujo duelo terminou depois: anota o resultado (e o feed)
+  pendentes(todos){
+    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=d.resultado.v===2? d.resultado : DUELO.calcula(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){}
+  },
+  async retrospecto(outro){
+    const todos=await DUELO.meus(), eu=DUELO.meu(); let v=0, p=0, e=0;
+    todos.forEach(d=>{
+      if(!d || d.status!=='fim' || !d.resultado || (outro && !DUELO.jog(d).includes(outro))) return;
+      const r=d.resultado.v===2? d.resultado : DUELO.calcula(d);
+      if(!r.venc) e++; else if(r.venc===eu) v++; else p++;
     });
-    return {v, p, e};
+    return {v, p, e, n:v+p+e};
   },
 
   /* ---------------- telas ---------------- */
@@ -4859,81 +5062,118 @@ const DUELO = {
   barra(){
     const d=DUELO.dados(); const el=h('div',{class:'card duelo-barra', id:'duelo-barra'});
     if(!d || !DUELO.emDuelo() || d.id!==S.ativo.duelo){ el.append(h('div',{class:'f13 mut'},'⚔️ Conectando ao duelo…')); return el; }
-    const eu=DUELO.meu(), ou=DUELO.outro(d), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao;
-    const lid=DUELO.lider(d), eo=DUELO.estadoDe(d,ou);
-    const txt = eo==='desistiu'? DUELO.nome(d,ou)+' desistiu' : (eo==='concluiu'? DUELO.nome(d,ou)+' já terminou' :
-      (lid===eu? 'Você está na frente' : (lid===ou? DUELO.nome(d,ou)+' está na frente' : 'Empatados até aqui')));
-    const ks=DUELO.chaves(d), feitos=ks.filter(k=>DUELO.setsDe(d,ou,k).length).length;
+    const eu=DUELO.meu(), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao, lid=DUELO.lider(d);
+    const os=DUELO.outros(d), ks=DUELO.chaves(d).filter(k=>!d.ex[k].troca);
+    const txt = lid===eu? 'Você está na frente' : (lid? DUELO.nome(d,lid)+' está na frente' : 'Empatados até aqui');
     el.append(
       h('div',{class:'linha',style:'gap:10px'},
-        h('div',{style:'font-size:22px'},'⚔️'),
+        h('div',{style:'font-size:20px'},'⚔️'),
         h('div',{class:'esp',style:'min-width:0'},
-          h('div',{class:'b800',style:'font-size:15px'},'vs '+DUELO.nome(d,ou)),
-          h('div',{class:'f12 mut'}, modo.n+' · '+DUELO.nome(d,ou)+': '+feitos+' de '+ks.length+' exercícios')),
+          h('div',{class:'b800',style:'font-size:14.5px'}, modo.ic+' '+modo.n),
+          h('div',{class:'duelo-chips'}, ...os.map(u=>{
+            const est=DUELO.estadoDe(d,u), feitos=ks.filter(k=>DUELO.setsDe(d,u,k).length).length;
+            const sub= est==='desistiu'? 'desistiu' : (est==='concluiu'? 'terminou' : (est==='recusou'? 'recusou' : (!DUELO.entrou(d,u)? 'convidado' : feitos+'/'+ks.length)));
+            return h('span',{class:'duelo-chip'+(lid===u?' on':'')}, DUELO.nome(d,u)+' · '+sub); }))),
         h('button',{class:'btn btn-mini',onclick:()=>UI.vai('duelo',{id:d.id})},'Placar')),
       h('div',{class:'duelo-lider'+(lid===eu?' on':'')}, txt));
     return el;
   },
-  // as series do adversario, embaixo de cada exercicio
+  fmtSerie(s, exId){
+    if(!s) return '';
+    const x=BIB.ex(exId)||{}, w=s.tipo==='W'? 'W ' : '';
+    if(x.t==='tempo') return w+fmtTempoCampo(s.reps);
+    if((x.t||'peso_reps')==='peso_reps' && Number(s.kg)>0) return w+CORE.fmtKg(s.kg)+'×'+s.reps;
+    return w+s.reps+' reps';
+  },
+  // comparacao serie a serie, embaixo de cada exercicio
   blocoOponente(e){
     const d=DUELO.dados(); const el=h('div',{class:'duelo-op','data-dk':e._dk||''});
     if(!d || !e._dk || !d.ex || !d.ex[e._dk]) return el;
-    const ou=DUELO.outro(d), ss=DUELO.setsDe(d, ou, e._dk), x=BIB.ex(DUELO.exDe(d,ou,e._dk))||{};
-    const fmt=s=> (x.t==='peso_reps' && Number(s.kg)>0)? CORE.fmtKg(s.kg)+' × '+s.reps : (x.t==='tempo'? fmtTempoCampo(s.reps) : s.reps+' reps');
-    el.append(h('div',{class:'f12 b800',style:'color:var(--tx2);margin-bottom:2px'},
-      DUELO.nome(d,ou)+(DUELO.exDe(d,ou,e._dk)!==e.exId? ' · fez '+(x.n||'outro exercício') : '')));
-    if(!ss.length) el.append(h('span',{class:'f12 mut2'},'ainda não começou'));
-    else ss.forEach(s=>el.append(h('span',{class:'q'}, fmt(s)+' ✓')));
-    if(d.modo==='mano'){
-      const w=DUELO.mano(d).por[e._dk];
-      if(w && w!=='≠') el.append(h('div',{class:'f12',style:'margin-top:6px;font-weight:800;color:'+(w===DUELO.meu()?'var(--brand2)':'var(--tx2)')},
-        w==='='? 'Empatados neste exercício' : (w===DUELO.meu()? 'Você leva este exercício' : DUELO.nome(d,ou)+' leva este exercício')));
+    const eu=DUELO.meu(), k=e._dk, os=DUELO.outros(d).filter(u=>DUELO.entrou(d,u));
+    if(!os.length){ el.append(h('div',{class:'f12 mut2'},'Aguardando os outros entrarem…')); return el; }
+    // avisos: troca e remocao
+    os.forEach(u=>{
+      const tr=DUELO.chaves(d).find(q=>d.ex[q].troca===k && d.ex[q].por===u);
+      const outroEx=DUELO.exDe(d,u,k);
+      if(DUELO.foraDe(d,u,k)) el.append(h('div',{class:'duelo-aviso'}, DUELO.nome(d,u)+' removeu este exercício'));
+      else if(tr || outroEx!==e.exId){
+        const nomeNovo= tr? (BIB.porId[d.ex[tr].exId]||{}).n || d.ex[tr].nm : DUELO.nomeEx(d,u,k);
+        const jaIgual= tr? S.ativo.ex.some(q=>q._dk===tr) : outroEx===e.exId;
+        el.append(h('div',{class:'duelo-aviso'},
+          h('span',{}, DUELO.nome(d,u)+' trocou por '+nomeNovo+(tr? ' (no meio do exercício)' : '')),
+          jaIgual? null : h('button',{class:'btn btn-mini btn-p',onclick:()=>DUELO.trocaIgual(e,u)},'Trocar também')));
+      }
+    });
+    // tabela: linha da ficha x pessoa (W com W, serie 1 com serie 1)
+    const quem=[eu].concat(os), lin=[];
+    const colunas=quem.map(u=>({u, ex: u===eu? e.exId : DUELO.exDe(d,u,k),
+      m: u===eu? Object.fromEntries((e.series||[]).map((s,i)=>[i,s]).filter(([i,s])=>s && s.ok)) : (((((d.j||{})[u]||{}).s)||{})[k]||{})}));
+    const idx=[...new Set(colunas.flatMap(c=>Object.keys(c.m).map(Number)))].sort((a,b)=>a-b);
+    const res= d.modo==='mano'? DUELO.mano(d) : null, w= res? res.por[k] : null;
+    const igual=(a,b)=>a && b && String(a.kg)===String(b.kg) && Number(a.reps)===Number(b.reps) && (a.tipo||'N')===(b.tipo||'N');
+    const melhorDe=c=>{ if(!res) return null; const p=(res.perf[k]||{})[c.u]; return p && p.melhor? p.melhor.s : null; };
+    const rotulo=i=>{ const minha=(e.series||[])[i]; const tipo= minha? minha.tipo : (colunas.map(c=>c.m[i]).find(Boolean)||{}).tipo;
+      if(tipo==='W') return 'W';
+      let n=0; for(let q=0;q<=i;q++){ const t=(e.series||[])[q]? e.series[q].tipo : ((colunas.map(c=>c.m[q]).find(Boolean)||{}).tipo); if(t!=='W') n++; }
+      return String(n); };
+    lin.push(h('div',{class:'duelo-tr cab'}, h('span',{class:'duelo-td n'},''), ...quem.map(u=>h('span',{class:'duelo-td'+(w===u?' ganha':'')}, u===eu? 'Você' : DUELO.nome(d,u)))));
+    if(!idx.length) lin.push(h('div',{class:'duelo-tr'}, h('span',{class:'duelo-td n'},''), ...quem.map(()=>h('span',{class:'duelo-td',style:'color:var(--tx3)'},'·'))));
+    idx.forEach(i=>{
+      lin.push(h('div',{class:'duelo-tr'}, h('span',{class:'duelo-td n'}, rotulo(i)),
+        ...colunas.map(c=>{ const s=c.m[i], best=melhorDe(c);
+          return h('span',{class:'duelo-td'+(s && igual(s,best)?' top':''), style:s? '' : 'color:var(--tx3)'}, s? DUELO.fmtSerie(Object.assign({}, s, {tipo:'N'}), c.ex) : '·'); })));
+    });
+    el.append(h('div',{class:'duelo-tab'}, ...lin));
+    if(d.modo==='mano' && w){
+      const motivo=()=>{ const p=(res.perf[k]||{})[w]; return p && p.melhor? ' (melhor série '+DUELO.fmtSerie(p.melhor.s, DUELO.exDe(d,w,k)||e.exId)+')' : ''; };
+      el.append(h('div',{class:'duelo-veredito'+(w===eu?' on':'')},
+        w==='='? 'Empatados neste exercício' : (w==='≠'? 'Exercícios diferentes: não conta' : (w===eu? 'Você leva este exercício' : DUELO.nome(d,w)+' leva este exercício')+motivo())));
     }
     return el;
   },
   // atualiza so os blocos do duelo, sem redesenhar a tela (nao tira o foco de quem digita)
   desenha(){
-    if(UI.telaAtual!=='ativo' || !DUELO.emDuelo()) return;
-    const b=$('#duelo-barra'); if(b) b.replaceWith(DUELO.barra());
-    document.querySelectorAll('.duelo-op').forEach(el=>{
-      const e=S.ativo.ex.find(q=>q._dk===el.dataset.dk); if(e) el.replaceWith(DUELO.blocoOponente(e));
-    });
+    try{
+      if(UI.telaAtual!=='ativo' || !DUELO.emDuelo()) return;
+      const b=$('#duelo-barra'); if(b) b.replaceWith(DUELO.barra());
+      document.querySelectorAll('.duelo-op').forEach(el=>{
+        const e=S.ativo.ex.find(q=>q._dk===el.dataset.dk); if(e) el.replaceWith(DUELO.blocoOponente(e));
+      });
+    }catch(e){ try{ console.error('duelo', e); }catch(_){} }
   },
   // convites no Inicio
   cartoesInicio(){
     if(!DUELO._convites.length) return null;
     const box=h('div',{});
     DUELO._convites.forEach(d=>{
-      const ou=DUELO.outro(d), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao;
+      const modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao;
+      const quem=d._tipo==='aceito'? DUELO.outros(d).map(u=>DUELO.nome(d,u)).join(' e ') : DUELO.nome(d,d.a);
+      const tit= d._tipo==='recebido'? quem+' te desafiou' : (d._tipo==='andamento'? 'Duelo de '+quem+' em andamento' : quem+' aceitou seu desafio');
       const card=h('div',{class:'card duelo-barra'},
         h('div',{class:'linha',style:'gap:10px'},
           h('div',{style:'font-size:24px'},'⚔️'),
           h('div',{class:'esp',style:'min-width:0'},
-            h('div',{class:'b800'}, d._tipo==='recebido'? DUELO.nome(d,ou)+' te desafiou' : DUELO.nome(d,ou)+' aceitou seu desafio'),
-            h('div',{class:'f12 mut'}, d.titulo+' · '+modo.n))));
-      if(d._tipo==='recebido') card.append(h('div',{class:'linha',style:'gap:8px;margin-top:12px'},
+            h('div',{class:'b800'}, tit),
+            h('div',{class:'f12 mut'}, d.titulo+' · '+modo.n+(DUELO.jog(d).length>2? ' · 3 pessoas' : '')))));
+      if(d._tipo==='aceito') card.append(h('button',{class:'btn btn-p',style:'margin-top:12px',onclick:()=>{ DUELO.conecta(d.id, d); DUELO.comeca(d); }},'Entrar no duelo'));
+      else card.append(h('div',{class:'linha',style:'gap:8px;margin-top:12px'},
         h('button',{class:'btn',style:'flex:1',onclick:()=>DUELO.recusar(d)},'Recusar'),
-        h('button',{class:'btn btn-p',style:'flex:1',onclick:()=>DUELO.aceitar(d)},'Aceitar')));
-      else card.append(h('button',{class:'btn btn-p',style:'margin-top:12px',onclick:()=>{ DUELO.conecta(d.id, d); DUELO.comeca(d); }},'Entrar no duelo'));
+        h('button',{class:'btn btn-p',style:'flex:1',onclick:()=>DUELO.aceitar(d)}, d._tipo==='andamento'? 'Entrar' : 'Aceitar')));
       box.append(card);
     });
     return box;
   },
-  // folha de desafiar, a partir do perfil do amigo. Montada UMA vez: escolher
-  // modo ou ficha so troca o destaque (redesenhar voltava a rolagem pro topo).
-  // O botao fica num rodape fixo: com muitas fichas, ele sumia no fim da lista.
+  // folha de desafiar. Montada UMA vez: escolher so troca o destaque.
   folhaDesafiar(amigo){
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes de começar um duelo'); return; }
-    let modo='superacao', rot=null;
-    const desc=h('div',{class:'f12 mut',style:'margin:8px 2px 0;line-height:1.45'}, DUELO.MODOS[modo].d);
-    const segs={};
-    const seg=h('div',{class:'duelo-seg',role:'radiogroup','aria-label':'Modo do duelo'}, ...['superacao','mano'].map(k=>{
+    let modo='superacao', rot=null, terceiro=null;
+    const cartoesModo={};
+    const modos=h('div',{style:'display:grid;gap:8px',role:'radiogroup','aria-label':'Modo do duelo'}, ...['superacao','mano'].map(k=>{
       const M=DUELO.MODOS[k];
-      segs[k]=h('button',{class:'duelo-seg-b'+(modo===k?' on':''),role:'radio','aria-checked':String(modo===k),onclick:()=>{
-        modo=k; desc.textContent=M.d;
-        Object.entries(segs).forEach(([kk,b])=>{ b.classList.toggle('on', kk===k); b.setAttribute('aria-checked', String(kk===k)); });
-      }}, M.ic+' '+M.n);
-      return segs[k];
+      cartoesModo[k]=h('button',{class:'duelo-modo'+(modo===k?' on':''),role:'radio','aria-checked':String(modo===k),onclick:()=>{
+        modo=k; Object.entries(cartoesModo).forEach(([kk,b])=>{ b.classList.toggle('on',kk===k); b.setAttribute('aria-checked',String(kk===k)); }); }},
+        h('div',{class:'b800'}, M.ic+' '+M.n), h('div',{class:'f12 mut',style:'margin-top:2px;line-height:1.4'}, M.d));
+      return cartoesModo[k];
     }));
     const itens=[];
     const item=(id, titulo, sub)=>{
@@ -4943,94 +5183,135 @@ const DUELO = {
     };
     const pastas=Object.values(S.pastas||{}).filter(p=>p && !p.apagada && !p.apagado).sort((a,b)=>(a.ordem||0)-(b.ordem||0));
     const rots=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada && !r.apagado && (r.ex||[]).length);
-    const lista=[item(null,'Treino livre','Vocês montam juntos: o que um adicionar aparece pro outro')];
+    const lista=[item(null,'Treino livre','Vocês montam juntos: o que um adicionar aparece pros outros')];
     pastas.map(p=>p.id).concat([undefined]).forEach(pid=>{
       rots.filter(r=>(r.pasta||undefined)===pid || (pid===undefined && r.pasta && !S.pastas[r.pasta]))
         .sort((a,b)=>(a.ordem||0)-(b.ordem||0))
         .forEach(r=>lista.push(item(r.id, r.titulo, (pid && S.pastas[pid]? S.pastas[pid].nome+' · ' : '')+r.ex.length+' exercícios')));
     });
+    // terceiro participante (opcional), entre quem eu sigo
+    const seg=Object.entries((DUELO.tres && S.social && S.social.seguindo)||{}).filter(([u])=>u!==amigo.uid && u!==S.auth?.uid)
+      .map(([u,v])=>({uid:u, user:(v&&v.user)||'', nome:(v&&v.nome)||''})).filter(p=>p.user||p.nome)
+      .sort((a,b)=>(a.user||a.nome).localeCompare(b.user||b.nome));
+    const cartT={};
+    const terc= seg.length? h('div',{class:'duelo-terc'}, ...seg.map(p=>{
+      cartT[p.uid]=h('button',{class:'chip',onclick:()=>{ terceiro= terceiro && terceiro.uid===p.uid? null : p;
+        Object.entries(cartT).forEach(([u,b])=>b.classList.toggle('on', !!terceiro && terceiro.uid===u)); }}, p.user? '@'+p.user : p.nome);
+      return cartT[p.uid]; })) : null;
     UI.folha('Duelo com '+(amigo.user? '@'+amigo.user : (amigo.nome||'amigo')),[
-      h('div',{class:'f13 mut',style:'margin:0 2px 8px'},'Modo'), seg, desc,
+      h('div',{class:'f13 mut',style:'margin:0 2px 8px'},'Modo'), modos,
       h('div',{class:'f13 mut',style:'margin:16px 2px 8px'},'Treino'),
       h('div',{style:'display:grid;gap:6px'}, ...lista),
+      terc? h('div',{class:'f13 mut',style:'margin:16px 2px 8px'},'Chamar mais alguém (opcional)') : null, terc,
       h('div',{class:'duelo-rodape'},
-        h('button',{class:'btn btn-p',onclick:()=>DUELO.desafiar(amigo, modo, rot)},'Enviar desafio ⚔️'),
+        h('button',{class:'btn btn-p',onclick:()=>DUELO.desafiar([amigo].concat(terceiro? [terceiro] : []), modo, rot)},'Enviar desafio ⚔️'),
         h('div',{class:'f12 mut2',style:'text-align:center;margin-top:6px'},'O convite vale por '+DUELO.CONVITE_MIN+' minutos.'))]);
   },
-  // resultado, convite e andamento
+  // placar: convite, andamento e resultado
   tela(id){
     UI.topo(h('div',{class:'topo-tit'},'Duelo'));
     const m=$('#main'); m.innerHTML='';
     if(!DUELO.cur || DUELO.cur.id!==id) DUELO.conecta(id);
     const d=DUELO.dados();
     if(!d){ m.append(h('div',{class:'vazio'},'Carregando o duelo…')); return; }
-    const eu=DUELO.meu(), ou=DUELO.outro(d), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao, souA=d.a===eu;
-    const cab=h('div',{class:'card duelo-barra',style:'text-align:center'},
-      h('div',{class:'f12 mut'}, modo.ic+' '+modo.n+' · '+d.titulo));
+    if(d.status==='fim' && d.resultado && d.resultado.v!==2) DUELO.fecha(d);     // resultado antigo: refaz com as regras novas
+    const eu=DUELO.meu(), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao, souA=d.a===eu, P=DUELO.jog(d);
+    const cab=h('div',{class:'card duelo-barra',style:'text-align:center'}, h('div',{class:'f12 mut'}, modo.ic+' '+modo.n+' · '+d.titulo));
     m.append(cab);
     if(d.status==='convite'){
       const exp=agora()>(d.expira||0);
-      cab.append(h('div',{class:'b800',style:'font-size:18px;margin-top:8px'}, exp? 'O convite expirou' : (souA? 'Aguardando '+DUELO.nome(d,ou)+' aceitar…' : DUELO.nome(d,ou)+' te desafiou')));
+      cab.append(h('div',{class:'b800',style:'font-size:18px;margin-top:8px'}, exp? 'O convite expirou' : (souA? 'Aguardando resposta…' : DUELO.nome(d,d.a)+' te desafiou')));
+      cab.append(h('div',{class:'duelo-chips',style:'justify-content:center;margin-top:8px'}, ...DUELO.outros(d).map(u=>{
+        const st=DUELO.estadoDe(d,u); return h('span',{class:'duelo-chip'}, DUELO.nome(d,u)+' · '+(st==='recusou'? 'recusou' : (st? 'aceitou' : 'aguardando'))); })));
       if(!exp && souA) m.append(h('button',{class:'btn',onclick:()=>DUELO.cancelar(d)},'Cancelar desafio'));
-      if(!exp && !souA) m.append(h('div',{class:'linha',style:'gap:8px'},
+      if(!exp && !souA && !DUELO.estadoDe(d,eu)) m.append(h('div',{class:'linha',style:'gap:8px'},
         h('button',{class:'btn',style:'flex:1',onclick:()=>{ DUELO.recusar(d); UI.volta(); }},'Recusar'),
         h('button',{class:'btn btn-p',style:'flex:1',onclick:()=>DUELO.aceitar(d)},'Aceitar')));
       return;
     }
     if(d.status==='recusado' || d.status==='cancelado'){
-      cab.append(h('div',{class:'b800',style:'font-size:18px;margin-top:8px'}, d.status==='recusado'? DUELO.nome(d,ou)+' recusou o desafio' : 'Desafio cancelado'));
+      cab.append(h('div',{class:'b800',style:'font-size:18px;margin-top:8px'}, d.status==='recusado'? 'O desafio foi recusado' : 'Desafio cancelado'));
       return;
     }
-    const fim=DUELO.terminou(d), r=DUELO.resultado(d), minha=souA? r.pa : r.pb, dele=souA? r.pb : r.pa;
-    const fmtN=v=> d.modo==='mano'? String(v) : (Math.round(v)+'%');
-    cab.append(
-      h('div',{class:'duelo-vs',style:'margin-top:10px'},
-        h('div',{style:'flex:1'}, h('div',{class:'f12 mut'},'Você'), h('div',{class:'duelo-placar'+(fim && r.venc===eu?' on':'')}, fim? fmtN(minha) : '—')),
-        h('div',{class:'f13 mut2'},'×'),
-        h('div',{style:'flex:1'}, h('div',{class:'f12 mut'}, DUELO.nome(d,ou)), h('div',{class:'duelo-placar'+(fim && r.venc===ou?' on':'')}, fim? fmtN(dele) : '—'))),
-      h('div',{class:'b800',style:'margin-top:8px;font-size:16px'},
-        !fim? (DUELO.estadoDe(d,eu)? 'Aguardando '+DUELO.nome(d,ou)+' terminar…' : 'Duelo em andamento') :
-        (r.wo? (r.venc===eu? 'Vitória por desistência 🏆' : 'Você desistiu') : (!r.venc? 'Empate' : (r.venc===eu? 'Você venceu 🏆' : DUELO.nome(d,ou)+' venceu')))),
-      d.modo!=='mano' && fim? h('div',{class:'f12 mut',style:'margin-top:4px'},'% do próprio normal: 100% é o seu padrão') : null);
+    const fim=DUELO.terminou(d), r=DUELO.calcula(d), quem=(fim? r.ordem : DUELO.noPlacar(d));
+    const fmtN=v=> d.modo==='mano'? String(v||0) : Math.round(v||0)+'%';
+    const placar=h('div',{class:'duelo-placar-g'}, ...quem.map((u,i)=>h('div',{class:'duelo-pessoa'+(fim && r.venc===u?' on':'')},
+      h('div',{class:'f12 mut'}, (fim && quem.length>2? DUELO.posicao(d, r, u)+'º · ' : '')+(u===eu? 'Você' : DUELO.nome(d,u))),
+      h('div',{class:'duelo-placar'}, fim || d.modo==='mano'? fmtN(r.pts[u]) : '—'),
+      h('div',{class:'f12 mut2'}, (function(){ const st=DUELO.estadoDe(d,u); return st==='desistiu'? 'desistiu' : (st==='concluiu'? 'terminou' : (DUELO.entrou(d,u)? 'treinando' : 'convidado')); })()))));
+    cab.append(placar,
+      h('div',{class:'b800',style:'margin-top:10px;font-size:16px'},
+        !fim? (DUELO.estadoDe(d,eu)==='concluiu'? 'Aguardando os outros terminarem…' : 'Duelo em andamento') :
+        (r.wo? (r.venc===eu? 'Vitória por desistência 🏆' : DUELO.nome(d,r.venc)+' venceu por desistência') : (!r.venc? 'Empate' : (r.venc===eu? 'Você venceu 🏆' : DUELO.nome(d,r.venc)+' venceu')))),
+      d.modo==='mano'? h('div',{class:'f12 mut',style:'margin-top:4px'},'Exercícios vencidos. Ganha cada exercício quem fizer a melhor série; empatando, a segunda melhor, depois o volume.')
+                     : (fim? h('div',{class:'f12 mut',style:'margin-top:4px'},'% do próprio normal: 100% é o seu padrão') : null));
     if(!fim && DUELO.emDuelo() && S.ativo.duelo===d.id) m.append(h('button',{class:'btn btn-p',onclick:()=>UI.vai('ativo',null,false)},'Voltar ao treino'));
-    // exercicio a exercicio
+    // exercicio a exercicio, todas as series
     const lista=h('div',{class:'card'});
-    DUELO.chaves(d).forEach(k=>{
-      const w=r.por[k], x=BIB.ex(d.ex[k].exId)||{};
-      const cel=(uid)=>{ const ss=DUELO.setsDe(d,uid,k); if(!ss.length) return '—';
-        const mx=Math.max(...ss.map(s=>DUELO.valor(s, DUELO.exDe(d,uid,k))));
-        const s=ss.find(s=>DUELO.valor(s, DUELO.exDe(d,uid,k))===mx)||ss[0];
-        return (Number(s.kg)>0? CORE.fmtKg(s.kg)+'×'+s.reps : s.reps+(x.t==='tempo'?'s':' reps')); };
-      lista.append(h('div',{class:'duelo-linha'},
-        h('div',{class:'esp',style:'min-width:0'}, h('div',{class:'b800',style:'font-size:14px'}, x.n||'Exercício'),
-          h('div',{class:'f12 mut2'}, w==='≠'? 'exercícios diferentes: não conta' : (w==='='? 'empate' : (w===eu? 'você levou' : (w===ou? DUELO.nome(d,ou)+' levou' : (fim? 'sem comparação' : '…')))))),
-        h('div',{class:'duelo-cel'+(w===eu?' on':'')}, cel(eu)),
-        h('div',{class:'duelo-cel'+(w===ou?' on':'')}, cel(ou))));
+    DUELO.chaves(d).filter(k=>!d.ex[k].troca).forEach(k=>{
+      const w=r.por[k], nomeSala=(BIB.porId[d.ex[k].exId]||{}).n || d.ex[k].nm || 'Exercício';
+      const linhas=quem.map(u=>{
+        const ss=DUELO.setsDe(d,u,k), ex=DUELO.exDe(d,u,k), fora=DUELO.foraDe(d,u,k);
+        return h('div',{class:'duelo-linha2'+(w===u?' on':'')},
+          h('span',{class:'duelo-quem'}, u===eu? 'Você' : DUELO.nome(d,u)),
+          h('span',{class:'duelo-sets'}, fora? 'removeu' : (ss.length? ss.map(s=>DUELO.fmtSerie(s, ex)).join('  ·  ') : '—')+(ex!==d.ex[k].exId? '  ('+DUELO.nomeEx(d,u,k)+')' : '')));
+      });
+      lista.append(h('div',{class:'duelo-bloco'},
+        h('div',{class:'linha',style:'gap:8px'}, h('div',{class:'b800 esp',style:'font-size:14px;min-width:0'}, nomeSala),
+          h('span',{class:'f12 mut2'}, w==='≠'? 'exercícios diferentes' : (w==='='? 'empate' : (w? (w===eu? 'você levou' : DUELO.nome(d,w)+' levou') : (fim? 'sem comparação' : '…'))))),
+        ...linhas));
     });
-    if(DUELO.chaves(d).length) m.append(h('div',{class:'secao'},'Melhor série de cada exercício'), lista);
+    if(DUELO.chaves(d).length) m.append(h('div',{class:'secao'},'Série por série'), lista);
     if(fim){
       const hist=h('div',{class:'f13 mut',style:'text-align:center;margin:6px 0 12px'},'Carregando o retrospecto…');
       m.append(hist);
-      DUELO.historicoCom(ou).then(c=>{ if(hist.isConnected) hist.textContent='Retrospecto contra '+DUELO.nome(d,ou)+': '+c.v+' vitória'+(c.v===1?'':'s')+' · '+c.p+' derrota'+(c.p===1?'':'s')+(c.e? ' · '+c.e+' empate'+(c.e===1?'':'s') : ''); });
+      const ou=DUELO.outros(d);
+      DUELO.retrospecto(ou.length===1? ou[0] : null).then(c=>{ if(hist.isConnected) hist.textContent=(ou.length===1? 'Retrospecto contra '+DUELO.nome(d,ou[0]) : 'Seus duelos')+': '+c.v+' vitória'+(c.v===1?'':'s')+' · '+c.p+' derrota'+(c.p===1?'':'s')+(c.e? ' · '+c.e+' empate'+(c.e===1?'':'s') : ''); });
       m.append(h('button',{class:'btn btn-p',onclick:()=>DUELO.revanche(d)},'Revanche ⚔️'));
     }
   },
+  // lista dos meus duelos (perfil)
+  async telaLista(){
+    UI.topo(h('div',{class:'topo-tit'},'Duelos'));
+    const m=$('#main'); m.innerHTML=''; m.append(h('div',{class:'vazio'},'Carregando…'));
+    const todos=(await DUELO.meus()).filter(d=>d.status==='fim' || d.status==='ativo').sort((a,b)=>(b.inicio||b.criado||0)-(a.inicio||a.criado||0));
+    if(UI.telaAtual!=='duelos') return;
+    m.innerHTML='';
+    const c=await DUELO.retrospecto(null);
+    m.append(h('div',{class:'card duelo-barra',style:'text-align:center'},
+      h('div',{class:'duelo-placar'}, c.v+' · '+c.p+(c.e? ' · '+c.e : '')),
+      h('div',{class:'f12 mut'}, 'vitórias · derrotas'+(c.e? ' · empates' : ''))));
+    if(!todos.length){ m.append(h('div',{class:'vazio'},'Nenhum duelo ainda. Desafie alguém pelo perfil.')); return; }
+    const lista=h('div',{class:'card'});
+    todos.slice(0,40).forEach(d=>{
+      const r=d.status==='fim' && d.resultado? (d.resultado.v===2? d.resultado : DUELO.calcula(d)) : null;
+      lista.append(h('button',{class:'duelo-item',onclick:()=>UI.vai('duelo',{id:d.id})},
+        h('div',{class:'esp',style:'min-width:0;text-align:left'},
+          h('div',{class:'b800',style:'font-size:14px'}, 'vs '+DUELO.outros(d).map(u=>DUELO.nome(d,u)).join(' e ')),
+          h('div',{class:'f12 mut2'}, (DUELO.MODOS[d.modo]||DUELO.MODOS.superacao).n+' · '+d.titulo+' · '+dataRelativa(d.inicio||d.criado))),
+        h('span',{class:'f12 b800'+(r && r.venc===DUELO.meu()?' duelo-ok':'')}, r? DUELO.textoRes(d, r) : 'em andamento')));
+    });
+    m.append(lista);
+  },
   async revanche(d){
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes de começar um duelo'); return; }
-    const eu=DUELO.meu(), ou=DUELO.outro(d), t0=agora(), id='d'+uid(), ex={};
-    DUELO.chaves(d).forEach((k,i)=>{ const q=d.ex[k]; ex['k'+uid()]={exId:q.exId, o:i, n:q.n||3, d:q.d, por:eu}; });
-    const n=Object.assign({}, d.nomes||{});
-    const nd={id, a:eu, b:ou, por:eu, modo:d.modo, titulo:d.titulo, status:'convite', criado:t0, expira:t0+DUELO.CONVITE_MIN*60000, nomes:n};
+    const eu=DUELO.meu(), os=DUELO.outros(d), t0=agora(), id='d'+uid(), ex={};
+    DUELO.chaves(d).filter(k=>!d.ex[k].troca).forEach((k,i)=>{ const q=d.ex[k]; ex['k'+uid()]=Object.assign({}, q, {o:i, por:eu}); });
+    const nd={id, a:eu, b:os[0], por:eu, modo:d.modo, titulo:d.titulo, status:'convite', criado:t0, expira:t0+DUELO.CONVITE_MIN*60000, nomes:Object.assign({}, d.nomes||{})};
+    if(os[1]) nd.c=os[1];
     if(Object.keys(ex).length) nd.ex=ex;
     try{ await NET.putD('/duelos/'+id, nd); }catch(e){ UI.toast('Não consegui enviar a revanche. Tente de novo.'); return; }
     UI.toast('Revanche enviada ⚔️', true); DUELO.conecta(id, nd); UI.vai('duelo',{id});
   },
+  async lerChave(){ try{ DUELO.tres = (await NET.get('/config/duelo3'))===true; }catch(e){} },
   boot(){
     try{ if(S.ativo && S.ativo.duelo) DUELO.conecta(S.ativo.duelo); }catch(e){}
+    DUELO.lerChave();
     DUELO.verConvites(true);
   }
 };
 TELAS.duelo = function({id}){ DUELO.tela(id); };
+TELAS.duelos = function(){ DUELO.telaLista(); };
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState!=='visible'){ try{ DUELO.es && DUELO.es.close(); }catch(e){} DUELO.es=null; return; }
   if(DUELO.cur && (DUELO.emDuelo() || UI.telaAtual==='duelo')){ const c=DUELO.cur; DUELO.cur=null; DUELO.conecta(c.id, c.dados); }
@@ -5038,6 +5319,17 @@ document.addEventListener('visibilitychange', ()=>{
 });
 document.addEventListener('focusout', ()=>DUELO.aoSairDoCampo());
 
+(function(){
+  // troca com series ja feitas divide o exercicio em dois: o pedaco novo e' "troca" do
+  // original no duelo (avisa os outros em vez de aparecer como exercicio novo pra eles)
+  const sub0=substituiExAtivo;
+  substituiExAtivo=function(e, novoId){
+    const ix=S.ativo? S.ativo.ex.indexOf(e) : -1;
+    const r=sub0.apply(this, arguments);
+    try{ if(r==='dividido' && ix>=0 && e && e._dk){ const n=S.ativo.ex[ix+1]; if(n && !n._dk) n._dkDe=e._dk; } }catch(_){}
+    return r;
+  };
+})();
 (function(){
   const marca0=ATIVO.marca;
   ATIVO.marca=function(e, s, row){ const r=marca0.apply(this, arguments); try{ DUELO.serieMudou(e, s); }catch(_){} return r; };
@@ -5141,7 +5433,8 @@ TELAS.perfil = function(){
     h('button',{class:'btn',onclick:()=>UI.vai('stats')},'Estatísticas'),
     h('button',{class:'btn',onclick:()=>PICKER.abre(null,'consulta')},'Exercícios'),
     h('button',{class:'btn',onclick:()=>UI.vai('medidas')},'Medições'),
-    h('button',{class:'btn',onclick:()=>UI.vai('calendario')},'Calendário')));
+    h('button',{class:'btn',onclick:()=>UI.vai('calendario')},'Calendário'),
+    S.auth? h('button',{class:'btn',style:'grid-column:1/-1',onclick:()=>UI.vai('duelos')},'⚔️ Duelos') : null));
 
   m.appendChild(h('div',{class:'secao'},'Treinamentos'));
   const meus=ts.slice().sort((a,b)=>b.inicio-a.inicio);
@@ -6366,6 +6659,9 @@ function cartaoFeed(i){
       h('div',{class:'esp'}),
       i.meu? h('button',{class:'feed-mais','aria-label':'Mais opções do treino '+t.titulo,onclick:ev=>{ ev.stopPropagation(); UI.vai('treinoDet',{id:tid}); }},'⋯') : null),
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
+    (function(){ const du = i.meu? (i.t && i.t.dueloInfo) : (i.r && i.r.duelo); if(!du) return null;
+      const txt='⚔️ Duelo'+((du.com&&du.com.length)? ' com '+du.com.join(' e ') : '')+(du.res? ' · '+du.res : '');
+      return i.meu? h('button',{class:'feed-duelo',onclick:ev=>{ ev.stopPropagation(); UI.vai('duelo',{id:du.id}); }}, txt) : h('div',{class:'feed-duelo'}, txt); })(),
     ...(function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
       if(!(a && a.n)) return [];
       return [h('button',{class:'feed-acad',title:'Abrir no mapa',
@@ -6618,6 +6914,8 @@ TELAS.perfilAmigo = function({uid:alvo}){
     NET.get('/seguindo/'+alvo).then(v=>{ const el=$('#pa-segdo'); if(el) el.textContent=Object.keys(v||{}).length; }).catch(()=>{});
     if(S.auth && alvo!==S.auth.uid) m.appendChild(h('button',{class:'btn btn-p',style:'margin-bottom:10px',
       onclick:()=>DUELO.folhaDesafiar({uid:alvo, user:p.user||'', nome:p.nome||''})},'⚔️ Desafiar para um duelo'));
+    if(S.auth && alvo!==S.auth.uid){ const rl=h('div',{class:'f12 mut',style:'text-align:center;margin:-2px 0 12px'}); m.appendChild(rl);
+      DUELO.retrospecto(alvo).then(c=>{ if(c.n && rl.isConnected) rl.textContent='Seus duelos com '+(p.user? '@'+p.user : 'essa pessoa')+': '+c.v+' vitória'+(c.v===1?'':'s')+' · '+c.p+' derrota'+(c.p===1?'':'s')+(c.e? ' · '+c.e+' empate'+(c.e===1?'':'s') : ''); }).catch(()=>{}); }
     m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>UI.vai('comparaPerfil',{uid:alvo})},'Comparar estatísticas'));
     m.appendChild(h('button',{class:'btn',style:'margin-bottom:12px',onclick:()=>EXSVIEW.folha(alvo, p)},'🏋️ Ver exercícios criados'));
     const rotBox=h('div',{});
@@ -8903,6 +9201,7 @@ function resumoTreino(t){
       sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
     atualizado:agora() };
   if(t.temFoto) r0.f=1;
+  if(t.dueloInfo) r0.duelo={id:t.dueloInfo.id, modo:t.dueloInfo.modo, com:(t.dueloInfo.com||[]).slice(0,2), res:t.dueloInfo.res||''};
   if(t.academia && t.academia.n){
     r0.acad={n:t.academia.n, id:t.academia.id||null};
     // coordenada do LUGAR (publica) pra quem ve poder abrir no mapa

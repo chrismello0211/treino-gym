@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.28.0';
+const EXPECTED_VERSION = '11.28.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -256,6 +256,20 @@ if (exercises !== null) {
       const escondidos = [...citados].filter(id => porId.has(id) && porId.get(id).oc && !PERMITIDOS.has(id));
       check(inexistentes.length === 0, 'assistente so cita exercicios que existem', inexistentes.slice(0, 6).join(', '));
       check(escondidos.length === 0, 'assistente nao cita exercicios escondidos', escondidos.slice(0, 6).join(', ') + ' (esconder tira do seletor mas o assistente ainda sorteia)');
+    }
+    // CORRECOES_TREINO: cada correcao pontual de historico precisa apontar para exercicios que existem e aparecem
+    const corrMatch = indexHtml.match(/const CORRECOES_TREINO = (\[[\s\S]*?\]);/);
+    check(!!corrMatch, 'correcoes pontuais de historico presentes', 'CORRECOES_TREINO nao encontrado no index.html');
+    if (corrMatch) {
+      const porIdC = new Map(exercises.map(e => [e.id, e]));
+      let lista = []; try { lista = Function('"use strict"; return (' + corrMatch[1] + ')')(); } catch (erro) { check(false, 'CORRECOES_TREINO legivel', erro.message); }
+      const ruinsC = [];
+      for (const c of lista) {
+        if (!porIdC.has(c.para)) ruinsC.push(c.para + ' (destino) nao existe no catalogo');
+        else if (porIdC.get(c.para).oc) ruinsC.push(c.para + ' (destino) esta escondido');
+        if (!c.treino || typeof c.ex !== 'number' || !c.de) ruinsC.push('correcao incompleta: ' + JSON.stringify(c));
+      }
+      check(ruinsC.length === 0, 'correcoes de historico apontam para exercicio visivel', ruinsC.slice(0, 4).join('; '));
     }
     // EX_ALIAS: codigo antigo (escondido, continua no catalogo) -> canonico (visivel); o app nao cita o antigo
     const aliasMatch = indexHtml.match(/const EX_ALIAS = (\{.*?\});/);

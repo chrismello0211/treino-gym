@@ -646,7 +646,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.28.0';
+const APP_VER='11.28.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -907,6 +907,34 @@ function migraAlias(){
       (S.ativo.ex||[]).forEach(e=>{ if(S.ativo._estr[e.exId]===undefined) S.ativo._estr[e.exId]=!CORE.marcasDe(S.prs[e.exId]).length; });
       salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
     }
+    return true;
+  }catch(e){ return false; }
+}
+/* Correcoes pontuais de historico (v11.28.1). Cada uma vale para UM treino de UMA pessoa (o id do
+   treino e' unico): em qualquer outro aparelho o treino nao existe e nao acontece nada.
+   1o caso: apos a limpeza de exercicios, a Marianne fez "Bom dia" (80/100/120 kg) e, sem o
+   exercicio no seletor, registrou como Flexao nordica com a nota "Bom dia*". Isso tambem
+   contaminou o recorde da Flexao nordica. A correcao leva as series pro exercicio certo e
+   recalcula os recordes DESTE aparelho (o app guarda o maior entre aparelho e nuvem, entao
+   corrigir so a nuvem nao limparia o recorde). Idempotente: depois de aplicada, 'de' nao bate mais.
+   So age quando o exercicio de destino ja existe no catalogo deste aparelho. */
+const CORRECOES_TREINO = [
+  {treino:'mv3kd4md62u8e', ex:5, de:'pernas__flexao-nordica', para:'pernas__bom-dia-1', nota:'Bom dia*'}
+];
+function migraCorrecoes(){
+  try{
+    let mudou=false;
+    CORRECOES_TREINO.forEach(c=>{
+      const t0=(S.treinos||{})[c.treino]; if(!t0 || t0.apagado) return;
+      const e=(t0.ex||[])[c.ex]; if(!e || e.exId!==c.de) return;
+      if(!BIB.porId[c.para]) return;                                   // catalogo ainda sem o exercicio: espera
+      e.exId=c.para;
+      if(c.nota && String(e.notas||'').trim()===c.nota) e.notas='';    // a nota era so o aviso do "quebra-galho"
+      t0.atualizado=agora(); NET.agenda('treinos/'+t0.id, t0); mudou=true;
+    });
+    if(!mudou) return false;
+    salva('treinos');
+    CORE.reconciliaPRs();                                              // recordes e medalhas com o historico certo
     return true;
   }catch(e){ return false; }
 }
@@ -9659,7 +9687,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); await migraVisibilidadeFeed(); migraAlias(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
 setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();

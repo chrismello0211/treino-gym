@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.27.2';
+const EXPECTED_VERSION = '11.28.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -208,6 +208,7 @@ check(indexHtml.includes("window.addEventListener('popstate'") && indexHtml.incl
 check(indexHtml.includes('try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }') && indexHtml.includes('function telaComErro('), 'telas protegidas contra erro', 'sem isso uma tela que falha fica em branco');
 check(indexHtml.includes('A._dkFora') && indexHtml.includes('n._dkDe=e._dk'), 'duelo nao ressuscita exercicio removido nem duplica troca', 'exercicio removido voltava e a troca virava exercicio novo pros outros');
 check(indexHtml.includes('P.append=function(...n){ return ap.apply(this, n.filter(x=>x!=null && x!==false)); }'), 'append ignora vazio (sem "null" na tela)', 'o append nativo escreve "null" quando recebe vazio');
+check(indexHtml.includes('decorridoMs(t){') && indexHtml.includes('fim=agoraReal-pausas') && !indexHtml.includes("CORE.fmtRelogioCurto((agora()-S.ativo.inicio)/1000)"), 'pausa do treino ligada ao cronometro e ao salvar', 'sem isso o tempo pausado entra na duracao');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

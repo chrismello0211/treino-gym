@@ -646,7 +646,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.28.2';
+const APP_VER='11.28.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1542,7 +1542,9 @@ const BIB = {
   },
   norm(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); },
   ex(id){ return BIB.porId[id] || {id, n:'Exercício removido', g:'corpo-inteiro', e:'outro', t:'peso_reps', semGif:true}; },
-  gif(id){ const x=BIB.porId[id]; return (x && !x.custom) ? 'g/'+id+'.webp' : null; },
+  // 'gif' (opcional, no catalogo) = id cujo ARQUIVO esta entrada usa. Serve pra corrigir um GIF que ficou
+  // no exercicio errado sem mexer nos arquivos: o celular guarda cada GIF pra sempre, por nome.
+  gif(id){ const x=BIB.porId[id]; return (x && !x.custom) ? 'g/'+(x.gif||id)+'.webp' : null; },
   contaUsos(){
     const u={};
     Object.values(S.treinos).forEach(t=>{ if(t.apagado) return; (t.ex||[]).forEach(e=>{ u[e.exId]=(u[e.exId]||0)+1; }); });

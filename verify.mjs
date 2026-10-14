@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.28.2';
+const EXPECTED_VERSION = '11.28.3';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -271,6 +271,10 @@ if (exercises !== null) {
       }
       check(ruinsC.length === 0, 'correcoes de historico apontam para exercicio visivel', ruinsC.slice(0, 4).join('; '));
     }
+    // gif: campo opcional da entrada = id cujo arquivo de GIF ela usa (corrige GIF no exercicio errado sem trocar arquivos)
+    const idsGif = new Set(exercises.map(e => e.id));
+    const ruinsGif = exercises.filter(e => e.gif !== undefined && (typeof e.gif !== 'string' || e.gif === e.id || !idsGif.has(e.gif))).map(e => e.id + ' -> ' + e.gif);
+    check(ruinsGif.length === 0, 'ponteiros de GIF apontam para exercicio do catalogo', ruinsGif.slice(0, 4).join('; '));
     // EX_ALIAS: codigo antigo (escondido, continua no catalogo) -> canonico (visivel); o app nao cita o antigo
     const aliasMatch = indexHtml.match(/const EX_ALIAS = (\{.*?\});/);
     check(!!aliasMatch, 'mapa de exercicios duplicados presente', 'EX_ALIAS nao encontrado no index.html');

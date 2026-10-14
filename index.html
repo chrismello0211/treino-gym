@@ -646,7 +646,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.28.1';
+const APP_VER='11.28.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3761,8 +3761,8 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
 const NOVIDADES = {
   V: 6,     // subir este numero faz a folha aparecer de novo
   ITENS: [
-    ['\u2694\ufe0f','Duelo com até 3 pessoas',
-     'Agora dá pra chamar mais um amigo pro duelo. O placar mostra série por série, o aquecimento conta, e quem troca de exercício avisa os outros. Seus duelos ficam no perfil e no feed.'],
+    ['\u2694\ufe0f','Duelo mais completo',
+     'O placar agora mostra série por série e o aquecimento conta. Se o seu adversário trocar de exercício, você recebe um aviso com a opção de trocar também. Seus duelos ficam no perfil e no feed.'],
     ['\u2705','Série sem carga',
      'Agora dá pra marcar a série só com as repetições, sem registrar a carga.'],
     ['\ud83d\uddbc\ufe0f','Galeria no perfil',

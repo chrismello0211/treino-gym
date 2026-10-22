@@ -246,6 +246,19 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .stats3.pf-stats>div,.stats3.pf-stats>div:first-child{flex:0 1 auto;min-width:0}
 .stats3.pf-stats .k{white-space:nowrap}
 /* duelo */
+.ed-cab{padding:2px 0 8px}
+.ed-tit{font-size:20px;font-weight:800;color:var(--brand2);line-height:1.25;word-break:break-word}
+.ed-ex{border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:12px}
+.ed-col,.ed-serie{display:grid;grid-template-columns:40px minmax(0,1fr) minmax(0,1fr) 36px;gap:8px;align-items:center}
+.ed-col.sem-kg,.ed-serie.sem-kg{grid-template-columns:40px minmax(0,1fr) 36px}
+.ed-col{font-size:11px;font-weight:800;color:var(--tx3);letter-spacing:.4px;margin:0 0 6px}
+.ed-col span{text-align:center}
+.ed-serie{margin-bottom:6px}
+.ed-serie input{min-width:0;width:100%}
+.ed-rot{display:flex;align-items:center;justify-content:center;height:38px;border-radius:10px;background:var(--surf2);font-weight:800;font-size:14px}
+.ed-rot.w{color:#f5b942}
+.ed-mais{width:100%;margin-top:4px}
+.folha{max-height:min(88vh, calc(100vh - var(--kb,0px) - env(safe-area-inset-top,0px) - 12px))}
 .cron.pausado{animation:cronPausa 1.6s ease-in-out infinite}
 @keyframes cronPausa{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){.cron.pausado{animation:none;opacity:.55}}
@@ -646,7 +659,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.28.3';
+const APP_VER='11.29.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1285,6 +1298,9 @@ const NET = {
       if(!tk) throw 0;
       let passos = 60, seguidas = 0;
       while(S.fila.length && passos-- > 0){
+        // duelo passa na frente: o adversario esta esperando a serie aparecer
+        const iD = S.fila.findIndex(f=>f && typeof f.path==='string' && f.path.indexOf('/duelos/')===0 && !(f.adiado && Date.now()<f.adiado));
+        if(iD>0){ const [dd]=S.fila.splice(iD,1); S.fila.unshift(dd); }
         const it = S.fila[0];
         // item adiado por falha de rede: deixa passar a vez sem tentar
         if(it.adiado && Date.now() < it.adiado){
@@ -1601,6 +1617,24 @@ const $$ = s=>Array.from(document.querySelectorAll(s));
 // placar). No app isso nunca e' desejado: vazio e' ignorado, como ja faz a funcao h().
 (function(){ [Element.prototype, DocumentFragment.prototype].forEach(P=>{ const ap=P.append;
   P.append=function(...n){ return ap.apply(this, n.filter(x=>x!=null && x!==false)); }; }); })();
+// Abrir uma folha com um campo de texto da TELA em foco: no iPhone tocar num botao nao tira o foco, entao
+// o app achava que o teclado continuava aberto e levantava a folha pra cima do topo da tela (print do
+// Rafael). Ao abrir uma folha, o campo de fora perde o foco e a conta do teclado zera.
+function soltaTeclado(){
+  try{
+    const a=document.activeElement;
+    const texto = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+    const naFolha = texto && a.closest && a.closest('.folha');
+    if(texto && !naFolha){
+      a.blur();
+      // o Safari pode deixar a tela deslocada depois que o teclado fecha: forca medir de novo,
+      // logo apos e depois da animacao do teclado
+      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){} }, 60);
+      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){} }, 380);
+    }
+    if(!texto || !naFolha){ document.body.classList.remove('kb'); document.documentElement.style.setProperty('--kb','0px'); }
+  }catch(e){}
+}
 // tela que falha ao desenhar: aviso com o detalhe tecnico, em vez de uma tela vazia
 function telaComErro(tela, e){
   try{ console.error('tela', tela, e); }catch(_){}
@@ -1714,6 +1748,11 @@ const UI = {
   toastT:null, syncT:null, _focoAntes:null, _folhaObrigatoria:false,
   vai(tela, args, empilha=true, rolagem){
     try{ UI.fechaFolha(); }catch(e){}
+    // treino em andamento: ao sair, guarda onde estava; ao voltar (por qualquer caminho), volta pro mesmo exercicio
+    try{
+      if(UI.telaAtual==='ativo' && tela!=='ativo' && S.ativo) UI.guardaLugarAtivo();
+      if(tela==='ativo' && !rolagem && S.ativo){ const l=UI.lugarAtivo(); if(l && l.id===S.ativo.id && l.y>0) rolagem=l.y; }
+    }catch(e){}
     if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0]);
     UI.telaAtual = tela; UI.args = args||null;
     try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }
@@ -1735,6 +1774,8 @@ const UI = {
     document.body.classList.toggle('tela-ativo', tela==='ativo');
     document.body.classList.toggle('tela-boas-vindas', tela==='boasVindas');
   },
+  guardaLugarAtivo(){ try{ UI._lugarAtivo={id:S.ativo.id, y:window.scrollY||0}; localStorage.setItem('tg_ativoY', JSON.stringify(UI._lugarAtivo)); }catch(e){} },
+  lugarAtivo(){ if(UI._lugarAtivo) return UI._lugarAtivo; try{ return JSON.parse(localStorage.getItem('tg_ativoY')||'null'); }catch(e){ return null; } },
   volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false, ant[2]||0); else UI.vai('treino', null, false); },
   refaz(){
     // limpeza defensiva: remove qualquer clone de drag preso e reseta opacidades
@@ -1792,6 +1833,7 @@ const UI = {
     }catch(e){}
   },
   folha(titulo, corpoEls, acao, aoFechar, opts){
+    soltaTeclado();
     UI._focoAntes=document.activeElement instanceof HTMLElement?document.activeElement:null;
     UI._aoFechar = aoFechar || null;
     UI._folhaObrigatoria=!!(opts&&opts.obrigatoria);
@@ -2543,12 +2585,14 @@ const PICKER = {
 /* segunda folha (sobreposta) para menus dentro do picker */
 const FOLHA2 = {
   el:null, focoAntes:null,
-  abre(titulo, corpo){
+  abre(titulo, corpo, opts){
+    soltaTeclado();
     FOLHA2.fecha();
     FOLHA2.focoAntes=document.activeElement instanceof HTMLElement?document.activeElement:null;
     const tituloId='folha2-titulo';
     const fechar=h('button',{class:'btn btn-mini','aria-label':'Fechar janela',onclick:FOLHA2.fecha},'Fechar');
-    const f = h('div',{class:'folha on',style:'z-index:70;max-height:70vh',role:'dialog','aria-modal':'true','aria-labelledby':tituloId},
+    const alto=(opts&&opts.alto)? '88vh' : '70vh';
+    const f = h('div',{class:'folha on',style:'z-index:70;max-height:min('+alto+', calc(100vh - var(--kb,0px) - env(safe-area-inset-top,0px) - 12px))',role:'dialog','aria-modal':'true','aria-labelledby':tituloId},
       h('div',{class:'alca','aria-hidden':'true'}),
       h('div',{class:'folha-cab'}, h('div',{id:tituloId,class:'b800',style:'font-size:16px'},titulo), h('div',{class:'esp'}),
         fechar),
@@ -4344,37 +4388,47 @@ const EDTREINO = {
     const num = v => (v===''||v==null) ? '' : String(v);
     const render = ()=>{
       const secoes=[];
-      secoes.push(h('div',{class:'f13 mut',style:'margin-bottom:6px;line-height:1.6'},
+      const pad=v=>String(v).padStart(2,'0'), di=new Date(t.inicio);
+      // qual treino esta sendo editado: o nome no laranja do app, com o dia
+      secoes.push(h('div',{class:'ed-cab'},
+        h('div',{class:'ed-tit'}, t.titulo||'Treino'),
+        h('div',{class:'f12 mut'}, dataRelativa(t.inicio)+' · '+pad(di.getHours())+':'+pad(di.getMinutes()))));
+      secoes.push(h('div',{class:'f13 mut',style:'margin:2px 0 4px;line-height:1.6'},
         'Ajuste as séries que você fez. Série sem carga e sem repetição é descartada ao salvar.'));
       copia.forEach((e,ie)=>{
         const x=BIB.ex(e.exId);
-        secoes.push(h('div',{class:'linha',style:'margin:16px 0 4px;gap:10px'},
-          h('div',{class:'b700',style:'font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, x.n),
-          h('span',{class:'esp'}),
+        const eT = x.t==='tempo', eC = eT && x.g==='cardio', comKg = (x.t||'peso_reps')==='peso_reps';   // sem carga: sem campo de kg
+        const bloco=h('div',{class:'ed-ex'});
+        bloco.append(h('div',{class:'linha',style:'gap:10px;margin-bottom:10px'},
+          thumbEl(e.exId),
+          h('div',{class:'esp',style:'min-width:0'},
+            h('div',{class:'b700',style:'color:var(--brand2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, x.n),
+            h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g)),
           h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 11px;flex-shrink:0','aria-label':'Tirar '+x.n+' do treino',
             onclick:()=>{ copia.splice(ie,1); render(); }},'Tirar')));
+        bloco.append(h('div',{class:'ed-col'+(comKg?'':' sem-kg')}, h('span',{},'SÉRIE'), comKg? h('span',{},'KG') : null, h('span',{}, eT?'TEMPO':'REPS'), h('span',{})));
+        let nNum=0;
         (e.series||[]).forEach((s,is)=>{
-          const eT = x.t==='tempo', eC = eT && x.g==='cardio';
-          const kg=h('input',{type:'number',inputmode:'decimal','aria-label':'Carga da série '+(is+1)+' de '+x.n+' em kg',value:num(s.kg),style:'text-align:center'});
-          const rp=h('input',{type:'text',inputmode:'numeric',style:'text-align:center',
-            'aria-label':(eT?'Tempo':'Repetições')+' da série '+(is+1)+' de '+x.n,
+          const rot = s.tipo==='W' ? 'W' : String(++nNum);
+          const kg = comKg? h('input',{type:'number',inputmode:'decimal','aria-label':'Carga da série '+rot+' de '+x.n+' em kg',value:num(s.kg),placeholder:'kg',style:'text-align:center'}) : null;
+          const rp=h('input',{type:'text',inputmode:'numeric',style:'text-align:center',placeholder: eT?'0:00':'reps',
+            'aria-label':(eT?'Tempo':'Repetições')+' da série '+rot+' de '+x.n,
             value: eT ? fmtTempoCampo(s.reps) : num(s.reps)});
-          kg.oninput=()=>{ s.kg = kg.value===''? '' : Number(kg.value); };
+          if(kg) kg.oninput=()=>{ s.kg = kg.value===''? '' : Number(kg.value); };
           rp.oninput=()=>{ s.reps = eT ? parseTempoCampo(rp.value, eC)
                                        : (rp.value===''? '' : Number(rp.value)); };
-          secoes.push(h('div',{class:'linha',style:'gap:8px;margin-bottom:6px'},
-            h('span',{class:'f12 mut2',style:'width:16px;flex-shrink:0'}, String(is+1)),
-            eT? null : kg,
-            eT? null : h('span',{class:'f12 mut2',style:'flex-shrink:0'},'kg'),
-            rp, h('span',{class:'f12 mut2',style:'flex-shrink:0'}, eT?'min:seg':'reps'),
-            h('button',{class:'btn btn-mini',style:'width:34px;padding:6px;flex-shrink:0','aria-label':'Remover série '+(is+1)+' de '+x.n,
+          bloco.append(h('div',{class:'ed-serie'+(comKg?'':' sem-kg')},
+            h('span',{class:'ed-rot'+(s.tipo==='W'?' w':'')}, rot),
+            kg, rp,
+            h('button',{class:'btn btn-mini',style:'width:36px;padding:6px','aria-label':'Remover série '+rot+' de '+x.n,
               onclick:()=>{ e.series.splice(is,1); render(); }},'\u2715')));
         });
-        secoes.push(h('button',{class:'menu-op',style:'margin-bottom:2px',onclick:()=>{
+        bloco.append(h('button',{class:'btn btn-mini ed-mais',onclick:()=>{
           const u=(e.series||[])[e.series.length-1];
           e.series.push({tipo:'N', kg:u? u.kg:'', reps:u? u.reps:'', ok:true});
           render();
-        }},'+ série'));
+        }},'＋ Série'));
+        secoes.push(bloco);
       });
       secoes.push(h('div',{style:'height:10px'}));
       secoes.push(h('button',{class:'menu-op',style:'margin-bottom:6px',onclick:()=>{
@@ -4394,7 +4448,10 @@ const EDTREINO = {
       }},'+ exercício'));
       secoes.push(h('div',{style:'height:14px'}));
       secoes.push(h('button',{class:'btn btn-p',onclick:()=>EDTREINO.salva(t, copia)},'Salvar alterações'));
-      FOLHA2.abre('Editar treino', secoes);
+      // redesenhar (tirar/acrescentar serie) nao volta a lista pro topo
+      const y0 = FOLHA2.el ? (FOLHA2.el.querySelector('.folha-corpo')||{}).scrollTop||0 : 0;
+      FOLHA2.abre('Editar treino', secoes, {alto:true});
+      if(y0){ const c=FOLHA2.el && FOLHA2.el.querySelector('.folha-corpo'); if(c) c.scrollTop=y0; }
     };
     render();
   },
@@ -4709,6 +4766,11 @@ const DUELO = {
   },
   baseDe(d, uid, k){ const b=((((d.j||{})[uid]||{}).b)||{})[k]; return Number(b)>0? Number(b) : null; },
   foraDe(d, uid, k){ return !!((((d.j||{})[uid]||{}).fora)||{})[k]; },
+  // troca no meio do exercicio: vira exercicio do placar quando 2+ pessoas fazem (alguem "trocou tambem")
+  quemFez(d, k){ return DUELO.noPlacar(d).filter(u=>DUELO.setsDe(d,u,k).length); },
+  contaChave(d, k){ const q=(d.ex||{})[k]||{}; return !q.troca || DUELO.quemFez(d,k).length>=2; },
+  // entra na ordem compartilhada: exercicio da sala, ou troca que deixou de ser so de uma pessoa
+  ordenavel(d, k){ const q=(d.ex||{})[k]; if(!q) return false; if(!q.troca) return true; const eu=DUELO.meu(); return q.por!==eu || DUELO.quemFez(d,k).some(u=>u!==eu); },
   // nome de um exercicio, mesmo criado por outra pessoa
   nomeEx(d, uid, k){
     const id=DUELO.exDe(d,uid,k), x=BIB.porId[id];
@@ -4724,7 +4786,7 @@ const DUELO = {
   superacao(d, uid, final){
     const idx={}; let soma=0, n=0, feitas=0, plan=0;
     DUELO.chaves(d).forEach(k=>{
-      if(((d.ex||{})[k]||{}).troca) return;                 // pedaco de troca de alguem: conta dentro do original
+      if(!DUELO.contaChave(d,k) || (d.ex[k].troca && !DUELO.setsDe(d,uid,k).length)) return;   // troca: so com 2+, e so pra quem fez
       const p=DUELO.planejadas(d,k), ss=DUELO.setsDe(d,uid,k), base=DUELO.baseDe(d,uid,k);
       plan+=p; feitas+=Math.min(ss.length, p);
       const i=DUELO.indice(DUELO.media(DUELO.valores(ss, DUELO.exDe(d,uid,k), base)), base);
@@ -4752,9 +4814,10 @@ const DUELO = {
     const P=DUELO.noPlacar(d), por={}, pts={}, perf={};
     P.forEach(u=>pts[u]=0);
     DUELO.chaves(d).forEach(k=>{
-      if(((d.ex||{})[k]||{}).troca) return;
-      // so compara quem fez o MESMO exercicio
-      const grupos={}; P.forEach(u=>{ if(DUELO.foraDe(d,u,k)) return; const e=DUELO.exDe(d,u,k); (grupos[e]=grupos[e]||[]).push(u); });
+      if(!DUELO.contaChave(d,k)) return;
+      const ehTroca=!!d.ex[k].troca;
+      // so compara quem fez o MESMO exercicio (numa troca compartilhada, so quem fez)
+      const grupos={}; P.forEach(u=>{ if(DUELO.foraDe(d,u,k) || (ehTroca && !DUELO.setsDe(d,u,k).length)) return; const e=DUELO.exDe(d,u,k); (grupos[e]=grupos[e]||[]).push(u); });
       const sala=((d.ex||{})[k]||{}).exId;
       const alvo=(grupos[sala] && grupos[sala].length>1)? sala : Object.keys(grupos).sort((a,b)=>grupos[b].length-grupos[a].length)[0];
       const G=grupos[alvo]||[];
@@ -4783,7 +4846,7 @@ const DUELO = {
     else {
       const sp={}; P.forEach(u=>{ sp[u]=DUELO.superacao(d,u,true); pts[u]=sp[u].nota; });
       DUELO.chaves(d).forEach(k=>{
-        if(((d.ex||{})[k]||{}).troca) return;
+        if(!DUELO.contaChave(d,k)) return;
         const c=P.filter(u=>sp[u].idx[k]!=null).sort((x,y)=>sp[y].idx[k]-sp[x].idx[k]);
         if(c.length<2){ por[k]=null; return; }
         por[k]=(sp[c[0]].idx[k]-sp[c[1]].idx[k]<DUELO.EMPATE)? '=' : c[0];
@@ -4922,7 +4985,7 @@ const DUELO = {
     const si=e.series.indexOf(s); if(si<0) return;
     const v=s.ok? {kg:(s.kg===''||s.kg==null? '' : Number(s.kg)||0), reps:Number(s.reps)||0, tipo:s.tipo||'N', t:agora()} : null;
     NET.agenda(DUELO.caminho('/s/'+e._dk+'/'+si), v);
-    NET.agenda(DUELO.caminho('/at'), agora());
+    if(agora()-(DUELO._atT||0)>15000){ DUELO._atT=agora(); NET.agenda(DUELO.caminho('/at'), agora()); }   // 'at' ninguem le: menos envio, serie chega antes
     const d=DUELO.dados();
     if(d){ d.j=d.j||{}; const j=d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}; j.s=j.s||{}; j.s[e._dk]=j.s[e._dk]||{}; if(v) j.s[e._dk][si]=v; else delete j.s[e._dk][si]; }
     DUELO.desenha();
@@ -4934,25 +4997,52 @@ const DUELO = {
     const A=S.ativo, eu=DUELO.meu(); A._dkVistos=A._dkVistos||{}; A._dkFora=A._dkFora||{};
     let mudou=false;
     const locais=new Set(A.ex.map(e=>e._dk).filter(Boolean));
+    // 0) alguem reordenou a sala (mudou o 'o' dos exercicios): a minha ficha segue a mesma ordem.
+    //    So os exercicios da sala que eu tenho trocam de lugar; o resto fica onde esta.
+    const salaKs=DUELO.chaves(d).filter(k=>DUELO.ordenavel(d,k));
+    if(A._salaKs){
+      const a0=A._salaKs.filter(k=>salaKs.includes(k)), a1=salaKs.filter(k=>A._salaKs.includes(k));
+      if(JSON.stringify(a0)!==JSON.stringify(a1)){
+        const pos=new Map(salaKs.map((k,i)=>[k,i])), idx=[];
+        A.ex.forEach((e,i)=>{ if(e._dk && pos.has(e._dk)) idx.push(i); });
+        const antes=idx.map(i=>A.ex[i]._dk).join(',');
+        const ord=idx.map(i=>A.ex[i]).sort((x,y)=>pos.get(x._dk)-pos.get(y._dk));
+        idx.forEach((i,jj)=>{ A.ex[i]=ord[jj]; });
+        if(antes!==idx.map(i=>A.ex[i]._dk).join(',')){ mudou=true; DUELO._reordenado=true; }
+        A._ordemKs=A.ex.map(e=>e._dk).filter(k=>k && DUELO.ordenavel(d,k));
+      }
+    }
+    A._salaKs=salaKs;
     // 1) chave que eu ja tive e sumiu da ficha: eu removi. Nao volta, e os outros ficam sabendo.
     Object.keys(A._dkVistos).forEach(k=>{
       if(!locais.has(k) && !A._dkFora[k]){ A._dkFora[k]=1; NET.agenda(DUELO.caminho('/fora/'+k), 1); mudou=true; }
     });
     // 2) exercicio novo na minha ficha
+    const juntar=[];
     A.ex.forEach((e,i)=>{
       if(e._dk) return;
       const ks=DUELO.chaves(d);
-      // troca no meio do exercicio: se alguem ja trocou o mesmo pelo mesmo, compartilha a chave
+      // troca no meio do exercicio: se alguem ja trocou o mesmo pelo mesmo, compartilha a chave.
+      // Adicionado a mao: usa o mesmo exercicio da sala, inclusive a TROCA de outra pessoa (bug da Lais:
+      // ela adicionou a mao o exercicio que o Chris trocou no meio, e um nao via as series do outro).
       const livre = e._dkDe
         ? ks.find(k=>!locais.has(k) && d.ex[k].troca===e._dkDe && d.ex[k].exId===e.exId)
-        : ks.find(k=>!locais.has(k) && !A._dkFora[k] && !d.ex[k].troca && d.ex[k].exId===e.exId);
+        : (ks.find(k=>!locais.has(k) && !A._dkFora[k] && !d.ex[k].troca && d.ex[k].exId===e.exId)
+           || ks.find(k=>!locais.has(k) && !A._dkFora[k] && d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId));
       if(livre){ e._dk=livre; locais.add(livre); mudou=true; return; }
+      if(e._dkDe){
+        // troquei no meio por um exercicio que ja esta na minha ficha (veio de outra pessoa) e eu ainda
+        // nao fiz: junta os dois, em vez de ficar com ele duplicado
+        const gemeo=A.ex.find(q=>q!==e && q._dk && q.exId===e.exId && d.ex[q._dk] && !d.ex[q._dk].troca && !juntar.includes(q) && !(q.series||[]).some(s=>s.ok));
+        if(gemeo){ e._dk=gemeo._dk; delete e._dkDe; juntar.push(gemeo); mudou=true; return; }
+      }
       const k='k'+uid(); e._dk=k; locais.add(k);
       const x=BIB.ex(e.exId)||{};
       const q=DUELO.exSala(x, e.exId, agora()+i, e.series, e.descanso);
       if(e._dkDe) q.troca=e._dkDe;
       d.ex=d.ex||{}; d.ex[k]=q; NET.agenda('/duelos/'+d.id+'/ex/'+k, q); mudou=true;
     });
+    juntar.forEach(g=>{ const ix=A.ex.indexOf(g); if(ix>=0) A.ex.splice(ix,1); });
     // 3) exercicio da sala que eu nao tenho: entra (menos o que eu removi e a troca dos outros)
     DUELO.chaves(d).forEach(k=>{
       if(locais.has(k) || A._dkFora[k]) return;
@@ -4961,6 +5051,34 @@ const DUELO = {
       A.ex.push(DUELO.novoEx(q, k)); locais.add(k); mudou=true;
     });
     A.ex.forEach(e=>{ if(e._dk && !A._dkVistos[e._dk]){ A._dkVistos[e._dk]=1; mudou=true; } });
+    // 4) series: quem acrescenta serie num exercicio, acrescenta pros outros tambem (remover nao se
+    //    propaga: senao a serie que alguem apagou voltaria sozinha)
+    A._nSala=A._nSala||{};
+    A.ex.forEach(e=>{
+      const k=e._dk, q=k && d.ex[k]; if(!q) return;
+      const nSala=Number(q.n)||0, visto=A._nSala[k];
+      if(visto!==undefined && nSala>visto){
+        const tp=Array.isArray(q.tp)? q.tp : (q.tp? Object.values(q.tp) : []);
+        for(let i=visto;i<nSala;i++){ e.series.push({tipo:tp[i]||'N', kg:'', reps:'', ok:false}); mudou=true; }
+      }
+      if((e.series||[]).length>nSala){
+        q.n=e.series.length; q.tp=e.series.map(s=>(s&&s.tipo)||'N');
+        NET.agenda('/duelos/'+d.id+'/ex/'+k+'/n', q.n); NET.agenda('/duelos/'+d.id+'/ex/'+k+'/tp', q.tp);
+      }
+      A._nSala[k]=Math.max(Number(q.n)||0, visto||0);
+    });
+    // 5) eu reordenei a ficha: a sala passa a seguir a minha ordem (os outros recebem)
+    const meus=A.ex.map(e=>e._dk).filter(k=>k && DUELO.ordenavel(d,k));
+    if(A._ordemKs){
+      const b0=A._ordemKs.filter(k=>meus.includes(k)), b1=meus.filter(k=>A._ordemKs.includes(k));
+      if(JSON.stringify(b0)!==JSON.stringify(b1)){
+        const base=agora();
+        meus.forEach((k,i)=>{ d.ex[k].o=base+i; NET.agenda('/duelos/'+d.id+'/ex/'+k+'/o', base+i); });
+        A._salaKs=DUELO.chaves(d).filter(k=>DUELO.ordenavel(d,k));
+        mudou=true;
+      }
+    }
+    A._ordemKs=meus;
     if(mudou){ salva('ativo'); DUELO.publica(); }
     return mudou;
   },
@@ -5084,7 +5202,9 @@ const DUELO = {
       const eu=DUELO.meu();
       if(d.status==='ativo' && d.a===eu && !DUELO.estadoDe(d,eu) && !DUELO.terminou(d) && UI.telaAtual==='duelo' && !S.ativo){ DUELO.comeca(d); return; }
       if(DUELO.emDuelo() && S.ativo.duelo===d.id){
-        if(DUELO.reconcilia()){
+        const mexeu=DUELO.reconcilia();
+        if(DUELO._reordenado){ DUELO._reordenado=false; try{ UI.toast('A ordem dos exercícios do duelo foi atualizada'); }catch(_){} }
+        if(mexeu){
           const f=document.activeElement, digitando=f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName);
           if(UI.telaAtual==='ativo'){ if(digitando) DUELO._pend=true; else UI.refaz(); }
         }
@@ -5326,8 +5446,8 @@ const DUELO = {
     if(!fim && DUELO.emDuelo() && S.ativo.duelo===d.id) m.append(h('button',{class:'btn btn-p',onclick:()=>UI.vai('ativo',null,false)},'Voltar ao treino'));
     // exercicio a exercicio, todas as series
     const lista=h('div',{class:'card'});
-    DUELO.chaves(d).filter(k=>!d.ex[k].troca).forEach(k=>{
-      const w=r.por[k], nomeSala=(BIB.porId[d.ex[k].exId]||{}).n || d.ex[k].nm || 'Exercício';
+    DUELO.chaves(d).filter(k=>!d.ex[k].troca || DUELO.quemFez(d,k).length).forEach(k=>{
+      const w=r.por[k], nomeSala=((BIB.porId[d.ex[k].exId]||{}).n || d.ex[k].nm || 'Exercício')+(d.ex[k].troca? ' · troca' : '');
       const linhas=quem.map(u=>{
         const ss=DUELO.setsDe(d,u,k), ex=DUELO.exDe(d,u,k), fora=DUELO.foraDe(d,u,k);
         return h('div',{class:'duelo-linha2'+(w===u?' on':'')},
@@ -7806,6 +7926,8 @@ function recuperaViewport(forcado){
 })();
 // gatilhos de recuperacao: fechar teclado, voltar pro app, girar a tela
 document.addEventListener('focusout', ()=>setTimeout(()=>{ if(!temFocoDeTexto()) recuperaViewport(); }, 150));
+// o app fechado no meio do treino tambem volta pro mesmo exercicio
+window.addEventListener('scroll', ()=>{ if(UI.telaAtual==='ativo' && S.ativo){ clearTimeout(UI._lugarT); UI._lugarT=setTimeout(()=>UI.guardaLugarAtivo(), 400); } }, {passive:true});
 window.addEventListener('orientationchange', ()=>setTimeout(()=>recuperaViewport(true), 300));
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>recuperaViewport(true), 150); });
 window.addEventListener('pageshow', ()=>setTimeout(()=>recuperaViewport(true), 100));

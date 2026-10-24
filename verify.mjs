@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.29.0';
+const EXPECTED_VERSION = '11.29.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -212,6 +212,8 @@ check(indexHtml.includes('decorridoMs(t){') && indexHtml.includes('fim=agoraReal
 check(indexHtml.includes('function soltaTeclado(') && (indexHtml.match(/soltaTeclado\(\);/g)||[]).length >= 2, 'folhas soltam o teclado de fora ao abrir', 'sem isso a folha pode abrir levantada alem do topo da tela');
 check(indexHtml.includes('UI.guardaLugarAtivo()') && indexHtml.includes("localStorage.getItem('tg_ativoY')"), 'treino em andamento volta pro mesmo exercicio', 'sem isso voltar ao treino abre no topo');
 check(indexHtml.includes('contaChave(d, k)') && indexHtml.includes("d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId") && indexHtml.includes('A._salaKs'), 'duelo: troca compartilhada, ordem e series sincronizadas', 'exercicio adicionado a mao nao se ligava a troca do outro; ordem nao se propagava');
+check(indexHtml.includes('if(DUELO.digitando()) DUELO.agendaRefaz(); else DUELO.refazTela();') && !indexHtml.includes("if(digitando) DUELO._pend=true; else UI.refaz();"), 'duelo: tela atualiza sozinha (so espera quem digita de verdade)', 'a tela so atualizava depois de abrir e fechar outra tela');
+check(indexHtml.includes('ehDuplicata(d, k)') && indexHtml.includes('DUELO.mapaDe(d,u,k)') && indexHtml.includes('A._dkJunta[k]=c'), 'duelo: mesmo exercicio em duas chaves converge e soma as series', 'series de quem adicionou de novo nao apareciam pros outros');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

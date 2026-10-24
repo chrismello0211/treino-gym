@@ -659,7 +659,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.29.0';
+const APP_VER='11.29.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4760,11 +4760,30 @@ const DUELO = {
   chaves(d){ const ex=(d&&d.ex)||{}; return Object.keys(ex).sort((a,b)=>((ex[a].o||0)-(ex[b].o||0)) || (a<b?-1:1)); },
   planejadas(d, k){ return Math.max(1, Number(((d.ex||{})[k]||{}).n)||3); },
   exDe(d, uid, k){ return ((((d.j||{})[uid]||{}).x)||{})[k] || ((d.ex||{})[k]||{}).exId; },
-  setsDe(d, uid, k){
+  setsDeBruto(d, uid, k){
     const o=((((d.j||{})[uid]||{}).s)||{})[k]||{};
     return Object.keys(o).sort((a,b)=>Number(a)-Number(b)).map(i=>o[i]).filter(Boolean);
   },
-  baseDe(d, uid, k){ const b=((((d.j||{})[uid]||{}).b)||{})[k]; return Number(b)>0? Number(b) : null; },
+  // O mesmo exercicio pode ir parar em duas chaves: alguem adiciona de novo enquanto a tela atrasava, remove e
+  // adiciona, ou duas pessoas adicionam juntas. A canonica e' a menor chave; a outra e' "duplicata" quando
+  // ninguem fez series nas duas (fazer o mesmo exercicio 2x de proposito continua valendo como 2 exercicios).
+  canonica(d, k){ const q=(d.ex||{})[k]; if(!q || q.troca) return k; return DUELO.chaves(d).filter(x=>!d.ex[x].troca && d.ex[x].exId===q.exId).sort()[0] || k; },
+  ehDuplicata(d, k){ const c=DUELO.canonica(d,k); if(c===k) return false; return !DUELO.jog(d).some(u=>DUELO.setsDeBruto(d,u,c).length && DUELO.setsDeBruto(d,u,k).length); },
+  // onde estao de fato as series da pessoa nesse exercicio: na chave, ou na duplicata quando a chave esta vazia
+  chaveDe(d, uid, k){
+    if(DUELO.setsDeBruto(d,uid,k).length) return k;
+    const q=(d.ex||{})[k]; if(!q || q.troca || DUELO.canonica(d,k)!==k) return k;
+    return DUELO.chaves(d).find(x=>x!==k && !d.ex[x].troca && d.ex[x].exId===q.exId && DUELO.ehDuplicata(d,x) && DUELO.setsDeBruto(d,uid,x).length) || k;
+  },
+  setsDe(d, uid, k){ return DUELO.setsDeBruto(d, uid, DUELO.chaveDe(d, uid, k)); },
+  mapaDe(d, uid, k){ return ((((d.j||{})[uid]||{}).s)||{})[DUELO.chaveDe(d,uid,k)]||{}; },
+  baseDe(d, uid, k){ const bb=(((d.j||{})[uid]||{}).b)||{}; const b=bb[k]!=null? bb[k] : bb[DUELO.chaveDe(d,uid,k)]; return Number(b)>0? Number(b) : null; },
+  // leva as MINHAS series de uma chave pra outra (cada um so escreve as proprias)
+  moveSeries(d, de, para){
+    const eu=DUELO.meu(), s=((((d.j||{})[eu]||{}).s)||{})[de]||{};
+    Object.entries(s).forEach(([i,v])=>{ if(!v) return; NET.agenda(DUELO.caminho('/s/'+para+'/'+i), v); NET.agenda(DUELO.caminho('/s/'+de+'/'+i), null); });
+    if(d.j && d.j[eu]){ d.j[eu].s=d.j[eu].s||{}; d.j[eu].s[para]=Object.assign({}, d.j[eu].s[para]||{}, s); delete d.j[eu].s[de]; }
+  },
   foraDe(d, uid, k){ return !!((((d.j||{})[uid]||{}).fora)||{})[k]; },
   // troca no meio do exercicio: vira exercicio do placar quando 2+ pessoas fazem (alguem "trocou tambem")
   quemFez(d, k){ return DUELO.noPlacar(d).filter(u=>DUELO.setsDe(d,u,k).length); },
@@ -4786,7 +4805,7 @@ const DUELO = {
   superacao(d, uid, final){
     const idx={}; let soma=0, n=0, feitas=0, plan=0;
     DUELO.chaves(d).forEach(k=>{
-      if(!DUELO.contaChave(d,k) || (d.ex[k].troca && !DUELO.setsDe(d,uid,k).length)) return;   // troca: so com 2+, e so pra quem fez
+      if(!DUELO.contaChave(d,k) || DUELO.ehDuplicata(d,k) || (d.ex[k].troca && !DUELO.setsDe(d,uid,k).length)) return;   // troca: so com 2+, e so pra quem fez
       const p=DUELO.planejadas(d,k), ss=DUELO.setsDe(d,uid,k), base=DUELO.baseDe(d,uid,k);
       plan+=p; feitas+=Math.min(ss.length, p);
       const i=DUELO.indice(DUELO.media(DUELO.valores(ss, DUELO.exDe(d,uid,k), base)), base);
@@ -4814,7 +4833,7 @@ const DUELO = {
     const P=DUELO.noPlacar(d), por={}, pts={}, perf={};
     P.forEach(u=>pts[u]=0);
     DUELO.chaves(d).forEach(k=>{
-      if(!DUELO.contaChave(d,k)) return;
+      if(!DUELO.contaChave(d,k) || DUELO.ehDuplicata(d,k)) return;
       const ehTroca=!!d.ex[k].troca;
       // so compara quem fez o MESMO exercicio (numa troca compartilhada, so quem fez)
       const grupos={}; P.forEach(u=>{ if(DUELO.foraDe(d,u,k) || (ehTroca && !DUELO.setsDe(d,u,k).length)) return; const e=DUELO.exDe(d,u,k); (grupos[e]=grupos[e]||[]).push(u); });
@@ -4846,7 +4865,7 @@ const DUELO = {
     else {
       const sp={}; P.forEach(u=>{ sp[u]=DUELO.superacao(d,u,true); pts[u]=sp[u].nota; });
       DUELO.chaves(d).forEach(k=>{
-        if(!DUELO.contaChave(d,k)) return;
+        if(!DUELO.contaChave(d,k) || DUELO.ehDuplicata(d,k)) return;
         const c=P.filter(u=>sp[u].idx[k]!=null).sort((x,y)=>sp[y].idx[k]-sp[x].idx[k]);
         if(c.length<2){ por[k]=null; return; }
         por[k]=(sp[c[0]].idx[k]-sp[c[1]].idx[k]<DUELO.EMPATE)? '=' : c[0];
@@ -4936,7 +4955,7 @@ const DUELO = {
   comeca(d){
     if(S.ativo && S.ativo.duelo===d.id){ UI.pilha=[]; UI.vai('ativo',null,false); return true; }
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes do duelo'); return false; }
-    const ks=DUELO.chaves(d).filter(k=>!((d.ex[k]||{}).troca));
+    const ks=DUELO.chaves(d).filter(k=>!((d.ex[k]||{}).troca) && !DUELO.ehDuplicata(d,k));
     ks.forEach(k=>DUELO.garanteEx(d.ex[k].exId, d.ex[k].cx));
     S.ativo={ id:uid(), rid:null, titulo:'⚔️ '+(d.titulo||'Duelo'), inicio:agora(), duelo:d.id, _dkVistos:{}, _dkFora:{},
       ex: ks.map(k=>DUELO.novoEx(d.ex[k], k)) };
@@ -5015,7 +5034,7 @@ const DUELO = {
     A._salaKs=salaKs;
     // 1) chave que eu ja tive e sumiu da ficha: eu removi. Nao volta, e os outros ficam sabendo.
     Object.keys(A._dkVistos).forEach(k=>{
-      if(!locais.has(k) && !A._dkFora[k]){ A._dkFora[k]=1; NET.agenda(DUELO.caminho('/fora/'+k), 1); mudou=true; }
+      if(!locais.has(k) && !A._dkFora[k] && !(A._dkJunta||{})[k]){ A._dkFora[k]=1; NET.agenda(DUELO.caminho('/fora/'+k), 1); mudou=true; }
     });
     // 2) exercicio novo na minha ficha
     const juntar=[];
@@ -5028,8 +5047,17 @@ const DUELO = {
       const livre = e._dkDe
         ? ks.find(k=>!locais.has(k) && d.ex[k].troca===e._dkDe && d.ex[k].exId===e.exId)
         : (ks.find(k=>!locais.has(k) && !A._dkFora[k] && !d.ex[k].troca && d.ex[k].exId===e.exId)
-           || ks.find(k=>!locais.has(k) && !A._dkFora[k] && d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId));
-      if(livre){ e._dk=livre; locais.add(livre); mudou=true; return; }
+           || ks.find(k=>!locais.has(k) && !A._dkFora[k] && d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId)
+           || ks.find(k=>!locais.has(k) && A._dkFora[k] && !d.ex[k].troca && d.ex[k].exId===e.exId));   // removi e adicionei de novo
+      if(livre){
+        if(A._dkFora[livre]){ delete A._dkFora[livre]; NET.agenda(DUELO.caminho('/fora/'+livre), null); }
+        e._dk=livre; locais.add(livre); mudou=true; return;
+      }
+      if(!e._dkDe){
+        // adicionei a mao um exercicio que ja tinha chegado do duelo (a tela ainda nao mostrava): e' o mesmo
+        const igual=A.ex.find(q=>q!==e && q._dk && q.exId===e.exId && d.ex[q._dk] && !d.ex[q._dk].troca && d.ex[q._dk].por!==eu && !juntar.includes(q) && !(q.series||[]).some(s=>s.ok));
+        if(igual){ e._dk=igual._dk; juntar.push(igual); mudou=true; return; }
+      }
       if(e._dkDe){
         // troquei no meio por um exercicio que ja esta na minha ficha (veio de outra pessoa) e eu ainda
         // nao fiz: junta os dois, em vez de ficar com ele duplicado
@@ -5043,9 +5071,24 @@ const DUELO = {
       d.ex=d.ex||{}; d.ex[k]=q; NET.agenda('/duelos/'+d.id+'/ex/'+k, q); mudou=true;
     });
     juntar.forEach(g=>{ const ix=A.ex.indexOf(g); if(ix>=0) A.ex.splice(ix,1); });
+    // 2b) o mesmo exercicio ja esta em duas chaves: a minha ficha converge pra canonica, com as minhas series
+    A._dkJunta=A._dkJunta||{};
+    A.ex.slice().forEach(e=>{
+      const k=e._dk, q=k && d.ex[k]; if(!q || q.troca || !DUELO.ehDuplicata(d,k)) return;
+      const c=DUELO.canonica(d,k), noC=A.ex.find(x=>x!==e && x._dk===c);
+      const fiz=(e.series||[]).some(s=>s.ok), fizC=!!(noC && (noC.series||[]).some(s=>s.ok));
+      if(noC && fiz && fizC) return;                                  // fiz nas duas: sao dois exercicios mesmo
+      if(noC && !fiz){ A.ex.splice(A.ex.indexOf(e),1); }              // a duplicata esta vazia: sai
+      else {
+        if(noC) A.ex.splice(A.ex.indexOf(noC),1);                     // a canonica esta vazia: sai, e esta vira ela
+        if(fiz) DUELO.moveSeries(d, k, c);
+        e._dk=c;
+      }
+      A._dkJunta[k]=c; locais.delete(k); locais.add(c); mudou=true;
+    });
     // 3) exercicio da sala que eu nao tenho: entra (menos o que eu removi e a troca dos outros)
     DUELO.chaves(d).forEach(k=>{
-      if(locais.has(k) || A._dkFora[k]) return;
+      if(locais.has(k) || A._dkFora[k] || A._dkJunta[k] || DUELO.ehDuplicata(d,k)) return;
       const q=d.ex[k]; if(q.troca && q.por!==eu) return;
       DUELO.garanteEx(q.exId, q.cx);
       A.ex.push(DUELO.novoEx(q, k)); locais.add(k); mudou=true;
@@ -5155,7 +5198,7 @@ const DUELO = {
     DUELO.cur={id, dados: inicial||null};
     DUELO.puxa();
     DUELO.abreStream(id);
-    DUELO._poll=setInterval(()=>{ if(!document.hidden) DUELO.puxa(); }, 8000);   // reserva, se o streaming cair
+    DUELO._poll=setInterval(()=>{ if(!document.hidden) DUELO.puxa(); }, 4000);   // reserva, se o streaming cair
   },
   async abreStream(id){
     try{
@@ -5204,9 +5247,10 @@ const DUELO = {
       if(DUELO.emDuelo() && S.ativo.duelo===d.id){
         const mexeu=DUELO.reconcilia();
         if(DUELO._reordenado){ DUELO._reordenado=false; try{ UI.toast('A ordem dos exercícios do duelo foi atualizada'); }catch(_){} }
-        if(mexeu){
-          const f=document.activeElement, digitando=f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName);
-          if(UI.telaAtual==='ativo'){ if(digitando) DUELO._pend=true; else UI.refaz(); }
+        if(mexeu && UI.telaAtual==='ativo'){
+          // so espera quem esta digitando DE VERDADE (tecla nos ultimos 2,5 s). No iPhone o campo continua com
+          // foco depois de tocar num botao, e a tela so atualizava abrindo e fechando outra tela.
+          if(DUELO.digitando()) DUELO.agendaRefaz(); else DUELO.refazTela();
         }
         DUELO.publica();
       }
@@ -5215,7 +5259,14 @@ const DUELO = {
       if(UI.telaAtual==='duelo') UI.refaz();
     }catch(e){ try{ console.error('duelo', e); }catch(_){} }
   },
-  aoSairDoCampo(){ if(DUELO._pend && UI.telaAtual==='ativo'){ DUELO._pend=false; setTimeout(()=>{ const f=document.activeElement; if(!(f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName))) UI.refaz(); else DUELO._pend=true; }, 120); } },
+  digitando(){ const f=document.activeElement; return !!(f && /^(INPUT|TEXTAREA)$/.test(f.tagName) && Date.now()-(DUELO._tecla||0)<2500); },
+  refazTela(){ DUELO._pend=false; clearTimeout(DUELO._pendT); if(UI.telaAtual==='ativo') UI.refaz(); },
+  agendaRefaz(){
+    DUELO._pend=true; clearTimeout(DUELO._pendT);
+    const ve=()=>{ if(!DUELO._pend) return; if(DUELO.digitando()) DUELO._pendT=setTimeout(ve, 700); else DUELO.refazTela(); };
+    DUELO._pendT=setTimeout(ve, 700);
+  },
+  aoSairDoCampo(){ if(DUELO._pend && UI.telaAtual==='ativo') setTimeout(()=>{ if(DUELO._pend && !DUELO.digitando()) DUELO.refazTela(); }, 120); },
 
   /* ---------------- convites e historico ---------------- */
   async consulta(campo){
@@ -5261,7 +5312,7 @@ const DUELO = {
     const d=DUELO.dados(); const el=h('div',{class:'card duelo-barra', id:'duelo-barra'});
     if(!d || !DUELO.emDuelo() || d.id!==S.ativo.duelo){ el.append(h('div',{class:'f13 mut'},'⚔️ Conectando ao duelo…')); return el; }
     const eu=DUELO.meu(), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao, lid=DUELO.lider(d);
-    const os=DUELO.outros(d), ks=DUELO.chaves(d).filter(k=>!d.ex[k].troca);
+    const os=DUELO.outros(d), ks=DUELO.chaves(d).filter(k=>!d.ex[k].troca && !DUELO.ehDuplicata(d,k));
     const txt = lid===eu? 'Você está na frente' : (lid? DUELO.nome(d,lid)+' está na frente' : 'Empatados até aqui');
     el.append(
       h('div',{class:'linha',style:'gap:10px'},
@@ -5305,7 +5356,7 @@ const DUELO = {
     // tabela: linha da ficha x pessoa (W com W, serie 1 com serie 1)
     const quem=[eu].concat(os), lin=[];
     const colunas=quem.map(u=>({u, ex: u===eu? e.exId : DUELO.exDe(d,u,k),
-      m: u===eu? Object.fromEntries((e.series||[]).map((s,i)=>[i,s]).filter(([i,s])=>s && s.ok)) : (((((d.j||{})[u]||{}).s)||{})[k]||{})}));
+      m: u===eu? Object.fromEntries((e.series||[]).map((s,i)=>[i,s]).filter(([i,s])=>s && s.ok)) : DUELO.mapaDe(d,u,k)}));
     const idx=[...new Set(colunas.flatMap(c=>Object.keys(c.m).map(Number)))].sort((a,b)=>a-b);
     const res= d.modo==='mano'? DUELO.mano(d) : null, w= res? res.por[k] : null;
     const igual=(a,b)=>a && b && String(a.kg)===String(b.kg) && Number(a.reps)===Number(b.reps) && (a.tipo||'N')===(b.tipo||'N');
@@ -5446,7 +5497,7 @@ const DUELO = {
     if(!fim && DUELO.emDuelo() && S.ativo.duelo===d.id) m.append(h('button',{class:'btn btn-p',onclick:()=>UI.vai('ativo',null,false)},'Voltar ao treino'));
     // exercicio a exercicio, todas as series
     const lista=h('div',{class:'card'});
-    DUELO.chaves(d).filter(k=>!d.ex[k].troca || DUELO.quemFez(d,k).length).forEach(k=>{
+    DUELO.chaves(d).filter(k=>(!d.ex[k].troca || DUELO.quemFez(d,k).length) && !DUELO.ehDuplicata(d,k)).forEach(k=>{
       const w=r.por[k], nomeSala=((BIB.porId[d.ex[k].exId]||{}).n || d.ex[k].nm || 'Exercício')+(d.ex[k].troca? ' · troca' : '');
       const linhas=quem.map(u=>{
         const ss=DUELO.setsDe(d,u,k), ex=DUELO.exDe(d,u,k), fora=DUELO.foraDe(d,u,k);
@@ -5516,6 +5567,10 @@ document.addEventListener('visibilitychange', ()=>{
   DUELO.verConvites();
 });
 document.addEventListener('focusout', ()=>DUELO.aoSairDoCampo());
+document.addEventListener('input', ()=>{ DUELO._tecla=Date.now(); }, true);
+document.addEventListener('keydown', ()=>{ DUELO._tecla=Date.now(); }, true);
+// tocar num campo tambem conta: o teclado abre e a primeira tecla ainda nao veio
+document.addEventListener('focusin', ev=>{ if(ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) DUELO._tecla=Date.now(); }, true);
 
 (function(){
   // troca com series ja feitas divide o exercicio em dois: o pedaco novo e' "troca" do

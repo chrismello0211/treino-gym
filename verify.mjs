@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.29.1';
+const EXPECTED_VERSION = '11.30.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -214,6 +214,9 @@ check(indexHtml.includes('UI.guardaLugarAtivo()') && indexHtml.includes("localSt
 check(indexHtml.includes('contaChave(d, k)') && indexHtml.includes("d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId") && indexHtml.includes('A._salaKs'), 'duelo: troca compartilhada, ordem e series sincronizadas', 'exercicio adicionado a mao nao se ligava a troca do outro; ordem nao se propagava');
 check(indexHtml.includes('if(DUELO.digitando()) DUELO.agendaRefaz(); else DUELO.refazTela();') && !indexHtml.includes("if(digitando) DUELO._pend=true; else UI.refaz();"), 'duelo: tela atualiza sozinha (so espera quem digita de verdade)', 'a tela so atualizava depois de abrir e fechar outra tela');
 check(indexHtml.includes('ehDuplicata(d, k)') && indexHtml.includes('DUELO.mapaDe(d,u,k)') && indexHtml.includes('A._dkJunta[k]=c'), 'duelo: mesmo exercicio em duas chaves converge e soma as series', 'series de quem adicionou de novo nao apareciam pros outros');
+check(indexHtml.includes('semHistorico: IOS_APP') && indexHtml.includes('if(VOLTAR.semHistorico || VOLTAR.guarda') && indexHtml.includes('VOLTAR.fazVoltar();') && (indexHtml.match(/addEventListener\('touchend'/g)||[]).length===2, 'iPhone instalado: voltar sem historico do navegador (sem tela branca)', 'o gesto do Safari com historico deixava a tela branca');
+check(indexHtml.includes('function mascaraTempo(') && !indexHtml.includes("parseTempoCampo(ev.target.value, ehCardio)") && !indexHtml.includes("parseTempoCampo(rp.value, eC)"), 'campo de tempo sempre com 00:00 (numeros entram pela direita)', 'o tempo aparecia sem as casas');
+check((indexHtml.match(/campoNotas\(e\.notas/g)||[]).length >= 2 && indexHtml.includes('const METAPESO'), 'notas que crescem e objetivo de peso', 'nota longa ficava escondida numa linha');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

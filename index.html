@@ -246,6 +246,12 @@ details.pasta[open] summary .seta{transform:rotate(90deg)}
 .stats3.pf-stats>div,.stats3.pf-stats>div:first-child{flex:0 1 auto;min-width:0}
 .stats3.pf-stats .k{white-space:nowrap}
 /* duelo */
+.notas{resize:none;overflow:hidden;line-height:1.4;display:block;min-height:44px}
+body.arrastando #main{transform:translateX(var(--arrasto,0px));transition:none}
+.meta-peso{display:block;width:100%;text-align:left;background:var(--surf2);border:1px solid var(--line);border-radius:14px;padding:11px 12px;margin:12px 0 4px;color:var(--tx);font:inherit;cursor:pointer}
+.meta-num{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:3px}
+.meta-barra{height:7px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:9px}
+.meta-barra>div{height:100%;border-radius:5px}
 .ed-cab{padding:2px 0 8px}
 .ed-tit{font-size:20px;font-weight:800;color:var(--brand2);line-height:1.25;word-break:break-word}
 .ed-ex{border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:12px}
@@ -659,7 +665,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.29.1';
+const APP_VER='11.30.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1887,23 +1893,9 @@ function aplicaTema(t){
 }
 try{ aplicaTema(S.cfg && S.cfg.tema); }catch(e){}
 $('#veu').addEventListener('click', UI.fechaFolha);
-(function(){
-  let sx=0, sy=0, t0=0, ok=false;
-  addEventListener('touchstart', e=>{
-    const t=e.touches[0]; if(!t) return;
-    ok = t.clientX<28 && !window.__tgDrag;
-    sx=t.clientX; sy=t.clientY; t0=Date.now();
-  }, {passive:true});
-  addEventListener('touchend', e=>{
-    if(!ok) return; ok=false;
-    const t=e.changedTouches[0]; if(!t) return;
-    const dx=t.clientX-sx, dy=Math.abs(t.clientY-sy);
-    if(dx>72 && dy<70 && Date.now()-t0<650){
-      if($('#folha').classList.contains('on')) UI.fechaFolha();
-      else if(UI.pilha && UI.pilha.length) UI.volta();
-    }
-  }, {passive:true});
-})();
+// (o gesto de arrastar da borda que ficava aqui rodava em todo celular, e no iPhone junto com o voltar do
+// proprio Safari: duas navegacoes no mesmo arrasto, redesenhando no meio da animacao do Safari. Agora o
+// gesto tem um dono so: no iPhone instalado e' o do app (modulo VOLTAR); no Safari e no Android, o do sistema.)
 $$('#tabbar .tab').forEach(t=>t.addEventListener('click', ()=>{
   try{ if(typeof recuperaViewport==='function') recuperaViewport(true); }catch(e){}
   UI.pilha=[]; UI.vai(t.dataset.tab, null, false);
@@ -1976,7 +1968,49 @@ function pesoCorporalAtual(){ try{ const l=medLista().filter(x=>x.peso!=null); r
 // campo de tempo: sempre m:ss, pra nao ficar "600" nem "90"
 function fmtTempoCampo(seg){
   seg=Math.round(Number(seg)||0); if(!seg) return '';
-  return Math.floor(seg/60)+':'+String(seg%60).padStart(2,'0');
+  return tempoMascara(seg);
+}
+// sempre com as 4 casas: 00:18, 12:00, e 1:30:00 a partir de uma hora
+function tempoMascara(seg){
+  seg=Math.max(0, Math.round(Number(seg)||0));
+  const hh=Math.floor(seg/3600), mm=Math.floor(seg%3600/60), ss=seg%60;
+  return (hh? hh+':'+String(mm).padStart(2,'0') : String(mm).padStart(2,'0'))+':'+String(ss).padStart(2,'0');
+}
+// os numeros entram pela direita, como no Hevy: 1,8 -> 00:18 ; 1,8,0,0 -> 18:00 ; apagar volta da direita
+function digitosTempo(v){
+  const d=String(v==null?'':v).replace(/\D/g,'').replace(/^0+/,'').slice(-6), p=d.padStart(4,'0');
+  const ss=p.slice(-2), mm=p.slice(-4,-2), hh=p.slice(0,-4);
+  return { txt:(hh? hh+':' : '')+mm+':'+ss, seg:(parseInt(hh||'0',10)*3600)+(parseInt(mm,10)*60)+parseInt(ss,10) };
+}
+function mascaraTempo(inp, aoMudar){
+  inp.setAttribute('inputmode','numeric'); inp.setAttribute('autocomplete','off');
+  const fim=()=>{ try{ const n=inp.value.length; inp.setSelectionRange(n,n); }catch(e){} };
+  inp.addEventListener('focus', ()=>{ inp._antes=inp.value; if(!inp.value) inp.value='00:00'; setTimeout(fim,0); });
+  inp.addEventListener('click', fim);
+  inp.addEventListener('input', ()=>{ const r=digitosTempo(inp.value); inp.value=r.txt; fim(); aoMudar(r.seg||''); });
+  inp.addEventListener('blur', ()=>{
+    const r=digitosTempo(inp.value), novo=r.seg? tempoMascara(r.seg) : '';   // 01:80 vira 02:20
+    if(inp.value!==novo) inp.value=novo;
+    if(novo!==(inp._antes||'')) aoMudar(r.seg||'');
+  });
+  return inp;
+}
+// notas: cresce com o texto (ate ~5 linhas parado; tocando, ate 40% da tela) em vez de uma linha que esconde tudo
+function campoNotas(valor, aoMudar, rotulo, ph, estilo){
+  const ta=h('textarea',{rows:1, class:'notas', placeholder:ph||'Notas…', 'aria-label':rotulo||'Notas', style:estilo||''});
+  ta.value=valor||'';
+  const ajusta=()=>{
+    if(!ta.isConnected) return;
+    ta.style.height='auto';
+    const max = document.activeElement===ta ? Math.round(window.innerHeight*0.4) : 118;
+    const alt = ta.scrollHeight+2;
+    ta.style.height=Math.min(alt, max)+'px';
+    ta.style.overflowY = alt>max ? 'auto' : 'hidden';
+  };
+  ta.addEventListener('input', ()=>{ aoMudar(ta.value); ajusta(); });
+  ta.addEventListener('focus', ajusta); ta.addEventListener('blur', ()=>{ ajusta(); ta.scrollTop=0; });
+  requestAnimationFrame(ajusta); setTimeout(ajusta, 60);
+  return ta;
 }
 // numero sozinho: em cardio a pessoa pensa em MINUTOS, em prancha pensa em SEGUNDOS
 function parseTempoCampo(v, ehCardio){
@@ -2840,7 +2874,7 @@ TELAS.rotinaEditor = function(){
           h('div',{class:'b700',style:'color:var(--brand2)'}, x.n),
           h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g)),
         h('button',{class:'btn btn-mini',style:'width:38px','aria-label':'Mais opções de '+x.n,onclick:()=>menuEx(e,ix)},'⋯')),
-      h('input',{placeholder:'Notas do exercício (opcional)','aria-label':'Notas de '+x.n, value:e.notas||'', oninput:ev=>e.notas=ev.target.value, style:'margin-bottom:10px;font-size:14px'}),
+      campoNotas(e.notas, v=>{ e.notas=v; }, 'Notas de '+x.n, 'Notas do exercício (opcional)', 'margin-bottom:10px'),
       h('div',{class:'linha f13',style:'color:var(--azul);margin-bottom:8px',onclick:()=>mudaDescanso(e)},
         '⏱ Descanso entre séries: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
       h('div',{class:'gtab cab'}, h('div',{},'Série'), h('div',{style:'text-align:center'},'Alvo'), h('div',{style:'text-align:center'},rot[0]), h('div',{style:'text-align:center'},rot[1]), h('div')),
@@ -2855,8 +2889,7 @@ TELAS.rotinaEditor = function(){
       h('div',{class:'anterior'},'—'),
       x.t==='peso_reps' ? h('input',{type:'text',inputmode:'decimal','aria-label':'Carga alvo da série '+numerada+' de '+x.n+' em kg',value:s.kg,placeholder:'kg',oninput:ev=>s.kg=ev.target.value.replace(',','.')}) : h('div',{class:'anterior'},'—'),
       (x.t==='tempo'
-        ? h('input',{type:'text',inputmode:'numeric','aria-label':'Tempo alvo da série '+numerada+' de '+x.n,value:fmtTempoCampo(s.reps),placeholder:'0:00',
-            oninput:ev=>s.reps=parseTempoCampo(ev.target.value, x.g==='cardio')})
+        ? mascaraTempo(h('input',{type:'text','aria-label':'Tempo alvo da série '+numerada+' de '+x.n,value:fmtTempoCampo(s.reps),placeholder:'00:00'}), v=>{ s.reps=v; })
         : h('input',{type:'number',inputmode:'numeric','aria-label':'Repetições alvo da série '+numerada+' de '+x.n,value:s.reps,placeholder:'reps',oninput:ev=>s.reps=ev.target.value})),
       h('button',{class:'scheck','aria-label':'Remover série '+numerada+' de '+x.n,onclick:()=>{ if(e.series.length>1){ e.series.splice(si,1); UI.refaz(); } }},'✕'));
   }
@@ -3251,7 +3284,7 @@ TELAS.ativo = function(){
           h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g),
           (function(){ const rr=recordeResumo(e.exId); return rr? h('div',{class:'f12',style:'color:#E8B84B;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, '🥇 '+rr) : h('span',{style:'display:none'}); })()),
         h('button',{class:'btn btn-mini',style:'width:38px','aria-label':'Mais opções de '+x.n,onclick:()=>menuEx(e,ix)},'⋯')),
-      h('input',{placeholder:'Notas…','aria-label':'Notas de '+x.n,value:e.notas||'',oninput:ev=>{e.notas=ev.target.value;salva('ativo');},style:'margin-bottom:8px;font-size:14px'}),
+      campoNotas(e.notas, v=>{ e.notas=v; salva('ativo'); }, 'Notas de '+x.n, 'Notas…', 'margin-bottom:8px'),
       (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
       h('div',{class:'linha f13',style:'color:var(--azul);margin-bottom:6px',onclick:()=>mudaDescanso(e)},'⏱ Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
       (x.e==='peso-corporal' && x.t==='peso_reps') ? h('div',{class:'f12',style:'color:var(--tx2);margin:-2px 0 8px',onclick:()=>MED.registrar()},
@@ -3289,7 +3322,7 @@ TELAS.ativo = function(){
     const refKg = (ant && ant.kg!=null && ant.kg!=='') ? ant.kg : (s._planKg!=null? s._planKg : null);
     const refReps = (ant && ant.reps!=null && ant.reps!=='') ? ant.reps : (s._planReps!=null? s._planReps : null);
     const phKg = refKg!=null ? String(fmtPeso(refKg, unEx(e))) : (pcEx?('+'+unEx(e)):unEx(e));
-    const phReps = refReps!=null ? (ehTempo?fmtTempoCampo(refReps):String(refReps)) : (ehTempo?'0:00':'reps');
+    const phReps = refReps!=null ? (ehTempo?fmtTempoCampo(refReps):String(refReps)) : (ehTempo?'00:00':'reps');
     const antSemCarga = ant && (ant.kg==null || ant.kg==='' || !(Number(ant.kg)>0));
     const antTxt = ant ? (x.t==='peso_reps' ? (antSemCarga? ant.reps+' reps' : fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps) : (ehTempo? fmtTempoCampo(ant.reps) : ant.reps+' reps')) : '—';
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
@@ -3309,12 +3342,12 @@ TELAS.ativo = function(){
             : h('div',{class:'anterior'},'—')),
       ehTempo
         ? (function(){
-            const inp=h('input',{type:'text',inputmode:'numeric',
+            const inp=h('input',{type:'text',
               'aria-label':'Tempo da série '+(numerada||1)+' de '+x.n,
               value:(s.reps==null||s.reps===''?'':fmtTempoCampo(s.reps)),placeholder:phReps,
-              oninput:ev=>{ if(ATIVO.cron&&ATIVO.cron.s===s) ATIVO.paraCron(false);
-                s.reps=parseTempoCampo(ev.target.value, ehCardio); salva('ativo'); ATIVO.pinta(); },
               disabled:s.ok});
+            mascaraTempo(inp, v=>{ if(ATIVO.cron&&ATIVO.cron.s===s) ATIVO.paraCron(false);
+                s.reps=v; salva('ativo'); ATIVO.pinta(); });
             if(ATIVO.cron && ATIVO.cron.s===s) ATIVO.cron.inp=inp;
             return inp;
           })()
@@ -4411,12 +4444,12 @@ const EDTREINO = {
         (e.series||[]).forEach((s,is)=>{
           const rot = s.tipo==='W' ? 'W' : String(++nNum);
           const kg = comKg? h('input',{type:'number',inputmode:'decimal','aria-label':'Carga da série '+rot+' de '+x.n+' em kg',value:num(s.kg),placeholder:'kg',style:'text-align:center'}) : null;
-          const rp=h('input',{type:'text',inputmode:'numeric',style:'text-align:center',placeholder: eT?'0:00':'reps',
+          const rp=h('input',{type:'text',inputmode:'numeric',style:'text-align:center',placeholder: eT?'00:00':'reps',
             'aria-label':(eT?'Tempo':'Repetições')+' da série '+rot+' de '+x.n,
             value: eT ? fmtTempoCampo(s.reps) : num(s.reps)});
           if(kg) kg.oninput=()=>{ s.kg = kg.value===''? '' : Number(kg.value); };
-          rp.oninput=()=>{ s.reps = eT ? parseTempoCampo(rp.value, eC)
-                                       : (rp.value===''? '' : Number(rp.value)); };
+          if(eT) mascaraTempo(rp, v=>{ s.reps=v; });
+          else rp.oninput=()=>{ s.reps = rp.value===''? '' : Number(rp.value); };
           bloco.append(h('div',{class:'ed-serie'+(comKg?'':' sem-kg')},
             h('span',{class:'ed-rot'+(s.tipo==='W'?' w':'')}, rot),
             kg, rp,
@@ -5595,8 +5628,14 @@ document.addEventListener('focusin', ev=>{ if(ev.target && /^(INPUT|TEXTAREA)$/.
    mesmo com uma folha aberta ou dentro de uma tela. Agora, enquanto houver algo
    pra voltar, existe uma "guarda" no historico; o voltar fecha a camada de
    cima ou volta uma tela. So no Inicio, sem nada aberto, ele sai do app. */
+// iPhone com o app instalado na tela inicial: o "arrastar da borda pra voltar" passa a ser do proprio app,
+// sem historico do navegador. Com historico (pushState) o Safari mostra uma "foto" da tela anterior durante o
+// gesto, e as vezes essa foto vem branca ou nao e retirada: a tela branca que aparecia ao voltar no iPhone.
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const IOS_APP = IOS && (((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)) || navigator.standalone===true);
 const VOLTAR = {
   guarda:false,
+  semHistorico: IOS_APP,
   folhaAberta(){ const f=document.getElementById('folha'); return !!(f && f.classList.contains('on')); },
   temAlgo(){
     try{
@@ -5606,11 +5645,17 @@ const VOLTAR = {
     }catch(e){ return false; }
   },
   sync(){
-    if(VOLTAR.guarda || !VOLTAR.temAlgo()) return;
+    if(VOLTAR.semHistorico || VOLTAR.guarda || !VOLTAR.temAlgo()) return;
     try{ history.pushState({fxVoltar:1}, ''); VOLTAR.guarda=true; }catch(e){}
   },
   aoVoltar(){
     VOLTAR.guarda=false;
+    VOLTAR.fazVoltar();
+    if(IOS) VOLTAR.repinta();
+    VOLTAR.sync();
+  },
+  // fecha a camada de cima, ou volta uma tela
+  fazVoltar(){
     try{
       if(FOTOVIEW.el) FOTOVIEW.fecha();
       else if(FOLHA2.el) FOLHA2.fecha();
@@ -5618,10 +5663,38 @@ const VOLTAR = {
       else if(UI.pilha.length) UI.volta();
       else if(UI.telaAtual && UI.telaAtual!=='inicio') UI.vai('inicio', null, false);   // Treino/Perfil/treino em andamento -> Inicio
     }catch(e){}
-    VOLTAR.sync();
+  },
+  // Safari (fora do app instalado): obriga a pintar a tela de novo depois do gesto, pra nao ficar a "foto"
+  repinta(){
+    try{
+      const r=document.documentElement;
+      requestAnimationFrame(()=>{ r.style.opacity='0.999'; requestAnimationFrame(()=>{ r.style.opacity=''; }); });
+      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){} }, 60);
+    }catch(e){}
   }
 };
 window.addEventListener('popstate', ()=>VOLTAR.aoVoltar());
+// o gesto de voltar do proprio app (iPhone instalado): arrastar a partir da borda esquerda
+if(IOS_APP){
+  let g=null;
+  const solta=()=>{ document.body.classList.remove('arrastando'); document.body.style.removeProperty('--arrasto'); };
+  document.addEventListener('touchstart', ev=>{
+    const tq=ev.touches && ev.touches[0];
+    g = (tq && ev.touches.length===1 && tq.clientX<=24 && !window.__tgDrag && VOLTAR.temAlgo()) ? {x:tq.clientX, y:tq.clientY, t:Date.now(), ok:false} : null;
+  }, {passive:true});
+  document.addEventListener('touchmove', ev=>{
+    if(!g) return; const tq=ev.touches[0]; const dx=tq.clientX-g.x, dy=Math.abs(tq.clientY-g.y);
+    if(!g.ok){ if(dy>14 && dy>dx){ g=null; solta(); return; } if(dx>10) g.ok=true; }
+    if(g.ok){ document.body.classList.add('arrastando'); document.body.style.setProperty('--arrasto', Math.round(Math.min(dx*0.45, 90))+'px'); }
+  }, {passive:true});
+  document.addEventListener('touchend', ev=>{
+    if(!g) return; const tq=(ev.changedTouches||[])[0], gg=g; g=null; solta();
+    if(!tq || !gg.ok) return;
+    const dx=tq.clientX-gg.x, dy=Math.abs(tq.clientY-gg.y), dt=Date.now()-gg.t;
+    if((dx>80 && dy<80) || (dx>45 && dt<260 && dy<40)) VOLTAR.fazVoltar();
+  }, {passive:true});
+  document.addEventListener('touchcancel', ()=>{ g=null; solta(); }, {passive:true});
+}
 // toda mudanca de tela ou de camada confere se precisa da guarda. Instalado
 // DEPOIS que o script inteiro carregou: FOTOVIEW e outros sao definidos mais
 // abaixo, e toca-los agora interromperia o carregamento do app.
@@ -7511,6 +7584,85 @@ TELAS.fotosProg = function(){
   m.appendChild(grid);
 };
 
+// Objetivo de peso: perder, ganhar ou so acompanhar, contando a partir de um registro escolhido (padrao: o
+// primeiro). O cartao de peso mostra quanto mudou desde la, em verde na direcao do objetivo e laranja contra.
+const METAPESO = {
+  cfg(){ const c=S.cfg && S.cfg.metaPeso; return (c && c.obj)? c : null; },
+  grava(){ S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); },   // igual aos Ajustes: aparelho e nuvem
+  pesos(){ return medLista().filter(x=>x.peso!=null); },
+  fmt(v){ return (Math.round(Math.abs(Number(v)||0)*10)/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}); },
+  dia(ts){ return new Date(ts).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}); },
+  calc(){
+    const c=METAPESO.cfg(), ps=METAPESO.pesos(); if(!c || !ps.length) return null;
+    const b=ps.find(x=>x.data>=(Number(c.desde)||0)) || ps[0], u=ps[ps.length-1];
+    const delta=Math.round((u.peso-b.peso)*10)/10;
+    const bom = c.obj==='perder' ? (delta<0? true : delta>0? false : null)
+              : c.obj==='ganhar' ? (delta>0? true : delta<0? false : null) : null;
+    const r={c,b,u,delta,bom,prog:null,falta:null,chegou:false};
+    const alvo=Number(c.alvo)||0;
+    if(alvo>0){
+      const total=alvo-b.peso, feito=u.peso-b.peso;
+      r.prog = Math.abs(total)>=0.05 ? Math.max(0, Math.min(1, feito/total)) : 1;
+      r.falta = Math.round(Math.abs(alvo-u.peso)*10)/10;
+      r.chegou = c.obj==='perder' ? u.peso<=alvo : c.obj==='ganhar' ? u.peso>=alvo : r.falta<0.3;
+    }
+    return r;
+  },
+  resumoCurto(){ const r=METAPESO.calc(); if(!r || r.b===r.u) return ''; return (r.delta>0?'+':r.delta<0?'−':'±')+METAPESO.fmt(r.delta)+' kg desde '+METAPESO.dia(r.b.data); },
+  bloco(){
+    const r=METAPESO.calc();
+    if(!r) return h('button',{class:'meta-peso',onclick:METAPESO.edita},
+      h('div',{class:'b700'},'🎯 Acompanhar objetivo de peso'),
+      h('div',{class:'f12 mut',style:'margin-top:2px'},'Veja quanto você perdeu ou ganhou desde o dia que escolher'));
+    const OBJ={perder:'Perder peso', ganhar:'Ganhar peso', acompanhar:'Acompanhar'};
+    const cor = r.bom===true? 'var(--ok)' : r.bom===false? 'var(--warn)' : 'var(--tx)';
+    const dias=Math.max(0, Math.round((r.u.data-r.b.data)/86400000));
+    const tempo = dias<1? '' : dias<14? ' · em '+dias+' dia'+(dias>1?'s':'') : ' · em '+Math.round(dias/7)+' semanas';
+    const el=h('button',{class:'meta-peso',onclick:METAPESO.edita,'aria-label':'Editar objetivo de peso'},
+      h('div',{class:'linha',style:'gap:8px'},
+        h('div',{class:'f12 mut',style:'flex:1;min-width:0'},'🎯 '+(OBJ[r.c.obj]||'Objetivo')+' · desde '+METAPESO.dia(r.b.data)),
+        h('div',{class:'f12 b700',style:'color:var(--azul)'},'Editar')));
+    if(r.b===r.u){
+      el.append(h('div',{class:'f13 mut',style:'margin-top:4px'},'Registre o próximo peso para ver quanto mudou desde '+METAPESO.dia(r.b.data)+'.'));
+      return el;
+    }
+    el.append(h('div',{class:'meta-num'},
+      h('span',{class:'b800',style:'font-size:22px;color:'+cor}, (r.delta>0?'+':r.delta<0?'−':'')+METAPESO.fmt(r.delta)+' kg'),
+      h('span',{class:'f13 mut'}, METAPESO.fmt(r.b.peso)+' → '+METAPESO.fmt(r.u.peso)+' kg'+tempo)));
+    if(r.prog!=null){
+      el.append(h('div',{class:'meta-barra'}, h('div',{style:'width:'+Math.round(r.prog*100)+'%;background:'+(r.chegou?'var(--ok)':'var(--brand)')})));
+      el.append(h('div',{class:'f12 '+(r.chegou?'b700':'mut'),style:'margin-top:5px'+(r.chegou?';color:var(--ok)':'')},
+        r.chegou ? '🎉 Você chegou ao peso desejado ('+METAPESO.fmt(r.c.alvo)+' kg)' : 'Faltam '+METAPESO.fmt(r.falta)+' kg para '+METAPESO.fmt(r.c.alvo)+' kg'));
+    }
+    return el;
+  },
+  edita(){
+    const ps=METAPESO.pesos(); if(!ps.length){ UI.toast('Registre seu peso primeiro'); return; }
+    const c=METAPESO.cfg()||{}; let obj=c.obj||'perder';
+    const chips=h('div',{class:'linha',style:'gap:8px;flex-wrap:wrap'});
+    const pinta=()=>{ chips.innerHTML=''; [['perder','Perder peso'],['ganhar','Ganhar peso'],['acompanhar','Só acompanhar']].forEach(([k,tx])=>
+      chips.append(h('button',{class:'chip'+(obj===k?' on':''),onclick:()=>{ obj=k; pinta(); }},tx))); };
+    pinta();
+    const base=(METAPESO.calc()||{}).b || ps[0];
+    const sel=h('select',{'aria-label':'Contar a partir de'});
+    ps.slice().reverse().forEach(x=>{ const o=h('option',{value:String(x.data)}, METAPESO.dia(x.data)+' · '+METAPESO.fmt(x.peso)+' kg'+(x===ps[0]?' (primeiro registro)':''));
+      if(x===base) o.selected=true; sel.append(o); });
+    const alvo=h('input',{type:'text',inputmode:'decimal',placeholder:'Opcional, ex.: 68','aria-label':'Peso desejado em kg',value:c.alvo? String(c.alvo).replace('.',','):''});
+    const salvar=()=>{
+      const a=parseFloat(String(alvo.value).replace(',','.'));
+      S.cfg.metaPeso={obj, desde:Number(sel.value)||ps[0].data, alvo:(isFinite(a)&&a>0)? Math.round(a*10)/10 : null};
+      METAPESO.grava(); UI.fechaFolha(); UI.refaz(); UI.toast('Objetivo salvo', true);
+    };
+    UI.folha('Objetivo de peso',[
+      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.5'},'O cartão de peso passa a mostrar quanto você mudou desde o registro escolhido: verde quando vai na direção do objetivo.'),
+      h('div',{class:'secao',style:'margin:0 0 8px'},'Objetivo'), chips,
+      h('div',{class:'secao',style:'margin:16px 0 8px'},'Contar a partir de'), sel,
+      h('div',{class:'secao',style:'margin:16px 0 8px'},'Peso desejado (kg)'), alvo,
+      h('button',{class:'btn btn-p',style:'width:100%;margin-top:18px',onclick:salvar},'Salvar objetivo'),
+      c.obj ? h('button',{class:'btn',style:'width:100%;margin-top:8px',onclick:()=>{ delete S.cfg.metaPeso; METAPESO.grava(); UI.fechaFolha(); UI.refaz(); }},'Remover objetivo') : null
+    ]);
+  }
+};
 TELAS.medidas = function(){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:20px'},'Medições'),
     h('button',{class:'btn btn-mini btn-p',onclick:MED.registrar},'Registrar'));
@@ -7541,6 +7693,7 @@ TELAS.medidas = function(){
         h('div',{},h('span',{class:'b800',style:'font-size:24px'},u.peso.toLocaleString('pt-BR')+' kg'),
           delta!=null? h('span',{class:'f13 b700',style:'margin-left:8px;color:'+(delta>0?'var(--warn)':delta<0?'var(--azul)':'var(--tx2)')},(delta>0?'+':'')+ (Math.round(delta*10)/10).toLocaleString('pt-BR')+' kg'):null)),
       h('div',{class:'esp'}), h('div',{class:'f12 mut2'},new Date(u.data).toLocaleDateString('pt-BR'))));
+    card.append(METAPESO.bloco());
     if(pesos.length>=2){
       const cv=h('canvas',{class:'graf'}); card.append(cv);
       requestAnimationFrame(()=>grafLinha(cv,pesos.map(x=>({v:x.peso,rot:new Date(x.data).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}),
@@ -7643,7 +7796,7 @@ const MED = {
         Object.entries(campos).forEach(([campo,inp])=>{ const v=String(inp.value).replace(',','.'); if(v!==''){ reg[campo]=Number(v)||0; tem=true; } });
         if(!tem){ UI.toast('Preencha pelo menos um campo'); return; }
         S.medidas[reg.id]=reg; salva('medidas'); NET.agenda('medidas/'+reg.id,reg);
-        UI.fechaFolha(); UI.refaz(); UI.toast('Medidas registradas');
+        UI.fechaFolha(); UI.refaz(); UI.toast('Medidas registradas'+(METAPESO.resumoCurto()? ' · '+METAPESO.resumoCurto() : ''));
       }},'Salvar')
     ]);
   }
@@ -7985,7 +8138,10 @@ document.addEventListener('focusout', ()=>setTimeout(()=>{ if(!temFocoDeTexto())
 window.addEventListener('scroll', ()=>{ if(UI.telaAtual==='ativo' && S.ativo){ clearTimeout(UI._lugarT); UI._lugarT=setTimeout(()=>UI.guardaLugarAtivo(), 400); } }, {passive:true});
 window.addEventListener('orientationchange', ()=>setTimeout(()=>recuperaViewport(true), 300));
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>recuperaViewport(true), 150); });
-window.addEventListener('pageshow', ()=>setTimeout(()=>recuperaViewport(true), 100));
+window.addEventListener('pageshow', ev=>{
+  setTimeout(()=>recuperaViewport(true), 100);
+  if(ev && ev.persisted){ try{ UI.refaz(); }catch(e){} }   // voltou do cache do navegador: desenha de novo
+});
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev=>{
     const d=ev.data||{};

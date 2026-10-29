@@ -252,6 +252,7 @@ body.arrastando #main{transform:translateX(var(--arrasto,0px));transition:none}
 .meta-num{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:3px}
 .meta-barra{height:7px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:9px}
 .meta-barra>div{height:100%;border-radius:5px}
+.duelo-pr{font-size:11px;margin-left:3px;vertical-align:1px}
 .ed-cab{padding:2px 0 8px}
 .ed-tit{font-size:20px;font-weight:800;color:var(--brand2);line-height:1.25;word-break:break-word}
 .ed-ex{border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:12px}
@@ -665,7 +666,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.30.0';
+const APP_VER='11.31.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -4944,7 +4945,9 @@ const DUELO = {
     amigos=(amigos||[]).filter(a=>a && a.uid && a.uid!==S.auth.uid).slice(0, DUELO.tres? DUELO.MAX-1 : 1);
     if(!amigos.length) return;
     const r=rotinaId? S.rotinas[rotinaId] : null, t0=agora(), id='d'+uid(), ex={};
-    (r? r.ex : []).forEach((e,i)=>{ const x=BIB.ex(e.exId)||{}; ex['k'+uid()]=DUELO.exSala(x, e.exId, i, e.series, (e.descanso!=null? e.descanso : S.cfg.descanso)); });
+    const notasK={};
+    (r? r.ex : []).forEach((e,i)=>{ const x=BIB.ex(e.exId)||{}, k='k'+uid(); ex[k]=DUELO.exSala(x, e.exId, i, e.series, (e.descanso!=null? e.descanso : S.cfg.descanso)); if(e.notas) notasK[k]=e.notas; });
+    DUELO.guardaNotas(id, notasK);
     const nomes={[S.auth.uid]:{user:S.perfil?.user||'', nome:(S.perfil?.nome||'').slice(0,40)}};
     amigos.forEach(a=>nomes[a.uid]={user:a.user||'', nome:(a.nome||'').slice(0,40)});
     const d={id, a:S.auth.uid, b:amigos[0].uid, por:S.auth.uid, modo:(modo==='mano'?'mano':'superacao'),
@@ -4993,11 +4996,34 @@ const DUELO = {
     S.ativo={ id:uid(), rid:null, titulo:'⚔️ '+(d.titulo||'Duelo'), inicio:agora(), duelo:d.id, _dkVistos:{}, _dkFora:{},
       ex: ks.map(k=>DUELO.novoEx(d.ex[k], k)) };
     S.ativo.ex.forEach(e=>S.ativo._dkVistos[e._dk]=1);
+    // as notas da ficha voltam so pra quem e dona dela (a sala nunca leva as notas)
+    try{
+      const nt=DUELO.notasDoDono(d);
+      if(nt.porChave) S.ativo.ex.forEach(e=>{ if(nt.porChave[e._dk]) e.notas=nt.porChave[e._dk]; });
+      else if(nt.porEx){ const usados=new Set(); S.ativo.ex.forEach(e=>{ const i=nt.porEx.findIndex((q,ix)=>!usados.has(ix) && q && q.exId===e.exId && q.notas); if(i>=0){ usados.add(i); e.notas=nt.porEx[i].notas; } }); }
+    }catch(_){}
     CORE.marcaEstreias(S.ativo); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
     DUELO.publica(); DUELO.estado('treinando');
     VIB.v(30); setTimeout(()=>{ try{ TELA.pega(); }catch(e){} }, 50);
     UI.pilha=[]; UI.vai('ativo',null,false);
     return true;
+  },
+  // notas da ficha: ficam SO no aparelho de quem criou o duelo (a dona da ficha)
+  guardaNotas(id, m){
+    try{
+      const tb=LS.get('dueloNotas', {}) || {};
+      if(Object.keys(m||{}).length) tb[id]={m, ts:agora()};
+      Object.keys(tb).sort((a,b)=>(tb[b].ts||0)-(tb[a].ts||0)).slice(20).forEach(x=>delete tb[x]);
+      LS.set('dueloNotas', tb);
+    }catch(e){}
+  },
+  notasDoDono(d){
+    if(!d || d.por!==DUELO.meu()) return {};
+    const tb=LS.get('dueloNotas', {}) || {};
+    if(tb[d.id] && tb[d.id].m) return {porChave:tb[d.id].m};
+    // duelo criado antes desta versao (ou em outro aparelho): acha a ficha pelo titulo e casa pelo exercicio
+    const r=Object.values(S.rotinas||{}).find(x=>x && !x.apagada && x.titulo===d.titulo);
+    return r? {porEx:r.ex||[]} : {};
   },
   novoEx(q, k){
     const x=BIB.ex(q.exId)||{};
@@ -5035,7 +5061,9 @@ const DUELO = {
   serieMudou(e, s){
     if(!DUELO.emDuelo() || !e || !e._dk) return;
     const si=e.series.indexOf(s); if(si<0) return;
-    const v=s.ok? {kg:(s.kg===''||s.kg==null? '' : Number(s.kg)||0), reps:Number(s.reps)||0, tipo:s.tipo||'N', t:agora()} : null;
+    // pr: a serie foi recorde de quem fez (quem esta junto ve a medalha na tabela)
+    const v=s.ok? Object.assign({kg:(s.kg===''||s.kg==null? '' : Number(s.kg)||0), reps:Number(s.reps)||0, tipo:s.tipo||'N', t:agora()},
+                                (Array.isArray(s.pr) && s.pr.length)? {pr:1} : {}) : null;
     NET.agenda(DUELO.caminho('/s/'+e._dk+'/'+si), v);
     if(agora()-(DUELO._atT||0)>15000){ DUELO._atT=agora(); NET.agenda(DUELO.caminho('/at'), agora()); }   // 'at' ninguem le: menos envio, serie chega antes
     const d=DUELO.dados();
@@ -5403,7 +5431,10 @@ const DUELO = {
     idx.forEach(i=>{
       lin.push(h('div',{class:'duelo-tr'}, h('span',{class:'duelo-td n'}, rotulo(i)),
         ...colunas.map(c=>{ const s=c.m[i], best=melhorDe(c);
-          return h('span',{class:'duelo-td'+(s && igual(s,best)?' top':''), style:s? '' : 'color:var(--tx3)'}, s? DUELO.fmtSerie(Object.assign({}, s, {tipo:'N'}), c.ex) : '·'); })));
+          const pr = s && (s.pr===1 || s.pr===true || (Array.isArray(s.pr) && s.pr.length));
+          return h('span',{class:'duelo-td'+(s && igual(s,best)?' top':''), style:s? '' : 'color:var(--tx3)'},
+            s? DUELO.fmtSerie(Object.assign({}, s, {tipo:'N'}), c.ex) : '·',
+            pr? h('span',{class:'duelo-pr',title:'Recorde','aria-label':'recorde'},'🥇') : null); })));
     });
     el.append(h('div',{class:'duelo-tab'}, ...lin));
     if(d.modo==='mano' && w){
@@ -5536,7 +5567,7 @@ const DUELO = {
         const ss=DUELO.setsDe(d,u,k), ex=DUELO.exDe(d,u,k), fora=DUELO.foraDe(d,u,k);
         return h('div',{class:'duelo-linha2'+(w===u?' on':'')},
           h('span',{class:'duelo-quem'}, u===eu? 'Você' : DUELO.nome(d,u)),
-          h('span',{class:'duelo-sets'}, fora? 'removeu' : (ss.length? ss.map(s=>DUELO.fmtSerie(s, ex)).join('  ·  ') : '—')+(ex!==d.ex[k].exId? '  ('+DUELO.nomeEx(d,u,k)+')' : '')));
+          h('span',{class:'duelo-sets'}, fora? 'removeu' : (ss.length? ss.map(s=>DUELO.fmtSerie(s, ex)+(s.pr? ' 🥇' : '')).join('  ·  ') : '—')+(ex!==d.ex[k].exId? '  ('+DUELO.nomeEx(d,u,k)+')' : '')));
       });
       lista.append(h('div',{class:'duelo-bloco'},
         h('div',{class:'linha',style:'gap:8px'}, h('div',{class:'b800 esp',style:'font-size:14px;min-width:0'}, nomeSala),

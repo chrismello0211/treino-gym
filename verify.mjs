@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.31.0';
+const EXPECTED_VERSION = '11.31.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -219,6 +219,7 @@ check(indexHtml.includes('function mascaraTempo(') && !indexHtml.includes("parse
 check((indexHtml.match(/campoNotas\(e\.notas/g)||[]).length >= 2 && indexHtml.includes('const METAPESO'), 'notas que crescem e objetivo de peso', 'nota longa ficava escondida numa linha');
 check(indexHtml.includes("(Array.isArray(s.pr) && s.pr.length)? {pr:1} : {}") && indexHtml.includes("class:'duelo-pr'"), 'duelo: medalha de recorde de quem esta junto', 'quem treinava junto nao via o recorde do outro');
 check(indexHtml.includes('DUELO.guardaNotas(id, notasK)') && indexHtml.includes('const nt=DUELO.notasDoDono(d)') && !/exSala\([^)]*notas/.test(indexHtml), 'duelo: notas da ficha so pra dona (e nunca na sala)', 'a dona da ficha perdia as notas no duelo');
+check(indexHtml.includes('FEED.atualizaSeNovo=function') && indexHtml.includes("FEED.atualizaSeNovo(30000)") && indexHtml.includes('cartao-naopub'), 'feed se atualiza ao voltar pro app e treino nao publicado avisa', 'o post do amigo so aparecia trocando de tela; treino fora do feed passava batido');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

@@ -252,6 +252,8 @@ body.arrastando #main{transform:translateX(var(--arrasto,0px));transition:none}
 .meta-num{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:3px}
 .meta-barra{height:7px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:9px}
 .meta-barra>div{height:100%;border-radius:5px}
+.aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
+.cartao-naopub{border:1px solid var(--warn)}
 .duelo-pr{font-size:11px;margin-left:3px;vertical-align:1px}
 .ed-cab{padding:2px 0 8px}
 .ed-tit{font-size:20px;font-weight:800;color:var(--brand2);line-height:1.25;word-break:break-word}
@@ -666,7 +668,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.31.0';
+const APP_VER='11.31.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3178,13 +3180,18 @@ const ATIVO = {
     pintaAcad();
     let pubAgora = (R.pub!==undefined) ? R.pub : (S.cfg.feedPub!==false);
     R.pub = pubAgora;
+    // desligado: aviso bem visivel (na sexta um toque sem querer deixou o treino da Lais fora do feed)
+    const avisoPub=h('div',{class:'f12 aviso-pub',style:'display:'+(pubAgora?'none':'block')},'🔒 Este treino não vai aparecer no feed dos seus amigos.');
     const pubArea = (S.perfil && S.perfil.user)
-      ? h('button',{class:'menu-op',style:'margin-bottom:14px',onclick:function(){
-          pubAgora=!pubAgora; R.pub=pubAgora;
-          const c=this.querySelector('.chip');
-          c.textContent=pubAgora?'Sim':'Nao'; c.classList.toggle('on',pubAgora);
-        }}, 'Publicar no feed', h('span',{class:'esp'}),
-        h('span',{class:'chip'+(pubAgora?' on':'')}, pubAgora?'Sim':'Nao'))
+      ? h('div',{},
+          h('button',{class:'menu-op',style:'margin-bottom:14px',onclick:function(){
+            pubAgora=!pubAgora; R.pub=pubAgora;
+            const c=this.querySelector('.chip');
+            c.textContent=pubAgora?'Sim':'Não'; c.classList.toggle('on',pubAgora);
+            avisoPub.style.display=pubAgora?'none':'block';
+          }}, 'Publicar no feed', h('span',{class:'esp'}),
+          h('span',{class:'chip'+(pubAgora?' on':'')}, pubAgora?'Sim':'Não')),
+          avisoPub)
       : h('span',{style:'display:none'});
     UI.folha('Concluir treino?',[
       h('div',{class:'stats3',style:'padding:6px 2px 16px'},
@@ -4175,6 +4182,17 @@ TELAS.concluido = function({id}){
   const m=$('#main'); m.innerHTML='';
   if(t.duelo) m.appendChild(h('button',{class:'card duelo-barra',style:'width:100%;text-align:left;cursor:pointer',onclick:()=>UI.vai('duelo',{id:t.duelo})},
     h('div',{class:'b800'},'⚔️ Ver o placar do duelo'), h('div',{class:'f12 mut',style:'margin-top:2px'},'O resultado sai quando os dois terminarem.')));
+  if(S.perfil?.user && S.auth && !t.apagado && !treinoPublicado(t)){
+    const cartaoPub=h('div',{class:'card cartao-naopub'},
+      h('div',{class:'b700'},'🔒 Este treino não foi publicado no feed'),
+      h('div',{class:'f13 mut',style:'margin:4px 0 10px;line-height:1.45'},'Seus amigos não vão vê-lo. Se foi sem querer, publique agora.'),
+      h('button',{class:'btn btn-p',style:'width:100%',onclick:()=>{
+        t.feedPub=true; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
+        NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
+        cartaoPub.remove(); UI.toast('Treino publicado no feed ✓', true);
+      }},'Publicar no feed'));
+    m.appendChild(cartaoPub);
+  }
   const cv=h('canvas',{style:'position:fixed;inset:0;pointer-events:none;z-index:80'});
   document.body.appendChild(cv);
   try{
@@ -9818,6 +9836,7 @@ const FEED = {
   },
   async carrega(){
     if(!S.auth) return;
+    FEED._ult=Date.now();
     FEED.hidrata();
     const donos=[S.auth.uid].concat(Object.keys(S.social.seguindo||{}).filter(u=>!MOD.bloqueado(u)));
     const pPerfis = NET.get('/perfis').then(v=>{ FEED.perfis=v||{}; });
@@ -9839,6 +9858,18 @@ const FEED = {
     return meus.concat(dos).sort((a,b)=>b.inicio-a.inicio).slice(0,80);
   }
 };
+// O app fica aberto em segundo plano por horas (iPhone): o Inicio mostrava o feed de quando a tela foi
+// aberta, e a publicacao que um amigo fez depois so aparecia trocando de tela. Agora, ao voltar pro app
+// (e a cada 2 min no Inicio), busca de novo e so redesenha se chegou algo novo.
+FEED.assinatura=function(){ try{ return FEED.itens().map(i=>i.dono+':'+i.id+':'+((i.r||{}).atualizado||'')).join('|'); }catch(e){ return ''; } };
+FEED.atualizaSeNovo=function(intervalo){
+  if(!S.auth || UI.telaAtual!=='inicio' || document.hidden) return;
+  if(Date.now()-(FEED._ult||0) < (intervalo||30000)) return;
+  const antes=FEED.assinatura();
+  FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio' && FEED.assinatura()!==antes && !temFocoDeTexto()) UI.refaz(); }).catch(()=>{});
+};
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>FEED.atualizaSeNovo(30000), 400); });
+setInterval(()=>FEED.atualizaSeNovo(110000), 120000);
 const SOCIALVIEW = {
   async folha(tipo, alvo){
     if(!alvo){ UI.toast('Crie sua conta para ver'); return; }

@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.31.1';
+const EXPECTED_VERSION = '11.32.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -208,7 +208,7 @@ check(indexHtml.includes("window.addEventListener('popstate'") && indexHtml.incl
 check(indexHtml.includes('try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }') && indexHtml.includes('function telaComErro('), 'telas protegidas contra erro', 'sem isso uma tela que falha fica em branco');
 check(indexHtml.includes('A._dkFora') && indexHtml.includes('n._dkDe=e._dk'), 'duelo nao ressuscita exercicio removido nem duplica troca', 'exercicio removido voltava e a troca virava exercicio novo pros outros');
 check(indexHtml.includes('P.append=function(...n){ return ap.apply(this, n.filter(x=>x!=null && x!==false)); }'), 'append ignora vazio (sem "null" na tela)', 'o append nativo escreve "null" quando recebe vazio');
-check(indexHtml.includes('decorridoMs(t){') && indexHtml.includes('fim=agoraReal-pausas') && !indexHtml.includes("CORE.fmtRelogioCurto((agora()-S.ativo.inicio)/1000)"), 'pausa do treino ligada ao cronometro e ao salvar', 'sem isso o tempo pausado entra na duracao');
+check(indexHtml.includes('decorridoMs(t){') && indexHtml.includes(': agoraReal-pausas;') && !indexHtml.includes("CORE.fmtRelogioCurto((agora()-S.ativo.inicio)/1000)"), 'pausa do treino ligada ao cronometro e ao salvar', 'sem isso o tempo pausado entra na duracao');
 check(indexHtml.includes('function soltaTeclado(') && (indexHtml.match(/soltaTeclado\(\);/g)||[]).length >= 2, 'folhas soltam o teclado de fora ao abrir', 'sem isso a folha pode abrir levantada alem do topo da tela');
 check(indexHtml.includes('UI.guardaLugarAtivo()') && indexHtml.includes("localStorage.getItem('tg_ativoY')"), 'treino em andamento volta pro mesmo exercicio', 'sem isso voltar ao treino abre no topo');
 check(indexHtml.includes('contaChave(d, k)') && indexHtml.includes("d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId") && indexHtml.includes('A._salaKs'), 'duelo: troca compartilhada, ordem e series sincronizadas', 'exercicio adicionado a mao nao se ligava a troca do outro; ordem nao se propagava');
@@ -220,6 +220,7 @@ check((indexHtml.match(/campoNotas\(e\.notas/g)||[]).length >= 2 && indexHtml.in
 check(indexHtml.includes("(Array.isArray(s.pr) && s.pr.length)? {pr:1} : {}") && indexHtml.includes("class:'duelo-pr'"), 'duelo: medalha de recorde de quem esta junto', 'quem treinava junto nao via o recorde do outro');
 check(indexHtml.includes('DUELO.guardaNotas(id, notasK)') && indexHtml.includes('const nt=DUELO.notasDoDono(d)') && !/exSala\([^)]*notas/.test(indexHtml), 'duelo: notas da ficha so pra dona (e nunca na sala)', 'a dona da ficha perdia as notas no duelo');
 check(indexHtml.includes('FEED.atualizaSeNovo=function') && indexHtml.includes("FEED.atualizaSeNovo(30000)") && indexHtml.includes('cartao-naopub'), 'feed se atualiza ao voltar pro app e treino nao publicado avisa', 'o post do amigo so aparecia trocando de tela; treino fora do feed passava batido');
+check(indexHtml.includes("if(t.retro) return Math.max(0, Number(t.durFixa)||0);") && indexHtml.includes("fim= t.retro? t.inicio+(Number(t.durFixa)||0) : agoraReal-pausas") && indexHtml.includes("type:'date','aria-label':'Dia do treino'"), 'treino retroativo: dia, duracao fixa e conclusao no dia certo', 'treino esquecido nao podia ser registrado em outro dia');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

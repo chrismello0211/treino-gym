@@ -252,6 +252,8 @@ body.arrastando #main{transform:translateX(var(--arrasto,0px));transition:none}
 .meta-num{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin-top:3px}
 .meta-barra{height:7px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:9px}
 .meta-barra>div{height:100%;border-radius:5px}
+input[type="date"]{-webkit-appearance:none;appearance:none;display:block;box-sizing:border-box;text-align:center;font-size:16px;font-weight:700;line-height:20px;padding:10px 12px;min-height:44px}
+input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pr{font-size:11px;margin-left:3px;vertical-align:1px}
@@ -668,7 +670,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.31.1';
+const APP_VER='11.32.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -2674,7 +2676,7 @@ TELAS.treino = function(){
 
   if(S.ativo){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
-      'Retomar treino em andamento · '+CORE.fmtDur(ATIVO.decorridoMs()/1000)+(S.ativo.pausaDesde?' · pausado':'')));
+      'Retomar treino em andamento · '+CORE.fmtDur(ATIVO.decorridoMs()/1000)+(S.ativo.pausaDesde?' · pausado':'')+(S.ativo.retro?' · 📅 '+ATIVO.diaRetro():'')));
   }
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:4px',onclick:()=>ATIVO.comeca(null)},'＋ Iniciar treino vazio'));
   m.appendChild(h('button',{class:'btn',style:'margin-bottom:4px;border-color:var(--brand);color:var(--brand2)',onclick:()=>ASSIST.abre()},'🧭 Montar ficha com o assistente'));
@@ -3047,16 +3049,24 @@ const ATIVO = {
     const tm=$('#ta-musc'); if(tm){ tm.innerHTML=''; tm.appendChild(corpoSVG(gruposDoTreino(S.ativo), 58)); }
   },
   /* pausa (v11.28): o inicio continua o real; o tempo parado fica a parte e nao conta */
-  pausadoMs(t){ t=t||S.ativo; if(!t) return 0; return (Number(t.pausadoMs)||0) + (t.pausaDesde? Math.max(0, agora()-t.pausaDesde) : 0); },
-  decorridoMs(t){ t=t||S.ativo; if(!t) return 0; return Math.max(0, agora()-t.inicio-ATIVO.pausadoMs(t)); },
+  pausadoMs(t){ t=t||S.ativo; if(!t || t.retro) return 0; return (Number(t.pausadoMs)||0) + (t.pausaDesde? Math.max(0, agora()-t.pausaDesde) : 0); },
+  // treino de outro dia (retroativo): a duracao e' a informada e o relogio nao corre
+  decorridoMs(t){ t=t||S.ativo; if(!t) return 0; if(t.retro) return Math.max(0, Number(t.durFixa)||0); return Math.max(0, agora()-t.inicio-ATIVO.pausadoMs(t)); },
+  diaRetro(t){
+    t=t||S.ativo; if(!t || !t.retro) return '';
+    const d0=new Date(); d0.setHours(0,0,0,0); const d=new Date(t.inicio); d.setHours(0,0,0,0);
+    const n=Math.round((d0-d)/86400000);
+    return n===1? 'Ontem' : n===2? 'Anteontem' : String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+  },
+  rotTempo(t){ t=t||S.ativo; return t.retro? '📅 '+ATIVO.diaRetro(t)+' ✎' : (t.pausaDesde? 'Tempo ⏸' : 'Tempo ✎'); },
   pintaTempo(){
     const t=S.ativo; if(!t) return;
     const el=$('#ta-cron'), k=$('#ta-cron-k');
     if(el){ el.textContent=CORE.fmtRelogioCurto(ATIVO.decorridoMs(t)/1000); el.classList.toggle('pausado', !!t.pausaDesde); }
-    if(k) k.textContent= t.pausaDesde? 'Tempo ⏸' : 'Tempo ✎';
+    if(k) k.textContent= ATIVO.rotTempo(t);
   },
   pausa(){
-    const t=S.ativo; if(!t || t.pausaDesde) return;
+    const t=S.ativo; if(!t || t.pausaDesde || t.retro) return;
     t.pausaDesde=agora(); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
     UI.fechaFolha(); ATIVO.pintaTempo(); VIB.v(15); UI.toast('Treino pausado ⏸');
   },
@@ -3070,11 +3080,17 @@ const ATIVO = {
   },
   editaTempo(){
     const t=S.ativo; if(!t) return;
-    const durMin=Math.max(0, Math.round(ATIVO.decorridoMs(t)/60000));
-    const inpDur=h('input',{type:'number',inputmode:'numeric','aria-label':'Duração até agora em minutos',value:String(durMin)});
-    const d=new Date(t.inicio);
     const pad=n=>String(n).padStart(2,'0');
+    const ymd=dt=>dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate());
+    const hoje=new Date(), hojeS=ymd(hoje);
+    const diaS=n=>{ const x=new Date(hoje); x.setDate(x.getDate()-n); return ymd(x); };
+    const durMin=Math.max(0, Math.round(ATIVO.decorridoMs(t)/60000));
+    const d=new Date(t.inicio);
+    const minD=new Date(hoje); minD.setDate(minD.getDate()-365);
+    const podeRetro=!t.duelo;                                    // duelo e' sempre ao vivo
+    const inpData=h('input',{type:'date','aria-label':'Dia do treino',value:ymd(d),max:hojeS,min:ymd(minD)});
     const inpHora=h('input',{type:'time','aria-label':'Horário de início',value:pad(d.getHours())+':'+pad(d.getMinutes())});
+    const inpDur=h('input',{type:'number',inputmode:'numeric','aria-label':'Duração em minutos',value:String(durMin)});
     const min=ms=>Math.max(1, Math.round(ms/60000))+' min';
     const pausaUI = t.pausaDesde
       ? h('div',{style:'margin-bottom:16px'},
@@ -3083,31 +3099,65 @@ const ATIVO = {
       : h('div',{style:'margin-bottom:16px'},
           h('button',{class:'btn',onclick:()=>ATIVO.pausa()},'⏸ Pausar treino'),
           (Number(t.pausadoMs)||0)>=60000? h('div',{class:'f12 mut',style:'margin-top:6px;text-align:center'},'Pausas até agora: '+min(t.pausadoMs)+' (não contam no tempo)') : null);
+    const chips=h('div',{class:'linha',style:'gap:8px;flex-wrap:wrap;margin-bottom:8px'});
+    const dica=h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'});
+    const rotDur=h('div',{class:'f13 mut',style:'margin-bottom:4px'});
+    const ehRetro=()=>podeRetro && (inpData.value||hojeS)!==hojeS;
+    const pinta=()=>{
+      const v=inpData.value||hojeS, retro=ehRetro();
+      chips.innerHTML='';
+      [['Hoje',0],['Ontem',1],['Anteontem',2]].forEach(([rot,n])=>chips.append(
+        h('button',{class:'chip'+(v===diaS(n)?' on':''),onclick:()=>{ inpData.value=diaS(n); pinta(); }},rot)));
+      dica.textContent = retro
+        ? 'Treino de outro dia: ele fica salvo nesse dia e horário, com a duração que você informar.'
+        : 'Começou antes e esqueceu de iniciar? Ajuste o horário de início ou a duração. Esqueceu de registrar um treino? Escolha o dia.';
+      rotDur.textContent = retro? 'Duração do treino (minutos)' : 'Ou duração até agora (minutos)';
+      pausaUI.style.display = retro? 'none' : '';
+    };
+    inpData.addEventListener('change', pinta); inpData.addEventListener('input', pinta);
+    if(t.retro) pausaUI.style.display='none';
+    pinta();
+    const salvar=()=>{
+      const hhmm=(inpHora.value||'').split(':'), hh=+hhmm[0]||0, mm=+hhmm[1]||0;
+      const dur=parseInt(inpDur.value,10);
+      if(ehRetro()){
+        const [Y,M,D]=(inpData.value||hojeS).split('-').map(Number);
+        const ini=new Date(Y, M-1, D, hh, mm, 0, 0).getTime();
+        if(!(dur>0)){ UI.toast('Informe quantos minutos durou o treino'); return; }
+        if(ini>agora()){ UI.toast('Escolha um dia que já passou'); return; }
+        if(ini+dur*60000>agora()){ UI.toast('O início mais a duração passam de agora'); return; }
+        t.pausaDesde=null; t.pausadoMs=0; t.inicio=ini; t.retro=1; t.durFixa=dur*60000;
+        salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+        UI.fechaFolha(); UI.refaz();
+        const r=ATIVO.diaRetro(t); UI.toast('📅 Treino de '+(/^\d/.test(r)? r : r.toLowerCase()), true);
+        return;
+      }
+      // hoje: como antes (horario de inicio, ou a duracao ja decorrida, sem as pausas)
+      const eraRetro=!!t.retro;
+      let novoInicio=t.inicio;
+      if(hhmm.length===2){
+        const cand=new Date(eraRetro? agora() : t.inicio); cand.setHours(hh, mm, 0, 0);
+        if(cand.getTime()>agora()) cand.setDate(cand.getDate()-1); // inicio no futuro => foi ontem a noite
+        novoInicio=cand.getTime();
+      }
+      if(!eraRetro && !isNaN(dur) && Math.abs(dur-durMin)>=1){
+        novoInicio=(t.pausaDesde||agora())-(Number(t.pausadoMs)||0)-dur*60000;
+      }
+      if(eraRetro){ delete t.retro; delete t.durFixa; t.pausadoMs=0; }
+      t.inicio=novoInicio; salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+      ATIVO.pintaTempo(); UI.fechaFolha(); if(eraRetro) UI.refaz(); UI.toast('Tempo ajustado');
+    };
     UI.folha('Tempo do treino',[
       pausaUI,
-      h('div',{class:'f13 mut',style:'margin-bottom:12px;line-height:1.6'},'Começou antes e esqueceu de iniciar? Ajuste a duração já decorrida ou o horário de início.'),
-      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Duração até agora (minutos)'), inpDur,
+      dica,
+      podeRetro
+        ? h('div',{style:'margin-bottom:12px'}, h('div',{class:'f13 mut',style:'margin-bottom:6px'},'Dia do treino'), chips, inpData)
+        : h('div',{class:'f12 mut',style:'margin-bottom:12px'},'No duelo o treino é sempre o de agora.'),
+      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Horário de início'), inpHora,
       h('div',{style:'height:12px'}),
-      h('div',{class:'f13 mut',style:'margin-bottom:4px'},'Ou horário de início'), inpHora,
+      rotDur, inpDur,
       h('div',{style:'height:14px'}),
-      h('button',{class: t.pausaDesde? 'btn' : 'btn btn-p',onclick:()=>{
-        // prioridade: se mexeu no horario e ele difere, usa horario; senao usa duracao
-        let novoInicio=t.inicio;
-        const hhmm=(inpHora.value||'').split(':');
-        if(hhmm.length===2){
-          const cand=new Date(t.inicio); cand.setHours(+hhmm[0], +hhmm[1], 0, 0);
-          if(cand.getTime()>agora()) cand.setDate(cand.getDate()-1); // inicio no futuro => foi ontem
-          novoInicio=cand.getTime();
-        }
-        const durInformada=parseInt(inpDur.value,10);
-        if(!isNaN(durInformada) && Math.abs(durInformada-durMin)>=1){
-          // duracao informada = tempo de treino (sem as pausas)
-          novoInicio=(t.pausaDesde||agora())-(Number(t.pausadoMs)||0)-durInformada*60000;
-        }
-        t.inicio=novoInicio; salva('ativo');
-        ATIVO.pintaTempo();
-        UI.fechaFolha(); UI.toast('Tempo ajustado');
-      }},'Salvar')]);
+      h('button',{class: t.pausaDesde? 'btn' : 'btn btn-p',onclick:salvar},'Salvar')]);
   },
   descarta(){
     UI.folha('Descartar treino?',[
@@ -3194,6 +3244,7 @@ const ATIVO = {
           avisoPub)
       : h('span',{style:'display:none'});
     UI.folha('Concluir treino?',[
+      t.retro? h('div',{class:'f13 b700',style:'color:var(--azul);margin:-2px 2px 10px'},'📅 Treino de '+(/^\d/.test(ATIVO.diaRetro(t))? ATIVO.diaRetro(t) : ATIVO.diaRetro(t).toLowerCase())+', às '+new Date(t.inicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})) : null,
       h('div',{class:'stats3',style:'padding:6px 2px 16px'},
         h('div',{},h('div',{class:'k'},'Duração'),h('div',{class:'v'},CORE.fmtDur(ATIVO.decorridoMs(t)/1000))),
         h('div',{},h('div',{class:'k'},'Volume'),h('div',{class:'v'},CORE.fmtKg(CORE.volumeTreino(t))+' kg')),
@@ -3203,7 +3254,7 @@ const ATIVO = {
       pubArea,
       h('button',{class:'btn btn-p',onclick:()=>{
         // fim = inicio + tempo de treino (as pausas nao contam); 'atualizado' fica com a hora real (sincronia)
-        const agoraReal=agora(), pausas=ATIVO.pausadoMs(t), fim=agoraReal-pausas;
+        const agoraReal=agora(), pausas=ATIVO.pausadoMs(t), fim= t.retro? t.inicio+(Number(t.durFixa)||0) : agoraReal-pausas;
         delete t._estr; delete t._avEstr;
         const salvo={ id:t.id, rid:t.rid, titulo:t.titulo, inicio:t.inicio, fim, feedPub:!!pubAgora,
           ex:feitos, volume:CORE.volumeTreino(t), series:CORE.seriesFeitas(t),
@@ -3247,7 +3298,7 @@ TELAS.ativo = function(){
   m.appendChild(h('div',{class:'card',style:'position:sticky;top:calc(var(--sat) + 58px);z-index:30'},
     h('div',{class:'linha',style:'align-items:flex-start;gap:8px'},
       h('div',{class:'stats3 cab-ta',style:'flex:1;min-width:0'},
-        h('button',{style:'background:none;border:none;text-align:left;padding:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k',id:'ta-cron-k'}, t.pausaDesde? 'Tempo ⏸' : 'Tempo ✎'),h('div',{class:'v cron'+(t.pausaDesde?' pausado':''),id:'ta-cron',style:'color:var(--brand2)'}, CORE.fmtRelogioCurto(ATIVO.decorridoMs(t)/1000))),
+        h('button',{style:'background:none;border:none;text-align:left;padding:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k',id:'ta-cron-k'}, ATIVO.rotTempo(t)),h('div',{class:'v cron'+(t.pausaDesde?' pausado':''),id:'ta-cron',style:'color:var(--brand2)'}, CORE.fmtRelogioCurto(ATIVO.decorridoMs(t)/1000))),
         h('div',{class:'col-vol',style:'cursor:pointer',title:'Toque para alternar entre exato e resumido',onclick:()=>{
           S.cfg.volCurto = !S.cfg.volCurto; salva('cfg'); ATIVO.pinta();
         }},
@@ -6940,7 +6991,7 @@ TELAS.inicio = function(){
   }
   if(S.ativo){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
-      'Retomar treino em andamento · '+CORE.fmtDur(ATIVO.decorridoMs()/1000)+(S.ativo.pausaDesde?' · pausado':'')));
+      'Retomar treino em andamento · '+CORE.fmtDur(ATIVO.decorridoMs()/1000)+(S.ativo.pausaDesde?' · pausado':'')+(S.ativo.retro?' · 📅 '+ATIVO.diaRetro():'')));
   }
   m.appendChild(cardSemana());
   const _pg=PROGSUG.banner(); if(_pg) m.appendChild(_pg);

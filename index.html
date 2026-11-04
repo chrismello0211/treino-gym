@@ -494,6 +494,11 @@ body.kb .folha .folha-corpo{max-height:38vh}
 .fx-mini-spin{width:15px;height:15px;border-radius:50%;border:2px solid var(--surf3);border-top-color:var(--brand);display:inline-block;animation:fx-spin .7s linear infinite}
 @keyframes fx-tela{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .fx-tela{animation:fx-tela .18s ease-out}
+@keyframes fx-ir{from{opacity:.0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes fx-voltar{from{opacity:.0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+#main.fx-tela.fx-ir{animation:fx-ir .26s var(--ease) both}
+#main.fx-tela.fx-voltar{animation:fx-voltar .26s var(--ease) both}
+#main.fx-ir>.card,#main.fx-ir>.vazio,#main.fx-voltar>.card,#main.fx-voltar>.vazio{animation:none}
 .cab-ta{gap:5px}
 .cab-ta .v{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cab-ta .k{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;letter-spacing:0}
@@ -591,6 +596,33 @@ body.claro .boas-hero{background:linear-gradient(180deg,rgba(232,80,0,.07),rgba(
   html{scroll-behavior:auto}
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
+/* ===== acabamento de app nativo (v11.33) ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+img{-webkit-user-drag:none}
+html:not(.teclado) :focus-visible{outline:none!important}
+.menu-op,.item,.med-row{transition:background-color .18s ease}
+.menu-op:active,.item:active,.med-row:active{background-color:var(--surf2);transition:none}
+.btn{transition:transform .16s var(--ease),filter .16s ease,background-color .16s ease}
+.btn-p:active{filter:brightness(.92)}
+.stats3,.srow input,.ed-serie input,.duelo-td,.meta-num,.cron{font-variant-numeric:tabular-nums}
+.folha{transition:transform .42s cubic-bezier(.32,.72,0,1),visibility .42s}
+@keyframes pulo{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
+.srow.pulo .scheck{animation:pulo .38s var(--ease)}
+@keyframes brilhoPR{0%{background:rgba(232,184,75,.30);box-shadow:0 0 0 4px rgba(232,184,75,.16)}100%{background:transparent;box-shadow:0 0 0 0 rgba(232,184,75,0)}}
+.pr-linha{border-radius:6px}
+.pr-linha.pr-novo{animation:brilhoPR 1.4s ease-out}
+#toast{box-shadow:0 12px 32px rgba(0,0,0,.32)}
+#ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:40;transform:translate(-50%,0);opacity:0;pointer-events:none;transition:opacity .15s}
+#ptr.on,#ptr.girando{opacity:1}
+body.puxando #main{transform:translateY(var(--puxa,0px));transition:none}
+body.puxa-volta #main{transition:transform .28s var(--ease)}
+#ptr .ptr-bola{width:36px;height:36px;border-radius:50%;background:var(--surf2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--tx2);font-weight:800;font-size:17px;box-shadow:0 6px 18px rgba(0,0,0,.28);transition:transform .2s var(--ease),color .15s,border-color .15s}
+#ptr.pronto .ptr-bola{transform:rotate(180deg);color:var(--brand);border-color:var(--brand)}
+#ptr.girando .ptr-bola{color:var(--brand);border-color:var(--brand);animation:ptrGira .8s linear infinite}
+@keyframes ptrGira{to{transform:rotate(360deg)}}
+.folha-corpo{overscroll-behavior:contain}
+@media (prefers-reduced-motion:reduce){.srow.pulo .scheck,.pr-linha.pr-novo,#ptr.girando .ptr-bola,#main.fx-tela.fx-ir,#main.fx-tela.fx-voltar{animation:none}.folha{transition:visibility 0s}}
 </style>
 </head>
 <body>
@@ -670,7 +702,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.32.0';
+const APP_VER='11.35.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1631,6 +1663,9 @@ const $$ = s=>Array.from(document.querySelectorAll(s));
 // Abrir uma folha com um campo de texto da TELA em foco: no iPhone tocar num botao nao tira o foco, entao
 // o app achava que o teclado continuava aberto e levantava a folha pra cima do topo da tela (print do
 // Rafael). Ao abrir uma folha, o campo de fora perde o foco e a conta do teclado zera.
+// anel de foco: so pra quem navega com teclado (no toque ele aparecia no "Fechar" de toda folha)
+document.addEventListener('keydown', ev=>{ if(ev.key==='Tab') document.documentElement.classList.add('teclado'); }, true);
+document.addEventListener('pointerdown', ()=>document.documentElement.classList.remove('teclado'), true);
 function soltaTeclado(){
   try{
     const a=document.activeElement;
@@ -1764,12 +1799,15 @@ const UI = {
       if(UI.telaAtual==='ativo' && tela!=='ativo' && S.ativo) UI.guardaLugarAtivo();
       if(tela==='ativo' && !rolagem && S.ativo){ const l=UI.lugarAtivo(); if(l && l.id===S.ativo.id && l.y>0) rolagem=l.y; }
     }catch(e){}
+    const dirFx = UI._semAnim ? '' : (UI._dirFx || ((empilha && UI.telaAtual)? 'fx-ir' : ''));
+    UI._dirFx='';
     if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0]);
     UI.telaAtual = tela; UI.args = args||null;
     try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }
-    try{ const mm=$('#main'); mm.classList.remove('fx-tela'); void mm.offsetWidth; mm.classList.add('fx-tela');
+    try{ const mm=$('#main'); mm.classList.remove('fx-tela','fx-ir','fx-voltar'); void mm.offsetWidth;
+      if(!UI._semAnim){ mm.classList.add('fx-tela'); if(dirFx) mm.classList.add(dirFx); }
       // a entrada anima SO na navegacao; redesenhar a tela nao repete a animacao
-      clearTimeout(UI._fxT); UI._fxT=setTimeout(()=>{ try{ mm.classList.remove('fx-tela'); }catch(e){} }, 420); }catch(e){}
+      clearTimeout(UI._fxT); UI._fxT=setTimeout(()=>{ try{ mm.classList.remove('fx-tela','fx-ir','fx-voltar'); }catch(e){} }, 420); }catch(e){}
     if(rolagem){
       // a tela acabou de ser montada; espera o layout assentar antes de rolar
       const alvo=rolagem;
@@ -1787,7 +1825,7 @@ const UI = {
   },
   guardaLugarAtivo(){ try{ UI._lugarAtivo={id:S.ativo.id, y:window.scrollY||0}; localStorage.setItem('tg_ativoY', JSON.stringify(UI._lugarAtivo)); }catch(e){} },
   lugarAtivo(){ if(UI._lugarAtivo) return UI._lugarAtivo; try{ return JSON.parse(localStorage.getItem('tg_ativoY')||'null'); }catch(e){ return null; } },
-  volta(){ const ant = UI.pilha.pop(); if(ant) UI.vai(ant[0], ant[1], false, ant[2]||0); else UI.vai('treino', null, false); },
+  volta(){ const ant = UI.pilha.pop(); UI._dirFx='fx-voltar'; if(ant) UI.vai(ant[0], ant[1], false, ant[2]||0); else UI.vai('treino', null, false); },
   refaz(){
     // limpeza defensiva: remove qualquer clone de drag preso e reseta opacidades
     if(window.__tgDrag){ window.__tgDrag=false; document.querySelectorAll('[style*="z-index:9999"]').forEach(el=>el.remove()); document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; }
@@ -1901,9 +1939,32 @@ $('#veu').addEventListener('click', UI.fechaFolha);
 // (o gesto de arrastar da borda que ficava aqui rodava em todo celular, e no iPhone junto com o voltar do
 // proprio Safari: duas navegacoes no mesmo arrasto, redesenhando no meio da animacao do Safari. Agora o
 // gesto tem um dono so: no iPhone instalado e' o do app (modulo VOLTAR); no Safari e no Android, o do sistema.)
+// sobe pro topo quadro a quadro: a rolagem suave do navegador para no meio quando a tela muda durante a
+// animacao (o Perfil carrega partes sozinho); encostar o dedo interrompe, como nos apps nativos
+function rolaProTopo(){
+  const y0=window.scrollY||0; if(y0<=0) return;
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0,0); return; }
+  const t0=performance.now(), dur=Math.min(520, 240+y0/6); let parou=false;
+  const para=()=>{ parou=true; };
+  window.addEventListener('touchstart', para, {once:true, passive:true});
+  const passo=tq=>{
+    if(parou) return;
+    const k=Math.min(1, (tq-t0)/dur), e=1-Math.pow(1-k, 3);
+    window.scrollTo(0, Math.round(y0*(1-e)));
+    if(k<1) requestAnimationFrame(passo); else window.removeEventListener('touchstart', para);
+  };
+  requestAnimationFrame(passo);
+}
 $$('#tabbar .tab').forEach(t=>t.addEventListener('click', ()=>{
+  const aba=t.dataset.tab;
+  // tocar de novo na aba em que ja esta (como no Instagram): sobe pro topo; ja no topo do Inicio, atualiza o feed
+  if(UI.telaAtual===aba && !UI.pilha.length && !document.querySelector('.folha.on')){
+    if((window.scrollY||0)>4){ rolaProTopo(); return; }
+    if(aba==='inicio' && S.auth){ try{ PUXA.atualiza(); return; }catch(e){} }
+  }
+  // (o reajuste da tela do Safari devolve a rolagem pro lugar: por isso so roda ao trocar de aba de verdade)
   try{ if(typeof recuperaViewport==='function') recuperaViewport(true); }catch(e){}
-  UI.pilha=[]; UI.vai(t.dataset.tab, null, false);
+  UI.pilha=[]; UI.vai(aba, null, false);
 }));
 
 /* ---------- sons ---------- */
@@ -3017,6 +3078,8 @@ const ATIVO = {
       return;
     }
     salva('ativo');
+    ATIVO.pintaRecorde(e.exId);                                   // o recorde novo aparece na hora no cartao
+    if(row && s.ok){ row.classList.remove('pulo'); void row.offsetWidth; row.classList.add('pulo'); setTimeout(()=>row.classList.remove('pulo'), 450); }
     if(row){ row.classList.toggle('feita', !!(s.ok||s.pr));
       const num=e.series.filter(q=>q.tipo!=='W').indexOf(s)+1;
       const chk=row.querySelector('.scheck'); if(chk){ chk.textContent=s.ok?'✓':'○'; chk.setAttribute('aria-pressed',String(!!s.ok)); chk.setAttribute('aria-label',(s.ok?'Desfazer conclusão da série ':'Marcar série ')+(num||1)+' de '+x.n+(s.ok?'':' como concluída')); }
@@ -3052,6 +3115,17 @@ const ATIVO = {
   pausadoMs(t){ t=t||S.ativo; if(!t || t.retro) return 0; return (Number(t.pausadoMs)||0) + (t.pausaDesde? Math.max(0, agora()-t.pausaDesde) : 0); },
   // treino de outro dia (retroativo): a duracao e' a informada e o relogio nao corre
   decorridoMs(t){ t=t||S.ativo; if(!t) return 0; if(t.retro) return Math.max(0, Number(t.durFixa)||0); return Math.max(0, agora()-t.inicio-ATIVO.pausadoMs(t)); },
+  // a linha "🥇 Recorde" do cartao: atualiza sem redesenhar a tela (antes so mudava saindo e voltando)
+  pintaRecorde(exId){
+    try{
+      const rr=recordeResumo(exId), novo= rr? '🥇 '+rr : '';
+      document.querySelectorAll('[data-pr-ex]').forEach(el=>{
+        if(el.getAttribute('data-pr-ex')!==exId || el.textContent===novo) return;
+        el.textContent=novo; el.style.display= rr? '' : 'none';
+        el.classList.remove('pr-novo'); void el.offsetWidth; if(rr) el.classList.add('pr-novo');
+      });
+    }catch(e){}
+  },
   diaRetro(t){
     t=t||S.ativo; if(!t || !t.retro) return '';
     const d0=new Date(); d0.setHours(0,0,0,0); const d=new Date(t.inicio); d.setHours(0,0,0,0);
@@ -3341,7 +3415,7 @@ TELAS.ativo = function(){
         h('div',{class:'esp',style:'min-width:0',onclick:()=>UI.vai('exercicio',{id:e.exId})},
           h('div',{class:'b700',style:'color:var(--brand2);font-size:15.5px'}, x.n),
           h('div',{class:'f12 mut'}, GRUPOS[x.g]||x.g),
-          (function(){ const rr=recordeResumo(e.exId); return rr? h('div',{class:'f12',style:'color:#E8B84B;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, '🥇 '+rr) : h('span',{style:'display:none'}); })()),
+          (function(){ const rr=recordeResumo(e.exId); return h('div',{class:'f12 pr-linha','data-pr-ex':e.exId,style:'color:#E8B84B;margin-top:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(rr?'':';display:none')}, rr? '🥇 '+rr : ''); })()),
         h('button',{class:'btn btn-mini',style:'width:38px','aria-label':'Mais opções de '+x.n,onclick:()=>menuEx(e,ix)},'⋯')),
       campoNotas(e.notas, v=>{ e.notas=v; salva('ativo'); }, 'Notas de '+x.n, 'Notas…', 'margin-bottom:8px'),
       (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
@@ -5750,7 +5824,8 @@ const VOLTAR = {
   },
   aoVoltar(){
     VOLTAR.guarda=false;
-    VOLTAR.fazVoltar();
+    if(IOS && !IOS_APP) UI._semAnim=true;
+    try{ VOLTAR.fazVoltar(); }finally{ UI._semAnim=false; }
     if(IOS) VOLTAR.repinta();
     VOLTAR.sync();
   },
@@ -9921,6 +9996,91 @@ FEED.atualizaSeNovo=function(intervalo){
 };
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>FEED.atualizaSeNovo(30000), 400); });
 setInterval(()=>FEED.atualizaSeNovo(110000), 120000);
+
+// ---- folhas: arrastar pra baixo fecha (pela alca/cabecalho, ou pelo corpo quando ja esta no topo) ----
+const ARRASTAFOLHA = { g:null };
+document.addEventListener('touchstart', ev=>{
+  ARRASTAFOLHA.g=null;
+  if(!ev.touches || ev.touches.length!==1 || document.body.classList.contains('kb')) return;
+  const el=ev.target; if(!el || !el.closest) return;
+  const f=el.closest('.folha.on'); if(!f) return;
+  if(f.id==='folha' && UI._folhaObrigatoria) return;
+  if(el.closest('input,textarea,select,canvas,[data-sem-arrasto]')) return;
+  const corpo=f.querySelector('.folha-corpo'), noCab=!!el.closest('.alca,.folha-cab');
+  if(!noCab && !(corpo && corpo.contains(el) && corpo.scrollTop<=0)) return;
+  const tq=ev.touches[0];
+  ARRASTAFOLHA.g={f, corpo, noCab, x:tq.clientX, y:tq.clientY, t:Date.now(), dy:0, ok:false};
+}, {passive:true});
+document.addEventListener('touchmove', ev=>{
+  const g=ARRASTAFOLHA.g; if(!g) return;
+  const tq=ev.touches[0], dy=tq.clientY-g.y, dx=Math.abs(tq.clientX-g.x);
+  if(!g.ok){
+    if(dx>12 && dx>dy){ ARRASTAFOLHA.g=null; return; }        // gesto de lado
+    if(dy<-6){ ARRASTAFOLHA.g=null; return; }                  // pra cima: rola o conteudo
+    if(dy<=8) return;
+    if(!g.noCab && g.corpo && g.corpo.scrollTop>0){ ARRASTAFOLHA.g=null; return; }
+    g.ok=true; g.f.style.transition='none';
+  }
+  g.dy=Math.max(0, dy);
+  g.f.style.transform='translateY('+Math.round(g.dy)+'px)';
+  if(g.f.id==='folha'){ const v=$('#veu'); if(v) v.style.opacity=String(Math.max(0.2, 1-g.dy/420)); }
+}, {passive:true});
+const fimArrastoFolha=()=>{
+  const g=ARRASTAFOLHA.g; ARRASTAFOLHA.g=null; if(!g) return;
+  const f=g.f, v=$('#veu');
+  f.style.transition=''; if(v) v.style.opacity='';
+  if(!g.ok){ f.style.transform=''; return; }
+  const vel=g.dy/Math.max(1, Date.now()-g.t);
+  const fecha = g.dy > Math.min(150, f.offsetHeight*0.3) || (g.dy>60 && vel>0.6);
+  if(fecha){ if(f===FOLHA2.el) FOLHA2.fecha(); else UI.fechaFolha(); }
+  f.style.transform='';                                          // desce (ou volta) a partir de onde o dedo deixou
+};
+document.addEventListener('touchend', fimArrastoFolha, {passive:true});
+document.addEventListener('touchcancel', fimArrastoFolha, {passive:true});
+
+// ---- Inicio: puxar o feed pra baixo atualiza ----
+const PUXA = { g:null, ocupado:false, el:null };
+PUXA.indicador=function(){
+  if(!PUXA.el){ PUXA.el=h('div',{id:'ptr','aria-hidden':'true'}, h('div',{class:'ptr-bola'},'↓')); document.body.appendChild(PUXA.el); }
+  return PUXA.el;
+};
+PUXA.conteudo=function(px){ document.body.classList.add('puxando'); document.body.style.setProperty('--puxa', Math.round(px)+'px'); };
+PUXA.solta=function(){
+  const i=PUXA.indicador(); i.style.transform=''; i.classList.remove('on','pronto','girando'); i.firstChild.textContent='↓';
+  const bd=document.body; if(bd.classList.contains('puxando')){ bd.classList.add('puxa-volta'); bd.classList.remove('puxando'); bd.style.removeProperty('--puxa'); setTimeout(()=>bd.classList.remove('puxa-volta'), 320); }
+};
+document.addEventListener('touchstart', ev=>{
+  PUXA.g=null;
+  if(PUXA.ocupado || UI.telaAtual!=='inicio' || !S.auth || !ev.touches || ev.touches.length!==1) return;
+  if((window.scrollY||0)>0 || document.querySelector('.folha.on')) return;
+  const tq=ev.touches[0]; if(tq.clientX<=24) return;               // borda esquerda: gesto de voltar
+  if(ev.target && ev.target.closest && ev.target.closest('input,textarea,select,canvas')) return;
+  PUXA.g={x:tq.clientX, y:tq.clientY, ok:false, d:0};
+}, {passive:true});
+document.addEventListener('touchmove', ev=>{
+  const g=PUXA.g; if(!g) return;
+  const tq=ev.touches[0], dy=tq.clientY-g.y, dx=Math.abs(tq.clientX-g.x);
+  if(!g.ok){
+    if((dx>12 && dx>dy) || dy<0 || (window.scrollY||0)>0){ PUXA.g=null; return; }
+    if(dy<=10) return; g.ok=true;
+  }
+  g.d=Math.min(110, dy*0.5);
+  const i=PUXA.indicador(); i.classList.add('on'); i.classList.toggle('pronto', g.d>=64);
+  i.style.transform='translate(-50%,'+Math.round(g.d*0.45)+'px)'; PUXA.conteudo(g.d);
+}, {passive:true});
+document.addEventListener('touchend', ()=>{
+  const g=PUXA.g; PUXA.g=null; if(!g) return;
+  if(!g.ok || g.d<64){ PUXA.solta(); return; }
+  PUXA.atualiza();
+}, {passive:true});
+// atualiza o feed mostrando o indicador (puxando, ou tocando de novo em Inicio ja no topo)
+PUXA.atualiza=function(){
+  if(PUXA.ocupado) return;
+  const i=PUXA.indicador(); PUXA.ocupado=true;
+  i.classList.remove('pronto'); i.classList.add('on','girando'); i.firstChild.textContent='↻'; i.style.transform='translate(-50%,25px)'; PUXA.conteudo(56);
+  const acaba=()=>{ PUXA.ocupado=false; PUXA.solta(); };
+  Promise.resolve(FEED.carrega()).then(()=>{ if(UI.telaAtual==='inicio') UI.refaz(); }).catch(()=>{}).then(()=>setTimeout(acaba, 300));
+};
 const SOCIALVIEW = {
   async folha(tipo, alvo){
     if(!alvo){ UI.toast('Crie sua conta para ver'); return; }

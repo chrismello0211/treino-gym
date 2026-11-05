@@ -702,7 +702,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.35.0';
+const APP_VER='11.35.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -3078,7 +3078,7 @@ const ATIVO = {
       return;
     }
     salva('ativo');
-    ATIVO.pintaRecorde(e.exId);                                   // o recorde novo aparece na hora no cartao
+    ATIVO.pintaRecorde(e.exId, row);                              // o recorde novo aparece na hora no cartao
     if(row && s.ok){ row.classList.remove('pulo'); void row.offsetWidth; row.classList.add('pulo'); setTimeout(()=>row.classList.remove('pulo'), 450); }
     if(row){ row.classList.toggle('feita', !!(s.ok||s.pr));
       const num=e.series.filter(q=>q.tipo!=='W').indexOf(s)+1;
@@ -3116,14 +3116,43 @@ const ATIVO = {
   // treino de outro dia (retroativo): a duracao e' a informada e o relogio nao corre
   decorridoMs(t){ t=t||S.ativo; if(!t) return 0; if(t.retro) return Math.max(0, Number(t.durFixa)||0); return Math.max(0, agora()-t.inicio-ATIVO.pausadoMs(t)); },
   // a linha "🥇 Recorde" do cartao: atualiza sem redesenhar a tela (antes so mudava saindo e voltando)
-  pintaRecorde(exId){
+  pintaRecorde(exId, row){
     try{
       const rr=recordeResumo(exId), novo= rr? '🥇 '+rr : '';
       document.querySelectorAll('[data-pr-ex]').forEach(el=>{
         if(el.getAttribute('data-pr-ex')!==exId || el.textContent===novo) return;
         el.textContent=novo; el.style.display= rr? '' : 'none';
         el.classList.remove('pr-novo'); void el.offsetWidth; if(rr) el.classList.add('pr-novo');
+        // espera a tela assentar (no iPhone o teclado fecha e a pagina desce um pouco) e garante que aparece
+        if(rr && row && row.closest && row.closest('.card')===el.closest('.card')) setTimeout(()=>ATIVO.mostraRecorde(el, row), 380);
       });
+    }catch(e){}
+  },
+  // a linha do recorde ficou embaixo do placar fixo do topo: sobe so o necessario (sem esconder a serie
+  // que acabou de ser marcada) e recomeca o brilho. Se nao der, fica o aviso de recorde de baixo.
+  mostraRecorde(el, row){
+    try{
+      if(!el.isConnected || !row.isConnected || UI.telaAtual!=='ativo') return;
+      const fixo=document.querySelector('#main .card[style*="position:sticky"]');
+      const topoLivre=(fixo? fixo.getBoundingClientRect().bottom : 0)+10;
+      const tb=$('#timerbar'), baseLivre=(tb && tb.classList.contains('on'))? tb.getBoundingClientRect().top-8 : window.innerHeight-8;
+      const r=el.getBoundingClientRect();
+      if(r.top>=topoLivre) return;                                   // ja aparece
+      const delta=Math.ceil(topoLivre-r.top), rs=row.getBoundingClientRect();
+      if(rs.bottom+delta>baseLivre) return;                          // subir esconderia a serie marcada
+      const brilha=()=>{ el.classList.remove('pr-novo'); void el.offsetWidth; el.classList.add('pr-novo'); };
+      const y0=window.scrollY||0, alvo=Math.max(0, y0-delta);
+      if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){ window.scrollTo(0, alvo); brilha(); return; }
+      const t0=performance.now(), dur=260; let parou=false;
+      const para=()=>{ parou=true; };
+      window.addEventListener('touchstart', para, {once:true, passive:true});
+      const passo=tq=>{
+        if(parou) return;
+        const k=Math.min(1,(tq-t0)/dur), e=1-Math.pow(1-k,3);
+        window.scrollTo(0, Math.round(y0+(alvo-y0)*e));
+        if(k<1) requestAnimationFrame(passo); else { window.removeEventListener('touchstart', para); brilha(); }
+      };
+      requestAnimationFrame(passo);
     }catch(e){}
   },
   diaRetro(t){

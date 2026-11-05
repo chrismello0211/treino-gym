@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.35.0';
+const EXPECTED_VERSION = '11.35.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -221,7 +221,7 @@ check(indexHtml.includes("(Array.isArray(s.pr) && s.pr.length)? {pr:1} : {}") &&
 check(indexHtml.includes('DUELO.guardaNotas(id, notasK)') && indexHtml.includes('const nt=DUELO.notasDoDono(d)') && !/exSala\([^)]*notas/.test(indexHtml), 'duelo: notas da ficha so pra dona (e nunca na sala)', 'a dona da ficha perdia as notas no duelo');
 check(indexHtml.includes('FEED.atualizaSeNovo=function') && indexHtml.includes("FEED.atualizaSeNovo(30000)") && indexHtml.includes('cartao-naopub'), 'feed se atualiza ao voltar pro app e treino nao publicado avisa', 'o post do amigo so aparecia trocando de tela; treino fora do feed passava batido');
 check(indexHtml.includes("if(t.retro) return Math.max(0, Number(t.durFixa)||0);") && indexHtml.includes("fim= t.retro? t.inicio+(Number(t.durFixa)||0) : agoraReal-pausas") && indexHtml.includes("type:'date','aria-label':'Dia do treino'"), 'treino retroativo: dia, duracao fixa e conclusao no dia certo', 'treino esquecido nao podia ser registrado em outro dia');
-check(indexHtml.includes('ATIVO.pintaRecorde(e.exId);') && indexHtml.includes("'data-pr-ex':e.exId"), 'recorde do cartao atualiza na hora em que a serie e marcada', 'o recorde novo so aparecia saindo e voltando da tela');
+check(indexHtml.includes('ATIVO.pintaRecorde(e.exId, row);') && indexHtml.includes("'data-pr-ex':e.exId") && indexHtml.includes('mostraRecorde(el, row){'), 'recorde do cartao atualiza na hora em que a serie e marcada', 'o recorde novo so aparecia saindo e voltando da tela');
 check(indexHtml.includes('const ARRASTAFOLHA') && indexHtml.includes('const PUXA') && indexHtml.includes("if(f.id==='folha' && UI._folhaObrigatoria) return;"), 'folha fecha arrastando e o Inicio atualiza puxando', 'gestos de app nativo');
 check(indexHtml.includes("UI._dirFx='fx-voltar'") && indexHtml.includes('#main.fx-tela.fx-ir') && indexHtml.includes('PUXA.atualiza();'), 'telas deslizam e tocar na aba atual sobe pro topo', 'navegacao com cara de app nativo');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');

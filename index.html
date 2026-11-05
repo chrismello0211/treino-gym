@@ -702,7 +702,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.35.1';
+const APP_VER='11.35.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1612,6 +1612,7 @@ const BIB = {
   temGifOuFoto(x){
     if(!x.custom) return true;                 // biblioteca sempre tem gif
     if(x.foto) return true;                    // custom com foto própria
+    if(fotoIrma(x)) return true;               // ou de um igual (mesmo nome) que tem foto
     if(!x.hevy) return true;                   // criado à mão ou copiado de amigo: sempre aparece
     // só o resto da importação do Hevy precisa casar com a biblioteca pra não virar lixo
     const nn = x._nn || BIB.norm(x.n);
@@ -1731,11 +1732,23 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function agora(){ return Date.now(); }
 function dataCurta(ts){ return new Date(ts).toLocaleDateString('pt-BR',{weekday:'short', day:'numeric', month:'short'}); }
 function dataLonga(ts){ const s=new Date(ts).toLocaleDateString('pt-BR',{weekday:'long', day:'numeric', month:'long'}); return s[0].toUpperCase()+s.slice(1); }
-// melhor imagem de um exercício: foto própria > gif dele > gif do
+// O mesmo exercicio criado mais de uma vez, com o mesmo nome (importado do Hevy, copiado num duelo, criado
+// de novo...): so um deles costuma ter a foto. Os outros usam a foto desse (Rafael: a elevacao lateral
+// aparecia com foto na ficha de peito e sem foto na de braco; Marianne tinha 4 copias e so 1 com foto).
+function fotoIrma(xf){
+  try{
+    if(!xf || !xf.custom || xf.foto) return null;
+    const nn=xf._nn || BIB.norm(xf.n||''); if(!nn) return null;
+    const c=Object.values(S.custom||{}).find(q=>q && q.foto && q.id!==xf.id && (q._nn || BIB.norm(q.n||''))===nn);
+    return c? c.foto : null;
+  }catch(e){ return null; }
+}
+// melhor imagem de um exercício: foto própria > foto de um igual (mesmo nome) > gif dele > gif do
 // equivalente com mesmo nome na biblioteca
 function srcEx(exId){
   const xf=BIB.porId[exId];
   if(xf && xf.foto) return xf.foto;
+  const fi=fotoIrma(xf); if(fi) return fi;
   let gifId=exId;
   if(xf && xf.custom){
     const nn = xf._nn || BIB.norm(xf.n);
@@ -1747,6 +1760,7 @@ function srcEx(exId){
 function thumbEl(exId, tam){
   const xf=BIB.porId[exId];
   if(xf && xf.foto) return h('img',{class:'thumb', src:xf.foto, alt:'', loading:'lazy'});
+  const fi=fotoIrma(xf); if(fi) return h('img',{class:'thumb', src:fi, alt:'', loading:'lazy'});
   let gifId = exId;
   if(xf && xf.custom){
     const nn = xf._nn || BIB.norm(xf.n);

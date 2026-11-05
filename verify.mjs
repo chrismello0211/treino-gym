@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.32.0';
+const EXPECTED_VERSION = '11.35.2';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -189,7 +189,7 @@ check(indexHtml.includes('@supports (-webkit-touch-callout:none)') && /input:not
 
 // guardas da revisao 11.24.1 (bugs reais encontrados na 11.24.0)
 check(!/html\s*\{[^}]*scroll-behavior\s*:\s*smooth/i.test(indexHtml), 'rolagem instantanea ao navegar', 'scroll-behavior:smooth faz a tela descer sozinha ao voltar');
-check(indexHtml.includes("mm.classList.remove('fx-tela')") && indexHtml.includes('UI._fxT'), 'animacao de entrada so ao navegar', 'sem remover fx-tela, cada redesenho reanima os cartoes');
+check(indexHtml.includes("mm.classList.remove('fx-tela','fx-ir','fx-voltar'); }catch(e){} }, 420)") && indexHtml.includes('UI._fxT'), 'animacao de entrada so ao navegar', 'sem remover fx-tela, cada redesenho reanima os cartoes');
 check(!/\.navigate\s*\(/.test(swSource), 'notificacao nao recarrega o app', 'clients.navigate recarrega a pagina e perde o que esta na memoria');
 {
   const atomico = (indexHtml.match(/\[([^\]]*)\]\s*\n?\s*\.forEach\(raiz=>\{ limpa\[raiz\+'\/'\+u\]=null; \}\)/) || [])[1] || '';
@@ -214,13 +214,17 @@ check(indexHtml.includes('UI.guardaLugarAtivo()') && indexHtml.includes("localSt
 check(indexHtml.includes('contaChave(d, k)') && indexHtml.includes("d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId") && indexHtml.includes('A._salaKs'), 'duelo: troca compartilhada, ordem e series sincronizadas', 'exercicio adicionado a mao nao se ligava a troca do outro; ordem nao se propagava');
 check(indexHtml.includes('if(DUELO.digitando()) DUELO.agendaRefaz(); else DUELO.refazTela();') && !indexHtml.includes("if(digitando) DUELO._pend=true; else UI.refaz();"), 'duelo: tela atualiza sozinha (so espera quem digita de verdade)', 'a tela so atualizava depois de abrir e fechar outra tela');
 check(indexHtml.includes('ehDuplicata(d, k)') && indexHtml.includes('DUELO.mapaDe(d,u,k)') && indexHtml.includes('A._dkJunta[k]=c'), 'duelo: mesmo exercicio em duas chaves converge e soma as series', 'series de quem adicionou de novo nao apareciam pros outros');
-check(indexHtml.includes('semHistorico: IOS_APP') && indexHtml.includes('if(VOLTAR.semHistorico || VOLTAR.guarda') && indexHtml.includes('VOLTAR.fazVoltar();') && (indexHtml.match(/addEventListener\('touchend'/g)||[]).length===2, 'iPhone instalado: voltar sem historico do navegador (sem tela branca)', 'o gesto do Safari com historico deixava a tela branca');
+check(indexHtml.includes('semHistorico: IOS_APP') && indexHtml.includes('if(VOLTAR.semHistorico || VOLTAR.guarda') && indexHtml.includes('VOLTAR.fazVoltar();') && !indexHtml.includes('ok = t.clientX<28 && !window.__tgDrag'), 'iPhone instalado: voltar sem historico do navegador (sem tela branca)', 'o gesto do Safari com historico deixava a tela branca');
 check(indexHtml.includes('function mascaraTempo(') && !indexHtml.includes("parseTempoCampo(ev.target.value, ehCardio)") && !indexHtml.includes("parseTempoCampo(rp.value, eC)"), 'campo de tempo sempre com 00:00 (numeros entram pela direita)', 'o tempo aparecia sem as casas');
 check((indexHtml.match(/campoNotas\(e\.notas/g)||[]).length >= 2 && indexHtml.includes('const METAPESO'), 'notas que crescem e objetivo de peso', 'nota longa ficava escondida numa linha');
 check(indexHtml.includes("(Array.isArray(s.pr) && s.pr.length)? {pr:1} : {}") && indexHtml.includes("class:'duelo-pr'"), 'duelo: medalha de recorde de quem esta junto', 'quem treinava junto nao via o recorde do outro');
 check(indexHtml.includes('DUELO.guardaNotas(id, notasK)') && indexHtml.includes('const nt=DUELO.notasDoDono(d)') && !/exSala\([^)]*notas/.test(indexHtml), 'duelo: notas da ficha so pra dona (e nunca na sala)', 'a dona da ficha perdia as notas no duelo');
 check(indexHtml.includes('FEED.atualizaSeNovo=function') && indexHtml.includes("FEED.atualizaSeNovo(30000)") && indexHtml.includes('cartao-naopub'), 'feed se atualiza ao voltar pro app e treino nao publicado avisa', 'o post do amigo so aparecia trocando de tela; treino fora do feed passava batido');
 check(indexHtml.includes("if(t.retro) return Math.max(0, Number(t.durFixa)||0);") && indexHtml.includes("fim= t.retro? t.inicio+(Number(t.durFixa)||0) : agoraReal-pausas") && indexHtml.includes("type:'date','aria-label':'Dia do treino'"), 'treino retroativo: dia, duracao fixa e conclusao no dia certo', 'treino esquecido nao podia ser registrado em outro dia');
+check(indexHtml.includes('ATIVO.pintaRecorde(e.exId, row);') && indexHtml.includes("'data-pr-ex':e.exId") && indexHtml.includes('mostraRecorde(el, row){'), 'recorde do cartao atualiza na hora em que a serie e marcada', 'o recorde novo so aparecia saindo e voltando da tela');
+check(indexHtml.includes('const ARRASTAFOLHA') && indexHtml.includes('const PUXA') && indexHtml.includes("if(f.id==='folha' && UI._folhaObrigatoria) return;"), 'folha fecha arrastando e o Inicio atualiza puxando', 'gestos de app nativo');
+check(indexHtml.includes("UI._dirFx='fx-voltar'") && indexHtml.includes('#main.fx-tela.fx-ir') && indexHtml.includes('PUXA.atualiza();'), 'telas deslizam e tocar na aba atual sobe pro topo', 'navegacao com cara de app nativo');
+check(indexHtml.includes('function fotoIrma(xf)') && indexHtml.includes('const fi=fotoIrma(xf); if(fi) return h(') && indexHtml.includes('const fi=fotoIrma(xf); if(fi) return fi;'), 'exercicio criado sem foto usa a foto de um igual (mesmo nome)', 'a elevacao lateral do Rafael aparecia sem foto na ficha de braco');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

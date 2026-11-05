@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.35.2';
+const EXPECTED_VERSION = '11.36.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -225,6 +225,8 @@ check(indexHtml.includes('ATIVO.pintaRecorde(e.exId, row);') && indexHtml.includ
 check(indexHtml.includes('const ARRASTAFOLHA') && indexHtml.includes('const PUXA') && indexHtml.includes("if(f.id==='folha' && UI._folhaObrigatoria) return;"), 'folha fecha arrastando e o Inicio atualiza puxando', 'gestos de app nativo');
 check(indexHtml.includes("UI._dirFx='fx-voltar'") && indexHtml.includes('#main.fx-tela.fx-ir') && indexHtml.includes('PUXA.atualiza();'), 'telas deslizam e tocar na aba atual sobe pro topo', 'navegacao com cara de app nativo');
 check(indexHtml.includes('function fotoIrma(xf)') && indexHtml.includes('const fi=fotoIrma(xf); if(fi) return h(') && indexHtml.includes('const fi=fotoIrma(xf); if(fi) return fi;'), 'exercicio criado sem foto usa a foto de um igual (mesmo nome)', 'a elevacao lateral do Rafael aparecia sem foto na ficha de braco');
+check(indexHtml.includes('const EXFOTO') && indexHtml.includes("EXFOTO.thumb(e.id, i.meu? null : i.dono, e.n)") && indexHtml.includes('EXFOTO.thumb(e.id, dono, e.n)') && indexHtml.includes('garanteEx(id, cx, dono)'), 'foto do exercicio criado aparece pra todo mundo (feed, treino de amigo, ficha publica, duelo)', 'o Rafael via o treino do Chris sem a foto do abdominal declinado');
+check(indexHtml.includes('const f=c.foto || fotoIrma(c);') && indexHtml.includes('S.cfg.exsIrma1'), 'exercicio sem foto e publicado com a foto do irmao (mesmo nome)', 'o abdominal declinado do Hevy ia pro publico sem foto');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

@@ -702,7 +702,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.35.2';
+const APP_VER='11.36.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1743,6 +1743,36 @@ function fotoIrma(xf){
     return c? c.foto : null;
   }catch(e){ return null; }
 }
+// Exercicio criado por OUTRA pessoa (post do feed, treino de amigo, ficha publica, duelo): o meu celular
+// nao tem a foto; ela fica publica em /exsPub/<dono>/<exercicio>. Busca so aquele exercicio, guarda na
+// memoria enquanto o app esta aberto, e troca a inicial pela foto quando chega.
+const EXFOTO = {
+  cache:{}, pend:{},
+  img(src){ return h('img',{class:'thumb', src, alt:'', loading:'lazy'}); },
+  busca(dono, exId){
+    const k=dono+'/'+exId;
+    if(k in EXFOTO.cache) return Promise.resolve(EXFOTO.cache[k]);
+    if(EXFOTO.pend[k]) return EXFOTO.pend[k];
+    EXFOTO.pend[k]=Promise.resolve(NET.get('/exsPub/'+dono+'/'+exId)).then(v=>{
+      const f=(v && typeof v.foto==='string' && v.foto.indexOf('data:image')===0)? v.foto : null;
+      EXFOTO.cache[k]=f; delete EXFOTO.pend[k]; return f;
+    }).catch(()=>{ delete EXFOTO.pend[k]; return null; });
+    return EXFOTO.pend[k];
+  },
+  // miniatura de um exercicio que aparece no conteudo de 'dono'
+  thumb(exId, dono, nome){
+    const meu = !dono || (S.auth && dono===S.auth.uid);
+    const xf = exId? BIB.porId[exId] : null;
+    const base = xf? thumbEl(exId) : thumbNome(nome||'?');
+    if(meu || !exId || String(exId).indexOf('custom__')!==0) return base;
+    if(xf && (xf.foto || fotoIrma(xf))) return base;               // eu ja tenho a foto dele
+    const k=dono+'/'+exId;
+    if(EXFOTO.cache[k]) return EXFOTO.img(EXFOTO.cache[k]);
+    if(k in EXFOTO.cache) return base;                              // ele nao tem foto
+    EXFOTO.busca(dono, exId).then(f=>{ if(f && base.isConnected) base.replaceWith(EXFOTO.img(f)); });
+    return base;
+  }
+};
 // melhor imagem de um exercício: foto própria > foto de um igual (mesmo nome) > gif dele > gif do
 // equivalente com mesmo nome na biblioteca
 function srcEx(exId){
@@ -5168,17 +5198,28 @@ const DUELO = {
   },
   cancelar(d){ NET.agenda('/duelos/'+d.id+'/status', 'cancelado'); if(DUELO.cur && DUELO.cur.dados) DUELO.cur.dados.status='cancelado'; UI.refaz(); },
   // exercicio criado por outra pessoa: copia escondida, so pra ter nome e tipo
-  garanteEx(id, cx){
-    if(!id || BIB.porId[id] || !cx) return;
-    const c={id, n:String(cx.n||'Exercício').slice(0,60), g:cx.g||'corpo-inteiro', t:cx.t||'peso_reps', e:cx.e||'outro', custom:true, oc:1, deDuelo:1, atualizado:agora()};
-    S.custom[id]=c; salva('custom'); NET.agenda('custom/'+id, c);
-    BIB.lista.push(c); BIB.indexa();
+  garanteEx(id, cx, dono){
+    if(!id) return;
+    if(!BIB.porId[id] && cx){
+      const c={id, n:String(cx.n||'Exercício').slice(0,60), g:cx.g||'corpo-inteiro', t:cx.t||'peso_reps', e:cx.e||'outro', custom:true, oc:1, deDuelo:1, atualizado:agora()};
+      S.custom[id]=c; salva('custom'); NET.agenda('custom/'+id, c);
+      BIB.lista.push(c); BIB.indexa();
+    }
+    // a sala so leva nome e tipo (fica leve): a foto vem do espaco publico de quem criou
+    const c=S.custom[id];
+    if(c && c.deDuelo && !c.foto && dono && dono!==DUELO.meu()){
+      EXFOTO.busca(dono, id).then(f=>{
+        const cc=S.custom[id]; if(!f || !cc || cc.foto) return;
+        cc.foto=f; salva('custom');
+        try{ if(UI.telaAtual==='ativo' && !temFocoDeTexto()) UI.refaz(); }catch(_){}
+      });
+    }
   },
   comeca(d){
     if(S.ativo && S.ativo.duelo===d.id){ UI.pilha=[]; UI.vai('ativo',null,false); return true; }
     if(S.ativo){ UI.toast('Conclua ou descarte o treino atual antes do duelo'); return false; }
     const ks=DUELO.chaves(d).filter(k=>!((d.ex[k]||{}).troca) && !DUELO.ehDuplicata(d,k));
-    ks.forEach(k=>DUELO.garanteEx(d.ex[k].exId, d.ex[k].cx));
+    ks.forEach(k=>DUELO.garanteEx(d.ex[k].exId, d.ex[k].cx, d.ex[k].por || d.por));
     S.ativo={ id:uid(), rid:null, titulo:'⚔️ '+(d.titulo||'Duelo'), inicio:agora(), duelo:d.id, _dkVistos:{}, _dkFora:{},
       ex: ks.map(k=>DUELO.novoEx(d.ex[k], k)) };
     S.ativo.ex.forEach(e=>S.ativo._dkVistos[e._dk]=1);
@@ -5337,7 +5378,7 @@ const DUELO = {
     DUELO.chaves(d).forEach(k=>{
       if(locais.has(k) || A._dkFora[k] || A._dkJunta[k] || DUELO.ehDuplicata(d,k)) return;
       const q=d.ex[k]; if(q.troca && q.por!==eu) return;
-      DUELO.garanteEx(q.exId, q.cx);
+      DUELO.garanteEx(q.exId, q.cx, q.por || d.por);
       A.ex.push(DUELO.novoEx(q, k)); locais.add(k); mudou=true;
     });
     A.ex.forEach(e=>{ if(e._dk && !A._dkVistos[e._dk]){ A._dkVistos[e._dk]=1; mudou=true; } });
@@ -5380,7 +5421,7 @@ const DUELO = {
     if(tr){ alvo=d.ex[tr].exId; cx=d.ex[tr].cx; }
     else { alvo=DUELO.exDe(d,u,k); cx=((((d.j||{})[u]||{}).xc)||{})[k] || ((d.ex||{})[k]||{}).cx; }
     if(!alvo || alvo===e.exId) return;
-    DUELO.garanteEx(alvo, cx);
+    DUELO.garanteEx(alvo, cx, u);
     const deEx=e.exId, modo=substituiExAtivo(e, alvo); if(!modo) return;
     try{ PICKER.registraTroca(deEx, alvo); }catch(_){}
     salva('ativo'); DUELO.reconcilia(); DUELO.publica(); UI.refaz();
@@ -7178,7 +7219,7 @@ function cartaoFeed(i){
               : (t.ex||[]).map(e=> (e.id&&BIB.porId[e.id])? Object.assign({}, e, {n:BIB.porId[e.id].n}) : e);
   const card=h('div',{class:'card'});
   const fotoCab=i.meu? S.perfil?.foto : (((FEED.perfis||{})[i.dono])||{}).foto;
-  const linhaEx=e=>h('div',{class:'feed-ex'}, e.id? thumbEl(e.id) : thumbNome(e.n),
+  const linhaEx=e=>h('div',{class:'feed-ex'}, EXFOTO.thumb(e.id, i.meu? null : i.dono, e.n),
     h('div',{style:'min-width:0'},
       h('div',{class:'b700',style:'font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, e.n),
       h('div',{class:'f12 mut2'}, e.s+' série'+(e.s===1?'':'s'))));
@@ -7323,7 +7364,7 @@ function desenhaAmigo(r, dono, tid){
   (r.ex||[]).forEach(e=>{
     const card=h('div',{class:'card'});
     const xb=(e.id&&BIB.porId[e.id])||null;      // resolve nome/tipo pela biblioteca ATUAL (corrige snapshots antigos)
-    card.append(h('div',{class:'linha',style:'margin-bottom:8px'}, (e.id? thumbEl(e.id) : thumbNome(e.n)),
+    card.append(h('div',{class:'linha',style:'margin-bottom:8px'}, EXFOTO.thumb(e.id, dono, e.n),
       h('div',{class:'esp b700'}, xb? xb.n : e.n)));
     if(e.sr && e.sr.length){
       card.append(h('div',{class:'gtab cab'},h('div',{},'Série'),h('div'),
@@ -7557,7 +7598,7 @@ TELAS.perfilAmigo = function({uid:alvo}){
 };
 function abreRotinaPub(alvo, r){
   const linhas=(r.ex||[]).map(e=>h('div',{class:'med-row'},
-    ((e.exId && BIB.porId[e.exId])? thumbEl(e.exId) : thumbNome(e.n||'?')),
+    EXFOTO.thumb(e.exId, alvo, e.n||'?'),
     h('div',{class:'esp',style:'min-width:0'},
       h('div',{class:'b700',style:'font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},e.n||'Exercício'),
       h('div',{class:'f12 mut'},(e.ser||3)+' séries × '+(e.reps||'10')))));
@@ -7579,6 +7620,10 @@ function abreRotinaPub(alvo, r){
             const alvo=(e.n||'').trim().toLowerCase();
             const ja=Object.values(S.custom||{}).find(c=>c && !c.oc && (c.n||'').trim().toLowerCase()===alvo);
             if(ja) exId=ja.id;                       // ja copiou antes, nao duplica
+            if(ja && !ja.foto){                       // ...mas sem foto: a foto de quem criou vem junto
+              const f2 = acervo[e.exId] || acervoPorNome[BIB.norm(e.n||'')] || null;
+              if(f2 && f2.foto){ ja.foto=f2.foto; ja.atualizado=agora(); salva('custom'); NET.agenda('custom/'+ja.id, ja); if(!ja.ocultoPub) EXSPUB.publica(ja); }
+            }
           }
           if(!exId){
             exId='custom__'+uid();
@@ -8441,10 +8486,17 @@ const EXSPUB = {
   // espelha um custom no espaço público, respeitando o toggle de ocultar
   publica(c){
     if(!S.auth || !c || !c.custom) return;
+    EXSPUB.publicaUm(c);
+    // ganhou foto: os "irmaos" (mesmo nome, sem foto: importado do Hevy, criado de novo...) sao
+    // republicados com ela, porque os amigos podem estar vendo um treino que usou o irmao
+    if(c.foto) Object.values(S.custom||{}).forEach(q=>{ if(q && q.id!==c.id && q.custom && !q.foto && !q.oc && fotoIrma(q)) EXSPUB.publicaUm(q); });
+  },
+  publicaUm(c){
     if(c.ocultoPub){ EXSPUB.remove(c.id); return; }
     const pub={ id:c.id, n:c.n, g:c.g, e:c.e||'outro', t:c.t, atualizado:c.atualizado||agora() };
     if(c.gs) pub.gs=c.gs;
-    if(c.foto) pub.foto=c.foto;
+    const f=c.foto || fotoIrma(c);                 // sem foto propria: a do irmao com o mesmo nome
+    if(f) pub.foto=f;
     NET.agenda('/exsPub/'+S.auth.uid+'/'+c.id, pub);
   },
   remove(id){ if(S.auth) NET.agenda('/exsPub/'+S.auth.uid+'/'+id, null); },
@@ -8992,6 +9044,13 @@ function reconciliaRecordes(){
   }catch(e){ if(DEBUG) console.log('reconcilia', e); }
 }
 function publicaCustomsIniciais(){
+  // uma vez: quem ja tem exercicio sem foto com um irmao com foto (o abdominal declinado do Chris)
+  if(!S.cfg.exsIrma1 && S.auth && S.perfil?.user){
+    try{
+      Object.values(S.custom||{}).forEach(c=>{ if(c && c.custom && !c.oc && !c.ocultoPub && !c.foto && fotoIrma(c)) EXSPUB.publicaUm(c); });
+      S.cfg.exsIrma1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+    }catch(e){}
+  }
   if(S.cfg.exsPubInit) return;
   if(!S.auth || !S.perfil?.user) return;
   try{ EXSPUB.sincronizaTodos(); S.cfg.exsPubInit=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); }catch(e){}

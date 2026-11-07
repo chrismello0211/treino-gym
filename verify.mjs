@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.37.1';
+const EXPECTED_VERSION = '11.37.2';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -229,6 +229,7 @@ check(indexHtml.includes('const EXFOTO') && indexHtml.includes("EXFOTO.thumb(e.i
 check(indexHtml.includes('const f=c.foto || fotoIrma(c);') && indexHtml.includes('S.cfg.exsIrma1'), 'exercicio sem foto e publicado com a foto do irmao (mesmo nome)', 'o abdominal declinado do Hevy ia pro publico sem foto');
 check(indexHtml.includes('Modo simples: sempre a ficha SEGUINTE') && !indexHtml.includes('const pendente = ciclo.find'), 'proximo treino: a ficha seguinte a ultima feita (sem insistir na pulada)', 'o app insistia na ficha que a pessoa tinha pulado');
 check(indexHtml.includes('function fichaDoTreino(t, pastaPref)') && indexHtml.includes('const ts=vivos.map(t=>({t, r:fichaDoTreino(t, pastaPref)}))'), 'proximo treino reconhece treino sem ficha (duelo de outra pessoa) pelo nome ou pelos exercicios', 'a Mari fez Braco completo no duelo e o app continuava sugerindo Braco completo');
+check(indexHtml.includes('const PRSPUB') && indexHtml.includes("NET.get('/rotinasPub/'+alvo+'/_prs/'") && indexHtml.includes("if(k.charAt(0)!=='_' && !ativas[k]) ROTPUB.remove(k);"), 'comparacao com amigo usa o resumo dos recordes dele (mesmos numeros do celular dele)', 'a comparacao usava so o feed e nao batia com o Rafael');
 check(indexHtml.includes("A FICHA E' UMA SO pra todo mundo do duelo") && indexHtml.includes("d.ex[k].rm={por:eu, t:agora()}") && indexHtml.includes("q.trPor=eu") && indexHtml.includes("if(e._dkDe) q.de=e._dkDe;") && indexHtml.includes("DUELO.caminho('/v'), APP_VER") && indexHtml.includes('marcaVolta(d, k){'), 'duelo: ficha igual pra todos (trocar, remover, adicionar e ordem valem pra todos; aviso de versao antiga)', 'com 3 pessoas cada um ficava com uma ficha diferente');
 check(indexHtml.includes("$('#folha').style.zIndex= sobre? '80' : ''") && indexHtml.includes("ev.data.tipo==='notifClick'") && swSource.includes("tipo:'notifClick'"), 'escolher exercicio por cima da edicao de treino; convite aparece na hora pela notificacao', 'a escolha de exercicio ficava atras da folha; convite demorava');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');

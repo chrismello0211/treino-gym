@@ -703,7 +703,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.37.1';
+const APP_VER='11.37.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1169,6 +1169,7 @@ const S = {
 };
 function salva(campo,opts){
   const ok=LS.set(campo,S[campo]);
+  if(campo==='prs'){ try{ PRSPUB.publica(); }catch(e){} }     // recordes mudaram: os amigos veem o certo na comparacao
   if(campo==='ativo' && !(opts&&opts.semSync)){
     setTimeout(()=>{ try{ SYNCATIVO.agenda(); }catch(e){} },0);
   }
@@ -7720,6 +7721,38 @@ function abreRotinaPub(alvo, r){
       UI.pilha=[]; UI.vai('treino',null,false);
     }},'Copiar para minhas rotinas')]));
 }
+// Recordes de um exercicio no formato da comparacao, da MESMA fonte da tela "Recordes pessoais" (o
+// historico completo, inclusive o importado do Hevy). Varios codigos com o mesmo nome: vale o maior.
+function recordesCmp(ids){
+  const r={kg:null, rm:null, vol:null, reps:null};
+  ids.forEach(id=>{ const p=(S.prs||{})[id]||{};
+    if(p.kg && (!r.kg || p.kg.v>r.kg.k)) r.kg={k:p.kg.v};
+    if(p.rm && (!r.rm || p.rm.v>r.rm.v)) r.rm={v:p.rm.v};
+    if(p.vol && (!r.vol || p.vol.v>r.vol.v)) r.vol={v:p.vol.v};
+    if(p.reps && (!r.reps || p.reps.v>r.reps.r)) r.reps={r:p.reps.v};
+  });
+  if(!r.kg && !r.rm && !r.vol && !r.reps){ const sets=[]; ids.forEach(id=>sets.push(...meusSetsDe(id))); return CORE.metricasSr(sets); }
+  return r;
+}
+// Resumo publico dos meus recordes (em rotinasPub/<eu>/_prs): a comparacao do amigo usava so os treinos
+// do feed (os 40 ultimos publicados), e os numeros nao batiam com os do celular dele (Rafael: o que veio
+// do Hevy nao esta no feed). So publica quem publica treinos no feed.
+const PRSPUB = {
+  chave(ch){ return String(ch).replace(/[.#$\[\]\/]/g,'_').slice(0,120); },
+  pode(){ return !!(S.auth && S.perfil && S.perfil.user && S.cfg && S.cfg.feedPub!==false); },
+  monta(){
+    const porNome={};
+    Object.keys(S.prs||{}).forEach(id=>{ const x=BIB.porId[id]; if(!x || !x.n) return; const ch=BIB.norm(x.n); if(!ch) return; (porNome[ch]=porNome[ch]||{n:x.n, ids:[]}).ids.push(id); });
+    const out={};
+    Object.entries(porNome).forEach(([ch,o])=>{
+      const r=recordesCmp(o.ids), c={n:String(o.n).slice(0,60)};
+      if(r.kg) c.kg=r.kg.k; if(r.rm) c.rm=Math.round(r.rm.v*10)/10; if(r.vol) c.vol=r.vol.v; if(r.reps) c.reps=r.reps.r;
+      if(c.kg||c.rm||c.vol||c.reps) out[PRSPUB.chave(ch)]=c;
+    });
+    return out;
+  },
+  publica(){ if(!PRSPUB.pode()) return; clearTimeout(PRSPUB._t); PRSPUB._t=setTimeout(()=>{ try{ NET.agenda('/rotinasPub/'+S.auth.uid+'/_prs', PRSPUB.monta()); }catch(e){} }, 1500); }
+};
 TELAS.comparaEx = function({uid:alvo, nome}){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Comparação'));
   const m=$('#main'); m.innerHTML='';
@@ -7730,10 +7763,16 @@ TELAS.comparaEx = function({uid:alvo, nome}){
     h('div',{class:'esp',style:'min-width:0'},
       h('div',{class:'b800',style:'font-size:15.5px'},nome),
       h('div',{class:'f13 mut'}, x? (GRUPOS[x.g]||x.g):'')))));
-  const dele = CORE.metricasSr(((amigoExercicios(alvo))[BIB.norm(nome)]||{}).sets||[]);
-  const meus = x? CORE.metricasSr(meusSetsDe(x.id)) : {kg:null,rm:null,vol:null,reps:null};
-  const semPeso = !(meus.kg||dele.kg);
+  const ch=BIB.norm(nome);
+  // do amigo: o resumo publico dos recordes dele (mesmos numeros do celular dele); enquanto nao chega,
+  // ou se ele estiver numa versao antiga, os treinos do feed
+  let dele = CORE.metricasSr(((amigoExercicios(alvo))[ch]||{}).sets||[]);
+  const ids = x? Object.values(BIB.porId).filter(q=>q && q.n && BIB.norm(q.n)===ch).map(q=>q.id) : [];
+  const meus = x? recordesCmp(ids.length? ids : [x.id]) : {kg:null,rm:null,vol:null,reps:null};
   const card=h('div',{class:'card'});
+  const desenha=()=>{
+  card.innerHTML='';
+  const semPeso = !(meus.kg||dele.kg);
   if(semPeso){
     card.append(barraCmp((x&&x.t==='tempo')?'Mais tempo':'Mais repetições', meus.reps?meus.reps.r:0, dele.reps?dele.reps.r:0, v=> (x&&x.t==='tempo')? fmtTempoEx(v) : v+' reps'));
   } else {
@@ -7744,7 +7783,13 @@ TELAS.comparaEx = function({uid:alvo, nome}){
   }
   if(!meus.kg && !meus.rm && !meus.vol && !meus.reps)
     card.append(h('div',{class:'f13 mut',style:'margin-top:4px'},'Você ainda não registrou este exercício. Faça uma série e volte aqui.'));
-  m.appendChild(card);
+  };
+  desenha(); m.appendChild(card);
+  NET.get('/rotinasPub/'+alvo+'/_prs/'+encodeURIComponent(PRSPUB.chave(ch))).then(p=>{
+    if(!p || UI.telaAtual!=='comparaEx' || !card.isConnected) return;
+    dele={kg:p.kg?{k:p.kg}:null, rm:p.rm?{v:p.rm}:null, vol:p.vol?{v:p.vol}:null, reps:p.reps?{r:p.reps}:null};
+    desenha();
+  }).catch(()=>{});
 };
 TELAS.comparaPerfil = function({uid:alvo}){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Comparação'));
@@ -9218,7 +9263,7 @@ const ROTPUB = {
     // faxina: tira da nuvem o que nao existe mais aqui
     try{
       const nuv=await NET.get('/rotinasPub/'+S.auth.uid);
-      Object.keys(nuv||{}).forEach(k=>{ if(k!=='_p' && !ativas[k]) ROTPUB.remove(k); });
+      Object.keys(nuv||{}).forEach(k=>{ if(k.charAt(0)!=='_' && !ativas[k]) ROTPUB.remove(k); });   // '_p', '_prs': nao sao fichas
     }catch(e){}
   }
 };
@@ -10470,7 +10515,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){} await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
 setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();

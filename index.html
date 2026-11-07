@@ -256,6 +256,7 @@ input[type="date"]{-webkit-appearance:none;appearance:none;display:block;box-siz
 input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
+.duelo-pessoa{min-width:0}
 .duelo-pr{font-size:11px;margin-left:3px;vertical-align:1px}
 .ed-cab{padding:2px 0 8px}
 .ed-tit{font-size:20px;font-weight:800;color:var(--brand2);line-height:1.25;word-break:break-word}
@@ -702,7 +703,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.36.1';
+const APP_VER='11.37.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1927,6 +1928,8 @@ const UI = {
   },
   folha(titulo, corpoEls, acao, aoFechar, opts){
     soltaTeclado();
+    // aberta por cima da folha de edicao de treino (ex.: escolher exercicio): fica ACIMA dela
+    try{ const sobre=!!(typeof FOLHA2!=='undefined' && FOLHA2.el); $('#folha').style.zIndex= sobre? '80' : ''; $('#veu').style.zIndex= sobre? '75' : ''; }catch(e){}
     UI._focoAntes=document.activeElement instanceof HTMLElement?document.activeElement:null;
     UI._aoFechar = aoFechar || null;
     UI._folhaObrigatoria=!!(opts&&opts.obrigatoria);
@@ -5264,9 +5267,12 @@ const DUELO = {
     NET.agenda(DUELO.caminho('/estado'), st); NET.agenda(DUELO.caminho('/at'), agora());
   },
   // publica o "normal" de cada exercicio e, se eu troquei, o que fiz no lugar (com nome)
+  marcaVolta(d, k){ const v={por:DUELO.meu(), t:agora()}; if(d.ex[k]) d.ex[k].volta=v; NET.agenda('/duelos/'+d.id+'/ex/'+k+'/volta', v); },
+  versaoMenor(a, b){ const x=String(a).split('.').map(Number), y=String(b).split('.').map(Number); for(let i=0;i<3;i++){ if((x[i]||0)!==(y[i]||0)) return (x[i]||0)<(y[i]||0); } return false; },
   publica(){
     if(!DUELO.emDuelo()) return;
     const d=DUELO.dados(), eu=DUELO.meu(), j=((d && d.j)||{})[eu]||{};
+    if(d && j.v!==APP_VER){ NET.agenda(DUELO.caminho('/v'), APP_VER); d.j=d.j||{}; (d.j[eu]=d.j[eu]||{}).v=APP_VER; }   // os outros sabem se estou atualizado
     S.ativo.ex.forEach(e=>{
       if(!e._dk) return;
       const sala=(d && d.ex && d.ex[e._dk]) ? d.ex[e._dk].exId : null;
@@ -5304,25 +5310,59 @@ const DUELO = {
     const A=S.ativo, eu=DUELO.meu(); A._dkVistos=A._dkVistos||{}; A._dkFora=A._dkFora||{};
     let mudou=false;
     const locais=new Set(A.ex.map(e=>e._dk).filter(Boolean));
-    // 0) alguem reordenou a sala (mudou o 'o' dos exercicios): a minha ficha segue a mesma ordem.
-    //    So os exercicios da sala que eu tenho trocam de lugar; o resto fica onde esta.
-    const salaKs=DUELO.chaves(d).filter(k=>DUELO.ordenavel(d,k));
-    if(A._salaKs){
-      const a0=A._salaKs.filter(k=>salaKs.includes(k)), a1=salaKs.filter(k=>A._salaKs.includes(k));
-      if(JSON.stringify(a0)!==JSON.stringify(a1)){
-        const pos=new Map(salaKs.map((k,i)=>[k,i])), idx=[];
-        A.ex.forEach((e,i)=>{ if(e._dk && pos.has(e._dk)) idx.push(i); });
-        const antes=idx.map(i=>A.ex[i]._dk).join(',');
-        const ord=idx.map(i=>A.ex[i]).sort((x,y)=>pos.get(x._dk)-pos.get(y._dk));
-        idx.forEach((i,jj)=>{ A.ex[i]=ord[jj]; });
-        if(antes!==idx.map(i=>A.ex[i]._dk).join(',')){ mudou=true; DUELO._reordenado=true; }
-        A._ordemKs=A.ex.map(e=>e._dk).filter(k=>k && DUELO.ordenavel(d,k));
+    // A FICHA E' UMA SO pra todo mundo do duelo: trocar, remover, adicionar e reordenar valem pra todos.
+    A._exSala=A._exSala||{}; A._dkRm=A._dkRm||{}; DUELO._avisos=DUELO._avisos||[];
+    const nomeDe=u=>'@'+((((d.nomes||{})[u])||{}).user||'alguém');
+    const ninguemFez=k=>!DUELO.jog(d).some(u=>DUELO.setsDeBruto(d,u,k).length);
+    const ordemLocal0=A.ex.map(e=>e._dk).filter(k=>k && d.ex[k]);
+    const euReordenei=!!A._ordemKs && (()=>{ const a=A._ordemKs.filter(k=>ordemLocal0.includes(k)), b=ordemLocal0.filter(k=>A._ordemKs.includes(k)); return JSON.stringify(a)!==JSON.stringify(b); })();
+    let criei=false;
+    // T) troca: quem troca um exercicio que ninguem fez troca na sala (pra todos); quem recebe e ainda nao
+    //    fez series nele troca junto
+    A.ex.slice().forEach(e=>{
+      const k=e._dk, q=k && d.ex[k]; if(!q || q.rm) return;
+      const visto=A._exSala[k], fiz=(e.series||[]).some(s=>s.ok);
+      if(visto===undefined){ A._exSala[k]=q.exId; return; }
+      if(q.exId!==visto && e.exId===visto){
+        if(!fiz){
+          DUELO.garanteEx(q.exId, q.cx, q.trPor||q.por||d.por); e.exId=q.exId; mudou=true;
+          DUELO._avisos.push((q.trPor && q.trPor!==eu? nomeDe(q.trPor)+' trocou um exercício por ' : 'Exercício trocado por ')+((BIB.porId[q.exId]||{}).n||q.nm||'outro'));
+        }
+        A._exSala[k]=q.exId; return;
       }
-    }
-    A._salaKs=salaKs;
+      if(e.exId!==q.exId && e.exId!==visto && q.exId===visto && !q.troca && !fiz && !ninguemFez(k)){
+        // troquei, mas outra pessoa ja fez series nele: o original fica (pra todos) e o novo entra logo
+        // depois, tambem pra todos (antes virava uma troca so minha, e as fichas ficavam diferentes)
+        const orig={exId:q.exId, _dk:k, descanso:e.descanso, notas:'', series:(e.series||[]).map(s=>({tipo:(s&&s.tipo)||'N', kg:'', reps:'', ok:false}))};
+        A.ex.splice(A.ex.indexOf(e), 0, orig);
+        delete e._dk; e._dkDe=k; locais.add(k); mudou=true;
+        return;
+      }
+      if(e.exId!==q.exId && e.exId!==visto && q.exId===visto && !q.troca && !fiz && ninguemFez(k)){
+        const x=BIB.ex(e.exId)||{};
+        q.exId=e.exId; q.trPor=eu; q.nm=x.n||q.nm||null;
+        if(x.custom) q.cx={n:x.n||'', g:x.g||'corpo-inteiro', t:x.t||'peso_reps', e:x.e||'outro'}; else delete q.cx;
+        ['exId','trPor','nm','cx'].forEach(c=>NET.agenda('/duelos/'+d.id+'/ex/'+k+'/'+c, q[c]==null? null : q[c]));
+        A._exSala[k]=q.exId; mudou=true;
+      }
+    });
+    // R) alguem removeu um exercicio da ficha: sai da minha tambem (menos se eu ja fiz series nele)
+    A.ex.slice().forEach(e=>{
+      const k=e._dk, q=k && d.ex[k]; if(!q || !q.rm) return;
+      // "removido por mim", mas esta na minha ficha: eu adicionei de novo (se cura sozinho, mesmo se um
+      // envio se perdeu ou chegou fora de ordem)
+      if(q.rm.por===eu){ delete q.rm; NET.agenda('/duelos/'+d.id+'/ex/'+k+'/rm', null); delete A._dkFora[k]; NET.agenda(DUELO.caminho('/fora/'+k), null); DUELO.marcaVolta(d, k); mudou=true; return; }
+      if((e.series||[]).some(s=>s.ok)) return;
+      A.ex.splice(A.ex.indexOf(e),1); A._dkRm[k]=1; locais.delete(k); mudou=true;
+      DUELO._avisos.push(nomeDe(q.rm.por)+' removeu '+((BIB.porId[e.exId]||{}).n||'um exercício'));
+    });
     // 1) chave que eu ja tive e sumiu da ficha: eu removi. Nao volta, e os outros ficam sabendo.
     Object.keys(A._dkVistos).forEach(k=>{
-      if(!locais.has(k) && !A._dkFora[k] && !(A._dkJunta||{})[k]){ A._dkFora[k]=1; NET.agenda(DUELO.caminho('/fora/'+k), 1); mudou=true; }
+      if(!locais.has(k) && !A._dkFora[k] && !(A._dkJunta||{})[k] && !A._dkRm[k]){
+        A._dkFora[k]=1; NET.agenda(DUELO.caminho('/fora/'+k), 1); mudou=true;
+        if(d.ex[k] && !d.ex[k].rm){ d.ex[k].rm={por:eu, t:agora()}; NET.agenda('/duelos/'+d.id+'/ex/'+k+'/rm', d.ex[k].rm); }   // sai pra todos
+        (A._rmT=A._rmT||{})[k]=agora();                                  // quando EU removi
+      }
     });
     // 2) exercicio novo na minha ficha
     const juntar=[];
@@ -5338,7 +5378,12 @@ const DUELO = {
            || ks.find(k=>!locais.has(k) && !A._dkFora[k] && d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId)
            || ks.find(k=>!locais.has(k) && A._dkFora[k] && !d.ex[k].troca && d.ex[k].exId===e.exId));   // removi e adicionei de novo
       if(livre){
-        if(A._dkFora[livre]){ delete A._dkFora[livre]; NET.agenda(DUELO.caminho('/fora/'+livre), null); }
+        if(A._dkFora[livre]){
+          delete A._dkFora[livre]; NET.agenda(DUELO.caminho('/fora/'+livre), null);
+          // desfaz a remocao na sala SEMPRE (a copia local pode ter sido trocada por uma de antes da remocao)
+          if(d.ex[livre]) delete d.ex[livre].rm; NET.agenda('/duelos/'+d.id+'/ex/'+livre+'/rm', null);
+          DUELO.marcaVolta(d, livre);
+        } else if(d.ex[livre] && d.ex[livre].rm){ delete d.ex[livre].rm; NET.agenda('/duelos/'+d.id+'/ex/'+livre+'/rm', null); DUELO.marcaVolta(d, livre); }   // voltou pra todos
         e._dk=livre; locais.add(livre); mudou=true; return;
       }
       if(!e._dkDe){
@@ -5355,8 +5400,8 @@ const DUELO = {
       const k='k'+uid(); e._dk=k; locais.add(k);
       const x=BIB.ex(e.exId)||{};
       const q=DUELO.exSala(x, e.exId, agora()+i, e.series, e.descanso);
-      if(e._dkDe) q.troca=e._dkDe;
-      d.ex=d.ex||{}; d.ex[k]=q; NET.agenda('/duelos/'+d.id+'/ex/'+k, q); mudou=true;
+      if(e._dkDe) q.de=e._dkDe;                  // troca no meio: exercicio compartilhado, logo depois do original
+      d.ex=d.ex||{}; d.ex[k]=q; NET.agenda('/duelos/'+d.id+'/ex/'+k, q); mudou=true; criei=true;
     });
     juntar.forEach(g=>{ const ix=A.ex.indexOf(g); if(ix>=0) A.ex.splice(ix,1); });
     // 2b) o mesmo exercicio ja esta em duas chaves: a minha ficha converge pra canonica, com as minhas series
@@ -5376,8 +5421,15 @@ const DUELO = {
     });
     // 3) exercicio da sala que eu nao tenho: entra (menos o que eu removi e a troca dos outros)
     DUELO.chaves(d).forEach(k=>{
-      if(locais.has(k) || A._dkFora[k] || A._dkJunta[k] || DUELO.ehDuplicata(d,k)) return;
-      const q=d.ex[k]; if(q.troca && q.por!==eu) return;
+      if(locais.has(k) || A._dkJunta[k] || DUELO.ehDuplicata(d,k)) return;
+      const q=d.ex[k]; if(q.rm) return; if(q.troca && q.por!==eu) return;   // (troca privada: so as antigas)
+      if(A._dkFora[k]){
+        // eu tinha removido: so volta se alguem readicionou DEPOIS da minha remocao (uma atualizacao
+        // atrasada, de antes da remocao chegar na sala, nao pode desfazer o que eu fiz)
+        const v=q.volta; if(!(v && v.t>((A._rmT||{})[k]||Infinity))) return;
+        delete A._dkFora[k]; NET.agenda(DUELO.caminho('/fora/'+k), null);
+      }
+      delete A._dkRm[k]; A._exSala[k]=q.exId;
       DUELO.garanteEx(q.exId, q.cx, q.por || d.por);
       A.ex.push(DUELO.novoEx(q, k)); locais.add(k); mudou=true;
     });
@@ -5398,18 +5450,29 @@ const DUELO = {
       }
       A._nSala[k]=Math.max(Number(q.n)||0, visto||0);
     });
-    // 5) eu reordenei a ficha: a sala passa a seguir a minha ordem (os outros recebem)
-    const meus=A.ex.map(e=>e._dk).filter(k=>k && DUELO.ordenavel(d,k));
-    if(A._ordemKs){
-      const b0=A._ordemKs.filter(k=>meus.includes(k)), b1=meus.filter(k=>A._ordemKs.includes(k));
-      if(JSON.stringify(b0)!==JSON.stringify(b1)){
-        const base=agora();
-        meus.forEach((k,i)=>{ d.ex[k].o=base+i; NET.agenda('/duelos/'+d.id+'/ex/'+k+'/o', base+i); });
-        A._salaKs=DUELO.chaves(d).filter(k=>DUELO.ordenavel(d,k));
-        mudou=true;
-      }
+    // 5) ordem: se eu mudei (reordenei ou adicionei), a sala segue a minha; senao a minha segue a da sala,
+    //    SEMPRE (nao so quando muda: quem perdeu uma atualizacao se corrige sozinho)
+    if(euReordenei || criei){
+      const base=agora();
+      A.ex.map(e=>e._dk).filter(k=>k && d.ex[k]).forEach((k,i)=>{ d.ex[k].o=base+i; NET.agenda('/duelos/'+d.id+'/ex/'+k+'/o', base+i); });
+      mudou=true;
+    } else {
+      const pos=new Map(DUELO.chaves(d).map((k,i)=>[k,i])), idx=[];
+      A.ex.forEach((e,i)=>{ if(e._dk && pos.has(e._dk)) idx.push(i); });
+      const antes=idx.map(i=>A.ex[i]._dk).join(',');
+      const ord=idx.map(i=>A.ex[i]).sort((x,y)=>pos.get(x._dk)-pos.get(y._dk));
+      idx.forEach((i,jj)=>{ A.ex[i]=ord[jj]; });
+      if(antes!==idx.map(i=>A.ex[i]._dk).join(',')){ mudou=true; if(A._ordemKs) DUELO._reordenado=true; }
     }
-    A._ordemKs=meus;
+    A._ordemKs=A.ex.map(e=>e._dk).filter(k=>k && d.ex[k]);
+    // versao: quem esta com o app antigo faz a ficha ficar diferente
+    A._avisoVer=A._avisoVer||{};
+    DUELO.jog(d).forEach(u=>{
+      if(u===eu || A._avisoVer[u] || !((d.j||{})[u])) return;
+      const v=((d.j||{})[u]||{}).v;
+      if(!v || DUELO.versaoMenor(v, '11.37.0')){ A._avisoVer[u]=1; DUELO._avisos.push('⚠️ '+nomeDe(u)+' está com o app desatualizado: peça pra atualizar, senão a ficha fica diferente'); }
+    });
+    if(DUELO._avisos.length){ const av=DUELO._avisos.splice(0); setTimeout(()=>{ try{ UI.toast(av.slice(0,2).join(' · ')); }catch(_){} }, 0); }
     if(mudou){ salva('ativo'); DUELO.publica(); }
     return mudou;
   },
@@ -5486,7 +5549,7 @@ const DUELO = {
     DUELO.cur={id, dados: inicial||null};
     DUELO.puxa();
     DUELO.abreStream(id);
-    DUELO._poll=setInterval(()=>{ if(!document.hidden) DUELO.puxa(); }, 4000);   // reserva, se o streaming cair
+    DUELO._poll=setInterval(()=>{ if(!document.hidden) DUELO.puxa(); }, 2500);   // reserva, se o streaming cair (no iPhone ele "dorme")
   },
   async abreStream(id){
     try{
@@ -5776,7 +5839,7 @@ const DUELO = {
     const fim=DUELO.terminou(d), r=DUELO.calcula(d), quem=(fim? r.ordem : DUELO.noPlacar(d));
     const fmtN=v=> d.modo==='mano'? String(v||0) : Math.round(v||0)+'%';
     const placar=h('div',{class:'duelo-placar-g'}, ...quem.map((u,i)=>h('div',{class:'duelo-pessoa'+(fim && r.venc===u?' on':'')},
-      h('div',{class:'f12 mut'}, (fim && quem.length>2? DUELO.posicao(d, r, u)+'º · ' : '')+(u===eu? 'Você' : DUELO.nome(d,u))),
+      h('div',{class:'f12 mut',style:'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%'}, (fim && quem.length>2? DUELO.posicao(d, r, u)+'º · ' : '')+(u===eu? 'Você' : DUELO.nome(d,u))),
       h('div',{class:'duelo-placar'}, fim || d.modo==='mano'? fmtN(r.pts[u]) : '—'),
       h('div',{class:'f12 mut2'}, (function(){ const st=DUELO.estadoDe(d,u); return st==='desistiu'? 'desistiu' : (st==='concluiu'? 'terminou' : (DUELO.entrou(d,u)? 'treinando' : 'convidado')); })()))));
     cab.append(...[placar,
@@ -5855,8 +5918,12 @@ TELAS.duelos = function(){ DUELO.telaLista(); };
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState!=='visible'){ try{ DUELO.es && DUELO.es.close(); }catch(e){} DUELO.es=null; return; }
   if(DUELO.cur && (DUELO.emDuelo() || UI.telaAtual==='duelo')){ const c=DUELO.cur; DUELO.cur=null; DUELO.conecta(c.id, c.dados); }
-  DUELO.verConvites();
+  DUELO.verConvites(true);                         // na hora (o convite que chegou pela notificacao aparece ja)
 });
+// tocou numa notificacao com o app aberto: o service worker avisa e o app busca os convites na hora
+try{ navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', ev=>{
+  if(ev.data && ev.data.tipo==='notifClick'){ DUELO.verConvites(true); try{ if(S.ativo && S.ativo.duelo) DUELO.puxa(); }catch(_){} }
+}); }catch(e){}
 document.addEventListener('focusout', ()=>DUELO.aoSairDoCampo());
 document.addEventListener('input', ()=>{ DUELO._tecla=Date.now(); }, true);
 document.addEventListener('keydown', ()=>{ DUELO._tecla=Date.now(); }, true);
@@ -5917,6 +5984,7 @@ const VOLTAR = {
   fazVoltar(){
     try{
       if(FOTOVIEW.el) FOTOVIEW.fecha();
+      else if(FOLHA2.el && VOLTAR.folhaAberta() && $('#folha').style.zIndex==='80'){ if(!UI._folhaObrigatoria) UI.fechaFolha(); }   // a de cima primeiro
       else if(FOLHA2.el) FOLHA2.fecha();
       else if(VOLTAR.folhaAberta()){ if(!UI._folhaObrigatoria) UI.fechaFolha(); }
       else if(UI.pilha.length) UI.volta();

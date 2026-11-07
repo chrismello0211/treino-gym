@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.36.1';
+const EXPECTED_VERSION = '11.37.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -211,7 +211,7 @@ check(indexHtml.includes('P.append=function(...n){ return ap.apply(this, n.filte
 check(indexHtml.includes('decorridoMs(t){') && indexHtml.includes(': agoraReal-pausas;') && !indexHtml.includes("CORE.fmtRelogioCurto((agora()-S.ativo.inicio)/1000)"), 'pausa do treino ligada ao cronometro e ao salvar', 'sem isso o tempo pausado entra na duracao');
 check(indexHtml.includes('function soltaTeclado(') && (indexHtml.match(/soltaTeclado\(\);/g)||[]).length >= 2, 'folhas soltam o teclado de fora ao abrir', 'sem isso a folha pode abrir levantada alem do topo da tela');
 check(indexHtml.includes('UI.guardaLugarAtivo()') && indexHtml.includes("localStorage.getItem('tg_ativoY')"), 'treino em andamento volta pro mesmo exercicio', 'sem isso voltar ao treino abre no topo');
-check(indexHtml.includes('contaChave(d, k)') && indexHtml.includes("d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId") && indexHtml.includes('A._salaKs'), 'duelo: troca compartilhada, ordem e series sincronizadas', 'exercicio adicionado a mao nao se ligava a troca do outro; ordem nao se propagava');
+check(indexHtml.includes('contaChave(d, k)') && indexHtml.includes("d.ex[k].troca && d.ex[k].por!==eu && d.ex[k].exId===e.exId") && indexHtml.includes('if(euReordenei || criei){'), 'duelo: troca compartilhada, ordem e series sincronizadas', 'exercicio adicionado a mao nao se ligava a troca do outro; ordem nao se propagava');
 check(indexHtml.includes('if(DUELO.digitando()) DUELO.agendaRefaz(); else DUELO.refazTela();') && !indexHtml.includes("if(digitando) DUELO._pend=true; else UI.refaz();"), 'duelo: tela atualiza sozinha (so espera quem digita de verdade)', 'a tela so atualizava depois de abrir e fechar outra tela');
 check(indexHtml.includes('ehDuplicata(d, k)') && indexHtml.includes('DUELO.mapaDe(d,u,k)') && indexHtml.includes('A._dkJunta[k]=c'), 'duelo: mesmo exercicio em duas chaves converge e soma as series', 'series de quem adicionou de novo nao apareciam pros outros');
 check(indexHtml.includes('semHistorico: IOS_APP') && indexHtml.includes('if(VOLTAR.semHistorico || VOLTAR.guarda') && indexHtml.includes('VOLTAR.fazVoltar();') && !indexHtml.includes('ok = t.clientX<28 && !window.__tgDrag'), 'iPhone instalado: voltar sem historico do navegador (sem tela branca)', 'o gesto do Safari com historico deixava a tela branca');
@@ -228,6 +228,8 @@ check(indexHtml.includes('function fotoIrma(xf)') && indexHtml.includes('const f
 check(indexHtml.includes('const EXFOTO') && indexHtml.includes("EXFOTO.thumb(e.id, i.meu? null : i.dono, e.n)") && indexHtml.includes('EXFOTO.thumb(e.id, dono, e.n)') && indexHtml.includes('garanteEx(id, cx, dono)'), 'foto do exercicio criado aparece pra todo mundo (feed, treino de amigo, ficha publica, duelo)', 'o Rafael via o treino do Chris sem a foto do abdominal declinado');
 check(indexHtml.includes('const f=c.foto || fotoIrma(c);') && indexHtml.includes('S.cfg.exsIrma1'), 'exercicio sem foto e publicado com a foto do irmao (mesmo nome)', 'o abdominal declinado do Hevy ia pro publico sem foto');
 check(indexHtml.includes('Modo simples: sempre a ficha SEGUINTE') && !indexHtml.includes('const pendente = ciclo.find'), 'proximo treino: a ficha seguinte a ultima feita (sem insistir na pulada)', 'o app insistia na ficha que a pessoa tinha pulado');
+check(indexHtml.includes("A FICHA E' UMA SO pra todo mundo do duelo") && indexHtml.includes("d.ex[k].rm={por:eu, t:agora()}") && indexHtml.includes("q.trPor=eu") && indexHtml.includes("if(e._dkDe) q.de=e._dkDe;") && indexHtml.includes("DUELO.caminho('/v'), APP_VER") && indexHtml.includes('marcaVolta(d, k){'), 'duelo: ficha igual pra todos (trocar, remover, adicionar e ordem valem pra todos; aviso de versao antiga)', 'com 3 pessoas cada um ficava com uma ficha diferente');
+check(indexHtml.includes("$('#folha').style.zIndex= sobre? '80' : ''") && indexHtml.includes("ev.data.tipo==='notifClick'") && swSource.includes("tipo:'notifClick'"), 'escolher exercicio por cima da edicao de treino; convite aparece na hora pela notificacao', 'a escolha de exercicio ficava atras da folha; convite demorava');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

@@ -703,7 +703,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.37.0';
+const APP_VER='11.37.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -7100,18 +7100,43 @@ function calcStreak(meta){
   for(let i=1;i<520;i++){ if(treinosNaSemana(w-i*7*864e5)>=meta) streak++; else break; }
   return streak;
 }
+// Treino sem ficha (duelo com a ficha de outra pessoa, treino livre): qual ficha MINHA ele foi?
+// 1) mesmo nome (sem acento/maiuscula/"⚔️"); com duas de mesmo nome, a da pasta que estou seguindo
+// 2) senao, a ficha com mais da metade dos exercicios em comum (criados por pessoas diferentes: pelo nome)
+// Os treinos nao sao alterados: e' calculado na hora (Mari fez "Braço completo" no duelo do Rafael e o
+// app continuava sugerindo "Braço completo").
+function fichaDoTreino(t, pastaPref){
+  if(!t) return null;
+  if(t.rid){ const r=S.rotinas[t.rid]; return (r && !r.apagada)? r : null; }
+  const rs=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada && (r.ex||[]).length);
+  if(!rs.length) return null;
+  const nn=s=>BIB.norm(String(s||'').replace(/⚔️|⚔/g,'')).replace(/\bduelo\b/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  const nt=nn(t.titulo);
+  if(nt){
+    const porNome=rs.filter(r=>nn(r.titulo)===nt);
+    if(porNome.length) return porNome.find(r=>(r.pasta||'')===(pastaPref||'')) || porNome[0];
+  }
+  const chave=id=>{ const x=BIB.porId[id]; return (x && x.custom)? 'n:'+BIB.norm(x.n||'') : id; };
+  const ex=new Set((t.ex||[]).map(e=>chave(e.exId))); if(!ex.size) return null;
+  let melhor=null, nota=0;
+  rs.forEach(r=>{ const rx=new Set(r.ex.map(e=>chave(e.exId))); let com=0; rx.forEach(i=>{ if(ex.has(i)) com++; });
+    const j=com/(rx.size+ex.size-com); if(j>nota || (j===nota && melhor && (r.pasta||'')===(pastaPref||'') && (melhor.pasta||'')!==(pastaPref||''))){ nota=j; melhor=r; } });
+  return nota>0.5? melhor : null;
+}
 function proximaRotina(){
   const rots=Object.values(S.rotinas||{}).filter(r=>r && !r.apagada);
   if(!rots.length) return null;
   // mesma ordem que voce ve na tela de rotinas
   const ordena = l => l.slice().sort((a,b)=>
     ((a.ordem==null?9999:a.ordem)-(b.ordem==null?9999:b.ordem)) || ((a.criado||0)-(b.criado||0)));
-  const ts=Object.values(S.treinos)
-    .filter(t=>!t.apagado && t.rid && S.rotinas[t.rid] && !S.rotinas[t.rid].apagada)
-    .sort((a,b)=>b.inicio-a.inicio);
+  const vivos=Object.values(S.treinos).filter(t=>t && !t.apagado).sort((a,b)=>b.inicio-a.inicio);
+  // pasta que estou seguindo: a da ultima ficha feita de verdade (serve pra desempatar nomes iguais)
+  const ultComRid=vivos.find(t=>t.rid && S.rotinas[t.rid] && !S.rotinas[t.rid].apagada);
+  const pastaPref=ultComRid? (S.rotinas[ultComRid.rid].pasta||'') : '';
+  const ts=vivos.map(t=>({t, r:fichaDoTreino(t, pastaPref)})).filter(x=>x.r);
   if(!ts.length) return ordena(rots)[0];          // nunca treinou: a primeira
 
-  const ultRot = S.rotinas[ts[0].rid];
+  const ultRot = ts[0].r;
   const pastaId = ultRot.pasta || '';
   let ciclo = ordena(rots.filter(r=>(r.pasta||'')===pastaId));
   if(ciclo.length<2) ciclo = ordena(rots);

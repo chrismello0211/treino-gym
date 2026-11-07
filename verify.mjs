@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.36.0';
+const EXPECTED_VERSION = '11.36.1';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -227,6 +227,7 @@ check(indexHtml.includes("UI._dirFx='fx-voltar'") && indexHtml.includes('#main.f
 check(indexHtml.includes('function fotoIrma(xf)') && indexHtml.includes('const fi=fotoIrma(xf); if(fi) return h(') && indexHtml.includes('const fi=fotoIrma(xf); if(fi) return fi;'), 'exercicio criado sem foto usa a foto de um igual (mesmo nome)', 'a elevacao lateral do Rafael aparecia sem foto na ficha de braco');
 check(indexHtml.includes('const EXFOTO') && indexHtml.includes("EXFOTO.thumb(e.id, i.meu? null : i.dono, e.n)") && indexHtml.includes('EXFOTO.thumb(e.id, dono, e.n)') && indexHtml.includes('garanteEx(id, cx, dono)'), 'foto do exercicio criado aparece pra todo mundo (feed, treino de amigo, ficha publica, duelo)', 'o Rafael via o treino do Chris sem a foto do abdominal declinado');
 check(indexHtml.includes('const f=c.foto || fotoIrma(c);') && indexHtml.includes('S.cfg.exsIrma1'), 'exercicio sem foto e publicado com a foto do irmao (mesmo nome)', 'o abdominal declinado do Hevy ia pro publico sem foto');
+check(indexHtml.includes('Modo simples: sempre a ficha SEGUINTE') && !indexHtml.includes('const pendente = ciclo.find'), 'proximo treino: a ficha seguinte a ultima feita (sem insistir na pulada)', 'o app insistia na ficha que a pessoa tinha pulado');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');
 check(!indexHtml.includes('.at(') || indexHtml.includes("if(!C.prototype.at)"), 'complemento do .at() presente', '.at() quebra no Safari < 15.4 e Chrome < 92');
 

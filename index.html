@@ -257,6 +257,20 @@ input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pessoa{min-width:0}
+.dx-bloco{padding:12px 0;border-bottom:1px solid var(--line)}
+.dx-bloco:last-child{border-bottom:none}
+.dx-cab{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.dx-ex{flex:1;min-width:0;font-weight:800;font-size:14.5px}
+.dx-badge{flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--tx3);background:var(--surf2);border-radius:999px;padding:3px 9px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dx-badge.on{color:var(--brand);background:rgba(255,106,0,.12)}
+.dx-linha{border-radius:10px;padding:7px 10px;margin-top:4px;background:var(--surf2)}
+.dx-linha.on{background:rgba(255,106,0,.10);box-shadow:inset 3px 0 0 var(--brand)}
+.dx-top{display:flex;align-items:baseline;gap:8px}
+.dx-nome{flex:1;min-width:0;font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dx-nota{flex-shrink:0;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.dx-linha.on .dx-nota{color:var(--brand)}
+.dx-sets{font-size:12px;color:var(--tx2);margin-top:2px;line-height:1.45;font-variant-numeric:tabular-nums}
+.dx-sets s{color:var(--tx3)}
 .duelo-nota{display:block;font-size:11.5px;color:var(--tx3);margin-top:2px}
 .duelo-pr{font-size:11px;margin-left:3px;vertical-align:1px}
 .ed-cab{padding:2px 0 8px}
@@ -704,7 +718,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.37.3';
+const APP_VER='11.38.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -5045,6 +5059,72 @@ const DUELO = {
     return Number(b);
   },
   // a serie foi desconsiderada pelo filtro (muito acima do normal da pessoa nesse exercicio)?
+  // explica o criterio do modo (botao "?" na barra e "Como funciona?" no placar e no resumo)
+  ajuda(modo){
+    const p=tx=>h('div',{class:'f13',style:'line-height:1.55;margin-bottom:10px'},tx);
+    const corpo = modo==='mano' ? [
+      p('🤜 Mano a mano: cada exercício vale 1 ponto, e vence quem fizer mais pontos.'),
+      p('Em cada exercício, ganha quem fizer a melhor série. A série é medida pelo 1RM estimado: carga × (1 + repetições ÷ 30). Assim, mais carga ou mais repetições contam.'),
+      p('Exemplo: 260 kg × 6 ≈ 312 e 220 kg × 6 ≈ 264. Quem fez 260×6 leva o exercício.'),
+      p('Empatou na melhor série? Compara a 2ª melhor, depois a 3ª. Se empatar em tudo, ganha o maior volume (soma de carga × repetições).'),
+      p('Aquecimento conta. Exercício sem carga (peso do corpo ou tempo): vale o número de repetições ou o tempo.'),
+      p('Série muito acima do seu normal nesse exercício (provável erro de digitação, como 2.000 kg) não conta e aparece riscada.'),
+      p('Se as pessoas fizerem exercícios diferentes na mesma posição, ninguém pontua nele.')
+    ] : [
+      p('📈 Superação: cada um compete contra o próprio normal.'),
+      p('Em cada exercício, suas séries são comparadas com o seu normal (as suas últimas sessões dele). 100% é o seu padrão; 110% é 10% acima.'),
+      p('Vence quem ficar mais acima do próprio normal, na média dos exercícios. Completar as séries planejadas também conta.'),
+      p('Série muito acima do seu normal (provável erro de digitação) não conta.')
+    ];
+    UI.folha('Como funciona o duelo', corpo);
+  },
+  // um exercicio no resultado: nome + quem levou; uma linha por pessoa (nota em destaque, series embaixo)
+  blocoRes(nome, badge, linhas){
+    return h('div',{class:'dx-bloco'},
+      h('div',{class:'dx-cab'}, h('div',{class:'dx-ex'}, nome), badge? h('span',{class:'dx-badge'+(badge.on?' on':'')}, badge.txt) : null),
+      ...linhas.map(l=>h('div',{class:'dx-linha'+(l.venceu?' on':'')},
+        h('div',{class:'dx-top'}, h('span',{class:'dx-nome'}, (l.venceu?'🏆 ':'')+l.quem), h('span',{class:'dx-nota'}, l.nota||'')),
+        h('div',{class:'dx-sets'}, l.sets||'—'))));
+  },
+  badgeRes(w, nome, fim){
+    if(w==='≠') return {txt:'exercícios diferentes'};
+    if(w==='=') return {txt:'empate'};
+    if(w) return {txt:'🏆 '+nome(w), on:true};
+    return {txt: fim? 'sem comparação' : 'em andamento'};
+  },
+  // resumo do resultado que vai na publicacao do feed: quem segue tambem consegue ver o duelo
+  resumoPub(d, r){
+    const quem=DUELO.noPlacar(d).filter(u=>DUELO.entrou(d,u)), ex=[];
+    DUELO.chaves(d).filter(k=>(!d.ex[k].troca || DUELO.quemFez(d,k).length) && !DUELO.ehDuplicata(d,k) && !d.ex[k].rm).forEach(k=>{
+      const p={}; let carga=false;
+      quem.forEach(u=>{
+        const ss=DUELO.setsDe(d,u,k), exu=DUELO.exDe(d,u,k); if(DUELO.valorEhCarga(exu)) carga=true;
+        if(DUELO.foraDe(d,u,k)){ p[u]={s:'removeu'}; return; }
+        if(!ss.length){ p[u]={s:'—'}; return; }
+        const pm=d.modo==='mano'? DUELO.perfMano(d,u,k) : null;
+        p[u]={s: ss.map(s=>DUELO.fmtSerie(s, exu)+(DUELO.descartada(d,u,k,s)? '*' : '')).join(' · ').slice(0,180)};
+        if(pm && pm.lista.length) p[u].m=Math.round(pm.lista[0]*10)/10;
+      });
+      ex.push({n:String((BIB.porId[d.ex[k].exId]||{}).n || d.ex[k].nm || 'Exercício').slice(0,50), w:(r.por||{})[k]||null, c:carga?1:0, p});
+    });
+    return {modo:d.modo, t:String(d.titulo||'').slice(0,50), q:quem, nomes:Object.fromEntries(quem.map(u=>[u, DUELO.nome(d,u)])), pts:r.pts||{}, venc:r.venc||'', wo:!!r.wo, ex:ex.slice(0,15)};
+  },
+  abreResumo(pub){
+    const quem=pub.q||Object.keys(pub.nomes||{}), eu=S.auth && S.auth.uid;
+    const nome=u=>u===eu? 'Você' : ((pub.nomes||{})[u]||'alguém');
+    const fmtN=v=>pub.modo==='mano'? String(v||0) : Math.round(v||0)+'%';
+    const setsEl=str=>{ const sp=h('span',{}); String(str||'—').split(' · ').forEach((x,i)=>{ if(i) sp.append('  ·  '); sp.append(/\*$/.test(x)? h('s',{title:'Não contou: muito acima do normal'}, x.slice(0,-1)) : x); }); return sp; };
+    const cab=h('div',{class:'card duelo-cab'},
+      h('div',{class:'f12 mut2'}, (pub.modo==='mano'? '🤜 Mano a mano' : '📈 Superação')+(pub.t? ' · '+pub.t : '')),
+      h('div',{class:'duelo-placar-g'}, ...quem.map(u=>h('div',{class:'duelo-pessoa'+(pub.venc===u?' on':'')},
+        h('div',{class:'f12 mut',style:'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%'}, nome(u)),
+        h('div',{class:'duelo-placar'}, fmtN((pub.pts||{})[u]))))),
+      h('div',{class:'b800',style:'margin-top:10px;font-size:16px'}, !pub.venc? 'Empate' : (pub.venc===eu? 'Você venceu 🏆' : nome(pub.venc)+' venceu')+(pub.wo? ' (por desistência)' : '')),
+      h('button',{class:'btn btn-mini',style:'margin-top:10px;width:auto;padding:7px 14px',onclick:()=>DUELO.ajuda(pub.modo)},'Como funciona?'));
+    const lista=h('div',{class:'card'}, ...(pub.ex||[]).map(x=>DUELO.blocoRes(x.n, DUELO.badgeRes(x.w, nome, true),
+      quem.map(u=>{ const p=(x.p||{})[u]||{}; return {quem:nome(u), venceu:x.w===u, nota:p.m!=null? CORE.fmtKg(p.m)+(x.c?' kg':'') : '', sets:setsEl(p.s)}; }))));
+    UI.folha('Resultado do duelo',[cab, h('div',{class:'secao'},'Exercício por exercício'), lista]);
+  },
   valorEhCarga(exId){ const x=BIB.ex(exId)||{}; return (x.t||'peso_reps')==='peso_reps' && x.e!=='peso-corporal'; },
   descartada(d, uid, k, s){ const ref=DUELO.baseDe(d,uid,k); if(!ref || !s) return false; return DUELO.valor(s, DUELO.exDe(d,uid,k), d.modo)>DUELO.SUSPEITO*ref; },
   // leva as MINHAS series de uma chave pra outra (cada um so escreve as proprias)
@@ -5556,6 +5636,7 @@ const DUELO = {
   anotaNoTreino(d, r){
     const t=Object.values(S.treinos||{}).find(t=>t && t.duelo===d.id && !t.apagado); if(!t) return;
     const info={id:d.id, modo:d.modo, com:DUELO.outros(d).filter(u=>DUELO.entrou(d,u)).map(u=>DUELO.nome(d,u)), res:DUELO.textoRes(d, Object.assign({}, r), DUELO.meu())};
+    try{ info.pub=DUELO.resumoPub(d, DUELO.calcula(d)); }catch(_){}    // quem segue tambem ve o duelo pelo feed
     if(JSON.stringify(t.dueloInfo||{})===JSON.stringify(info)) return;
     t.dueloInfo=info; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
     try{ if(S.perfil?.user && S.auth && treinoPublicado(t)) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); }catch(e){}
@@ -5693,6 +5774,7 @@ const DUELO = {
             const est=DUELO.estadoDe(d,u), feitos=ks.filter(k=>DUELO.setsDe(d,u,k).length).length;
             const sub= est==='desistiu'? 'desistiu' : (est==='concluiu'? 'terminou' : (est==='recusou'? 'recusou' : (!DUELO.entrou(d,u)? 'convidado' : feitos+'/'+ks.length)));
             return h('span',{class:'duelo-chip'+(lid===u?' on':'')}, DUELO.nome(d,u)+' · '+sub); }))),
+        h('button',{class:'btn btn-mini',onclick:()=>DUELO.ajuda(d.modo)},'?'),
         h('button',{class:'btn btn-mini',onclick:()=>UI.vai('duelo',{id:d.id})},'Placar')),
       h('div',{class:'duelo-lider'+(lid===eu?' on':'')}, txt));
     return el;
@@ -5747,7 +5829,15 @@ const DUELO = {
     });
     el.append(h('div',{class:'duelo-tab'}, ...lin));
     if(d.modo==='mano' && w){
-      const motivo=()=>{ const p=(res.perf[k]||{})[w]; return p && p.melhor? ' (melhor série '+DUELO.fmtSerie(p.melhor.s, DUELO.exDe(d,w,k)||e.exId)+')' : ''; };
+      const motivo=()=>{
+        const P=res.perf[k]||{}, pw=P[w]; if(!pw || !pw.lista || !pw.lista.length) return '';
+        const exw=DUELO.exDe(d,w,k)||e.exId, carga=DUELO.valorEhCarga(exw), fv=v=>CORE.fmtKg(Math.round(v*10)/10);
+        const best=(pw.melhor && !DUELO.descartada(d,w,k,pw.melhor.s))? DUELO.fmtSerie(pw.melhor.s, exw)+' ≈ ' : '';
+        const outros=Object.keys(P).filter(u=>u!==w && P[u] && P[u].lista && P[u].lista.length).map(u=>P[u].lista[0]);
+        const seg=outros.length? Math.max(...outros) : null;
+        const empMelhor = seg!=null && Math.abs(pw.lista[0]-seg)<0.01;
+        return ': melhor série '+best+fv(pw.lista[0])+(seg!=null? ' contra '+fv(seg) : '')+(carga? ' (1RM estimado)' : '')+(empMelhor? ' · empatou na melhor, decidiu a seguinte' : '');
+      };
       el.append(h('div',{class:'duelo-veredito'+(w===eu?' on':'')},
         w==='='? 'Empatados neste exercício' : (w==='≠'? 'Exercícios diferentes: não conta' : (w===eu? 'Você leva este exercício' : DUELO.nome(d,w)+' leva este exercício')+motivo())));
     }
@@ -5868,27 +5958,28 @@ const DUELO = {
       d.modo==='mano'? h('div',{class:'f12 mut',style:'margin-top:4px'},'Cada exercício vale 1 ponto. Ganha quem fizer a melhor série, medida pelo 1RM estimado (carga × (1 + repetições ÷ 30)): mais carga ou mais repetições contam. Empatou? Compara a 2ª melhor série e depois o volume. Aquecimento conta. Série muito acima do seu normal (provável erro de digitação) não conta e aparece riscada.')
                      : (fim? h('div',{class:'f12 mut',style:'margin-top:4px'},'% do próprio normal: 100% é o seu padrão') : null)].filter(Boolean));
     if(!fim && DUELO.emDuelo() && S.ativo.duelo===d.id) m.append(h('button',{class:'btn btn-p',onclick:()=>UI.vai('ativo',null,false)},'Voltar ao treino'));
-    // exercicio a exercicio, todas as series
+    // exercicio a exercicio: quem levou, a nota de cada um e as series (desconsiderada aparece riscada)
     const lista=h('div',{class:'card'});
+    const nomeU=u=>u===eu? 'Você' : DUELO.nome(d,u);
     DUELO.chaves(d).filter(k=>(!d.ex[k].troca || DUELO.quemFez(d,k).length) && !DUELO.ehDuplicata(d,k)).forEach(k=>{
       const w=r.por[k], nomeSala=((BIB.porId[d.ex[k].exId]||{}).n || d.ex[k].nm || 'Exercício')+(d.ex[k].troca? ' · troca' : '');
       const linhas=quem.map(u=>{
         const ss=DUELO.setsDe(d,u,k), ex=DUELO.exDe(d,u,k), fora=DUELO.foraDe(d,u,k);
-        return h('div',{class:'duelo-linha2'+(w===u?' on':'')},
-          h('span',{class:'duelo-quem'}, u===eu? 'Você' : DUELO.nome(d,u)),
-          h('span',{class:'duelo-sets'}, fora? 'removeu' : (()=>{ const sp=h('span',{}); if(!ss.length){ sp.append('—'); }
-              ss.forEach((s,i)=>{ if(i) sp.append('  ·  '); const txt=DUELO.fmtSerie(s, ex)+(s.pr? ' 🥇' : '');
-                sp.append(DUELO.descartada(d,u,k,s)? h('s',{title:'Não contou: muito acima do seu normal'},txt) : txt); });
-              if(ex!==d.ex[k].exId) sp.append('  ('+DUELO.nomeEx(d,u,k)+')'); return sp; })(),
-            (d.modo==='mano' && ss.length && !fora)? (()=>{ const pm=DUELO.perfMano(d,u,k), desc=ss.filter(s=>DUELO.descartada(d,u,k,s)).length;
-              return h('span',{class:'duelo-nota'}, (pm.lista.length? 'melhor: '+CORE.fmtKg(Math.round(pm.lista[0]*10)/10)+(DUELO.valorEhCarga(ex)? ' kg (1RM)' : '') : 'nenhuma série válida')+(desc? ' · '+desc+' não '+(desc>1?'contaram':'contou')+' (muito acima do normal)' : '')); })() : null));
+        const sp=h('span',{});
+        if(fora) sp.append('removeu'); else if(!ss.length) sp.append('—');
+        else ss.forEach((s,i)=>{ if(i) sp.append('  ·  '); const txt=DUELO.fmtSerie(s, ex)+(s.pr? ' 🥇' : '');
+          sp.append(DUELO.descartada(d,u,k,s)? h('s',{title:'Não contou: muito acima do seu normal'},txt) : txt); });
+        if(!fora && ex!==d.ex[k].exId) sp.append('  ('+DUELO.nomeEx(d,u,k)+')');
+        let nota='';
+        if(d.modo==='mano' && ss.length && !fora){ const pm=DUELO.perfMano(d,u,k); nota= pm.lista.length? CORE.fmtKg(Math.round(pm.lista[0]*10)/10)+(DUELO.valorEhCarga(ex)? ' kg' : '') : 'sem série válida'; }
+        return {quem:nomeU(u), venceu:w===u, nota, sets:sp};
       });
-      lista.append(h('div',{class:'duelo-bloco'},
-        h('div',{class:'linha',style:'gap:8px'}, h('div',{class:'b800 esp',style:'font-size:14px;min-width:0'}, nomeSala),
-          h('span',{class:'f12 mut2'}, w==='≠'? 'exercícios diferentes' : (w==='='? 'empate' : (w? (w===eu? 'você levou' : DUELO.nome(d,w)+' levou') : (fim? 'sem comparação' : '…'))))),
-        ...linhas));
+      lista.append(DUELO.blocoRes(nomeSala, DUELO.badgeRes(w, nomeU, fim), linhas));
     });
-    if(DUELO.chaves(d).length) m.append(h('div',{class:'secao'},'Série por série'), lista);
+    if(DUELO.chaves(d).length) m.append(h('div',{class:'linha',style:'margin:18px 2px 8px'}, h('div',{class:'secao esp',style:'margin:0'},'Exercício por exercício'),
+      h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 12px',onclick:()=>DUELO.ajuda(d.modo)},'Como funciona?')));
+    if(d.modo==='mano' && DUELO.chaves(d).length) m.append(h('div',{class:'f12 mut',style:'margin:-2px 2px 8px'},'A nota é o 1RM estimado da melhor série de cada um.'));
+    if(DUELO.chaves(d).length) m.append(lista);
     if(fim){
       const hist=h('div',{class:'f13 mut',style:'text-align:center;margin:6px 0 12px'},'Carregando o retrospecto…');
       m.append(hist);
@@ -7345,7 +7436,10 @@ function cartaoFeed(i){
     h('div',{class:'feed-tit'}, h('span',{class:'feed-bar'}), t.titulo),
     ...(function(){ const du = i.meu? (i.t && i.t.dueloInfo) : (i.r && i.r.duelo); if(!du) return [];
       const txt='⚔️ Duelo'+((du.com&&du.com.length)? ' com '+du.com.join(' e ') : '')+(du.res? ' · '+du.res : '');
-      return [i.meu? h('button',{class:'feed-duelo',onclick:ev=>{ ev.stopPropagation(); UI.vai('duelo',{id:du.id}); }}, txt) : h('div',{class:'feed-duelo'}, txt)]; })(),
+      // participante abre o duelo completo (de qualquer publicacao); quem so segue abre o resumo
+      const souParte = i.meu || !!(S.auth && du.pub && (du.pub.q||[]).includes(S.auth.uid)) || (du.com||[]).includes('@'+((S.perfil||{}).user||'~'));
+      const abre=ev=>{ ev.stopPropagation(); if(souParte) UI.vai('duelo',{id:du.id}); else if(du.pub) DUELO.abreResumo(du.pub); else UI.toast('O detalhe aparece nos próximos duelos'); };
+      return [h('button',{class:'feed-duelo',onclick:abre}, txt)]; })(),
     ...(function(){ const a = i.meu ? (i.t && i.t.academia) : (i.r && i.r.acad);
       if(!(a && a.n)) return [];
       return [h('button',{class:'feed-acad',title:'Abrir no mapa',
@@ -10032,7 +10126,7 @@ function resumoTreino(t){
       sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
     atualizado:agora() };
   if(t.temFoto) r0.f=1;
-  if(t.dueloInfo) r0.duelo={id:t.dueloInfo.id, modo:t.dueloInfo.modo, com:(t.dueloInfo.com||[]).slice(0,2), res:t.dueloInfo.res||''};
+  if(t.dueloInfo){ r0.duelo={id:t.dueloInfo.id, modo:t.dueloInfo.modo, com:(t.dueloInfo.com||[]).slice(0,2), res:t.dueloInfo.res||''}; if(t.dueloInfo.pub) r0.duelo.pub=t.dueloInfo.pub; }
   if(t.academia && t.academia.n){
     r0.acad={n:t.academia.n, id:t.academia.id||null};
     // coordenada do LUGAR (publica) pra quem ve poder abrir no mapa

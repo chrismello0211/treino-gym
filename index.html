@@ -257,6 +257,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pessoa{min-width:0}
+.duelo-nota{display:block;font-size:11.5px;color:var(--tx3);margin-top:2px}
 .duelo-pr{font-size:11px;margin-left:3px;vertical-align:1px}
 .ed-cab{padding:2px 0 8px}
 .ed-tit{font-size:20px;font-weight:800;color:var(--brand2);line-height:1.25;word-break:break-word}
@@ -703,7 +704,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.37.2';
+const APP_VER='11.37.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -5031,7 +5032,21 @@ const DUELO = {
   },
   setsDe(d, uid, k){ return DUELO.setsDeBruto(d, uid, DUELO.chaveDe(d, uid, k)); },
   mapaDe(d, uid, k){ return ((((d.j||{})[uid]||{}).s)||{})[DUELO.chaveDe(d,uid,k)]||{}; },
-  baseDe(d, uid, k){ const bb=(((d.j||{})[uid]||{}).b)||{}; const b=bb[k]!=null? bb[k] : bb[DUELO.chaveDe(d,uid,k)]; return Number(b)>0? Number(b) : null; },
+  // O "normal" (base do filtro de serie suspeita) tem que ser do exercicio que a pessoa FEZ nessa posicao.
+  // Duelo Chris x Mari: o leg press entrou por troca e o normal continuou o do exercicio anterior (37,59):
+  // as 3 series da Mari (ate 312) foram descartadas como suspeitas e o Chris levou o exercicio por WO.
+  baseDe(d, uid, k){
+    const j=((d.j||{})[uid])||{}, bb=j.b||{}, bx=j.bx||{};
+    const kk = bb[k]!=null? k : DUELO.chaveDe(d,uid,k);
+    const b=bb[kk]; if(!(Number(b)>0)) return null;
+    const ex=DUELO.exDe(d,uid,kk);
+    if(bx[kk]!==undefined) return bx[kk]===ex? Number(b) : null;
+    if(((d.ex||{})[kk]||{}).trPor || (j.x||{})[kk]) return null;     // posicao trocada e normal sem dono: nao filtra
+    return Number(b);
+  },
+  // a serie foi desconsiderada pelo filtro (muito acima do normal da pessoa nesse exercicio)?
+  valorEhCarga(exId){ const x=BIB.ex(exId)||{}; return (x.t||'peso_reps')==='peso_reps' && x.e!=='peso-corporal'; },
+  descartada(d, uid, k, s){ const ref=DUELO.baseDe(d,uid,k); if(!ref || !s) return false; return DUELO.valor(s, DUELO.exDe(d,uid,k), d.modo)>DUELO.SUSPEITO*ref; },
   // leva as MINHAS series de uma chave pra outra (cada um so escreve as proprias)
   moveSeries(d, de, para){
     const eu=DUELO.meu(), s=((((d.j||{})[eu]||{}).s)||{})[de]||{};
@@ -5130,7 +5145,7 @@ const DUELO = {
     let venc='';
     if(vivos.length===1 && P.length>1) venc=vivos[0];
     else if(ordem.length>1){ const a=pts[ordem[0]]||0, b=pts[ordem[1]]||0; venc=(d.modo==='mano'? a===b : Math.abs(a-b)<DUELO.EMPATE)? '' : ordem[0]; }
-    return {v:2, modo:d.modo, pts, por, ordem, venc, wo:(vivos.length===1 && desist.length>0), extra};
+    return {v:3, modo:d.modo, pts, por, ordem, venc, wo:(vivos.length===1 && desist.length>0), extra};
   },
   resultado(d){ return DUELO.calcula(d); },
   // ao vivo: so QUEM esta na frente (sem numeros: evita jogar contra a formula)
@@ -5277,10 +5292,13 @@ const DUELO = {
     S.ativo.ex.forEach(e=>{
       if(!e._dk) return;
       const sala=(d && d.ex && d.ex[e._dk]) ? d.ex[e._dk].exId : null;
-      const jaX=(j.x||{})[e._dk], jaB=(j.b||{})[e._dk];
+      const jaX=(j.x||{})[e._dk], jaB=(j.b||{})[e._dk], jaBx=(j.bx||{})[e._dk];
       const trocado = sala && e.exId!==sala;
-      if(jaB===undefined || (trocado && jaX!==e.exId) || (!trocado && jaX)){
+      if(jaB===undefined || jaBx!==e.exId || (trocado && jaX!==e.exId) || (!trocado && jaX)){
+        // o normal e' sempre do exercicio que estou fazendo nessa posicao (refeito quando ele muda)
         NET.agenda(DUELO.caminho('/b/'+e._dk), DUELO.normal(e.exId, S.ativo.inicio) || 0);
+        NET.agenda(DUELO.caminho('/bx/'+e._dk), e.exId);
+        if(d){ d.j=d.j||{}; const mm=d.j[eu]=d.j[eu]||{}; (mm.bx=mm.bx||{})[e._dk]=e.exId; }
         if(trocado){
           const x=BIB.ex(e.exId)||{};
           NET.agenda(DUELO.caminho('/x/'+e._dk), e.exId);
@@ -5525,8 +5543,8 @@ const DUELO = {
   fecha(d){
     if(!d || !DUELO.terminou(d)) return;
     const r=DUELO.calcula(d), eu=DUELO.meu();
-    const guarda={v:2, modo:r.modo, pts:r.pts, ordem:r.ordem, venc:r.venc||'', wo:!!r.wo};
-    if(d.status!=='fim' || !d.resultado || d.resultado.v!==2){
+    const guarda={v:3, modo:r.modo, pts:r.pts, ordem:r.ordem, venc:r.venc||'', wo:!!r.wo};
+    if(d.status!=='fim' || !d.resultado || d.resultado.v!==3){
       d.status='fim'; d.fim=d.fim||agora(); d.resultado=guarda;
       NET.agenda('/duelos/'+d.id+'/resultado', guarda);
       NET.agenda('/duelos/'+d.id+'/fim', d.fim);
@@ -5646,13 +5664,13 @@ const DUELO = {
   },
   // treino ja salvo cujo duelo terminou depois: anota o resultado (e o feed)
   pendentes(todos){
-    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=d.resultado.v===2? d.resultado : DUELO.calcula(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){}
+    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=d.resultado.v===3? d.resultado : DUELO.calcula(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){}
   },
   async retrospecto(outro){
     const todos=await DUELO.meus(), eu=DUELO.meu(); let v=0, p=0, e=0;
     todos.forEach(d=>{
       if(!d || d.status!=='fim' || !d.resultado || (outro && !DUELO.jog(d).includes(outro))) return;
-      const r=d.resultado.v===2? d.resultado : DUELO.calcula(d);
+      const r=d.resultado.v===3? d.resultado : DUELO.calcula(d);
       if(!r.venc) e++; else if(r.venc===eu) v++; else p++;
     });
     return {v, p, e, n:v+p+e};
@@ -5818,7 +5836,7 @@ const DUELO = {
     if(!DUELO.cur || DUELO.cur.id!==id) DUELO.conecta(id);
     const d=DUELO.dados();
     if(!d){ m.append(h('div',{class:'vazio'},'Carregando o duelo…')); return; }
-    if(d.status==='fim' && d.resultado && d.resultado.v!==2) DUELO.fecha(d);     // resultado antigo: refaz com as regras novas
+    if(d.status==='fim' && d.resultado && d.resultado.v!==3) DUELO.fecha(d);     // resultado antigo: refaz com as regras novas (v3: normal do exercicio certo)
     const eu=DUELO.meu(), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao, souA=d.a===eu, P=DUELO.jog(d);
     const cab=h('div',{class:'card duelo-barra',style:'text-align:center'}, h('div',{class:'f12 mut'}, modo.ic+' '+modo.n+' · '+d.titulo));
     m.append(cab);
@@ -5847,7 +5865,7 @@ const DUELO = {
       h('div',{class:'b800',style:'margin-top:10px;font-size:16px'},
         !fim? (DUELO.estadoDe(d,eu)==='concluiu'? 'Aguardando os outros terminarem…' : 'Duelo em andamento') :
         (r.wo? (r.venc===eu? 'Vitória por desistência 🏆' : DUELO.nome(d,r.venc)+' venceu por desistência') : (!r.venc? 'Empate' : (r.venc===eu? 'Você venceu 🏆' : DUELO.nome(d,r.venc)+' venceu')))),
-      d.modo==='mano'? h('div',{class:'f12 mut',style:'margin-top:4px'},'Exercícios vencidos. Ganha cada exercício quem fizer a melhor série; empatando, a segunda melhor, depois o volume.')
+      d.modo==='mano'? h('div',{class:'f12 mut',style:'margin-top:4px'},'Cada exercício vale 1 ponto. Ganha quem fizer a melhor série, medida pelo 1RM estimado (carga × (1 + repetições ÷ 30)): mais carga ou mais repetições contam. Empatou? Compara a 2ª melhor série e depois o volume. Aquecimento conta. Série muito acima do seu normal (provável erro de digitação) não conta e aparece riscada.')
                      : (fim? h('div',{class:'f12 mut',style:'margin-top:4px'},'% do próprio normal: 100% é o seu padrão') : null)].filter(Boolean));
     if(!fim && DUELO.emDuelo() && S.ativo.duelo===d.id) m.append(h('button',{class:'btn btn-p',onclick:()=>UI.vai('ativo',null,false)},'Voltar ao treino'));
     // exercicio a exercicio, todas as series
@@ -5858,7 +5876,12 @@ const DUELO = {
         const ss=DUELO.setsDe(d,u,k), ex=DUELO.exDe(d,u,k), fora=DUELO.foraDe(d,u,k);
         return h('div',{class:'duelo-linha2'+(w===u?' on':'')},
           h('span',{class:'duelo-quem'}, u===eu? 'Você' : DUELO.nome(d,u)),
-          h('span',{class:'duelo-sets'}, fora? 'removeu' : (ss.length? ss.map(s=>DUELO.fmtSerie(s, ex)+(s.pr? ' 🥇' : '')).join('  ·  ') : '—')+(ex!==d.ex[k].exId? '  ('+DUELO.nomeEx(d,u,k)+')' : '')));
+          h('span',{class:'duelo-sets'}, fora? 'removeu' : (()=>{ const sp=h('span',{}); if(!ss.length){ sp.append('—'); }
+              ss.forEach((s,i)=>{ if(i) sp.append('  ·  '); const txt=DUELO.fmtSerie(s, ex)+(s.pr? ' 🥇' : '');
+                sp.append(DUELO.descartada(d,u,k,s)? h('s',{title:'Não contou: muito acima do seu normal'},txt) : txt); });
+              if(ex!==d.ex[k].exId) sp.append('  ('+DUELO.nomeEx(d,u,k)+')'); return sp; })(),
+            (d.modo==='mano' && ss.length && !fora)? (()=>{ const pm=DUELO.perfMano(d,u,k), desc=ss.filter(s=>DUELO.descartada(d,u,k,s)).length;
+              return h('span',{class:'duelo-nota'}, (pm.lista.length? 'melhor: '+CORE.fmtKg(Math.round(pm.lista[0]*10)/10)+(DUELO.valorEhCarga(ex)? ' kg (1RM)' : '') : 'nenhuma série válida')+(desc? ' · '+desc+' não '+(desc>1?'contaram':'contou')+' (muito acima do normal)' : '')); })() : null));
       });
       lista.append(h('div',{class:'duelo-bloco'},
         h('div',{class:'linha',style:'gap:8px'}, h('div',{class:'b800 esp',style:'font-size:14px;min-width:0'}, nomeSala),
@@ -5888,7 +5911,7 @@ const DUELO = {
     if(!todos.length){ m.append(h('div',{class:'vazio'},'Nenhum duelo ainda. Desafie alguém pelo perfil.')); return; }
     const lista=h('div',{class:'card'});
     todos.slice(0,40).forEach(d=>{
-      const r=d.status==='fim' && d.resultado? (d.resultado.v===2? d.resultado : DUELO.calcula(d)) : null;
+      const r=d.status==='fim' && d.resultado? (d.resultado.v===3? d.resultado : DUELO.calcula(d)) : null;
       lista.append(h('button',{class:'duelo-item',onclick:()=>UI.vai('duelo',{id:d.id})},
         h('div',{class:'esp',style:'min-width:0;text-align:left'},
           h('div',{class:'b800',style:'font-size:14px'}, 'vs '+DUELO.outros(d).map(u=>DUELO.nome(d,u)).join(' e ')),

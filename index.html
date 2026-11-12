@@ -257,6 +257,9 @@ input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pessoa{min-width:0}
+#duelo-barra .duelo-chips{margin-top:8px}
+#duelo-barra .duelo-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.duelo-bt{flex-shrink:0;width:auto;padding:6px 11px}
 .dx-bloco{padding:12px 0;border-bottom:1px solid var(--line)}
 .dx-bloco:last-child{border-bottom:none}
 .dx-cab{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -718,7 +721,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.38.1';
+const APP_VER='11.38.2';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -5271,6 +5274,8 @@ const DUELO = {
     if(amigos[1]) d.c=amigos[1].uid;
     if(Object.keys(ex).length) d.ex=ex;
     try{ await NET.putD('/duelos/'+id, d); }catch(e){ UI.toast('Não consegui enviar o desafio. Tente de novo.'); return; }
+    // convites anteriores meus ainda pendentes saem (senao os amigos recebem varios duelos iguais)
+    DUELO.meus().then(l=>(l||[]).forEach(x=>{ if(x && x.id!==id && x.a===S.auth.uid && x.status==='convite') NET.agenda('/duelos/'+x.id+'/status', 'cancelado'); })).catch(()=>{});
     UI.fechaFolha(); VIB.v(20);
     UI.toast(amigos.length>1? 'Desafios enviados ⚔️' : 'Desafio enviado ⚔️', true);
     DUELO.conecta(id, d);
@@ -5283,7 +5288,9 @@ const DUELO = {
   },
   async aceitar(d){
     if(S.ativo && S.ativo.duelo!==d.id){ UI.toast('Conclua ou descarte o treino atual antes de entrar no duelo'); return; }
-    if(!DUELO.podeEntrar(d)){ UI.toast('Esse desafio não está mais disponível'); DUELO.verConvites(true); return; }
+    // confere a situacao ATUAL no servidor (o cartao do convite pode ser velho: duelo ja cancelado ou encerrado)
+    try{ const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f; else if(f===null && navigator.onLine){ UI.toast('Esse desafio não existe mais'); DUELO.verConvites(true); return; } }catch(e){}
+    if(!DUELO.podeEntrar(d)){ UI.toast(d.status==='cancelado'? 'Esse desafio foi cancelado' : (d.status==='fim'? 'Esse desafio já terminou' : 'Esse desafio não está mais disponível')); DUELO.verConvites(true); return; }
     if(d.status==='convite'){ NET.agenda('/duelos/'+d.id+'/status', 'ativo'); NET.agenda('/duelos/'+d.id+'/inicio', agora()); d.status='ativo'; d.inicio=agora(); }
     DUELO.conecta(d.id, d);
     DUELO.comeca(d);
@@ -5600,7 +5607,15 @@ const DUELO = {
       if(d && d.id===id) salvo.dueloInfo={id, modo:d.modo, com:DUELO.outros(d).filter(u=>DUELO.entrou(d,u) || DUELO.estadoDe(d,u)===null).map(u=>DUELO.nome(d,u))};
       try{ salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo); }catch(e){}
     }
-    if(d && d.id===id){ d.j=d.j||{}; (d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}).estado=como; setTimeout(()=>DUELO.fecha(d), 600); }
+    if(d && d.id===id){
+      d.j=d.j||{}; (d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}).estado=como;
+      // quem convidou abandonou antes de alguem entrar: o duelo e' cancelado (some dos convites), e nao
+      // "encerrado com desistencia" (Mari descartou pra convidar de novo e o Chris entrou num duelo morto)
+      if(como==='desistiu' && d.a===DUELO.meu() && DUELO.outros(d).every(u=>!DUELO.entrou(d,u))){
+        d.status='cancelado'; NET.agenda('/duelos/'+d.id+'/status', 'cancelado'); return;
+      }
+      setTimeout(()=>DUELO.fecha(d), 600);
+    }
   },
   // linha do duelo no feed/treino: "Venceu 4 x 2", "2o lugar"...
   // posicao com empate: quem empata divide o lugar; quem desistiu fica por ultimo
@@ -5767,16 +5782,16 @@ const DUELO = {
     const os=DUELO.outros(d), ks=DUELO.chaves(d).filter(k=>!d.ex[k].troca && !DUELO.ehDuplicata(d,k));
     const txt = lid===eu? 'Você está na frente' : (lid? DUELO.nome(d,lid)+' está na frente' : 'Empatados até aqui');
     el.append(
-      h('div',{class:'linha',style:'gap:10px'},
-        h('div',{style:'font-size:20px'},'⚔️'),
-        h('div',{class:'esp',style:'min-width:0'},
-          h('div',{class:'b800',style:'font-size:14.5px'}, modo.ic+' '+modo.n),
-          h('div',{class:'duelo-chips'}, ...os.map(u=>{
+      h('div',{class:'linha',style:'gap:8px'},
+        h('div',{style:'font-size:20px;flex-shrink:0'},'⚔️'),
+        h('div',{class:'esp b800',style:'min-width:0;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'}, modo.ic+' '+modo.n),
+        h('button',{class:'btn btn-mini duelo-bt','aria-label':'Como funciona o duelo',onclick:()=>DUELO.ajuda(d.modo)},'?'),
+        h('button',{class:'btn btn-mini duelo-bt',onclick:()=>UI.vai('duelo',{id:d.id})},'Placar')),
+      // as pessoas numa linha propria, com a largura toda (nome comprido nao cobre os botoes)
+      h('div',{class:'duelo-chips'}, ...os.map(u=>{
             const est=DUELO.estadoDe(d,u), feitos=ks.filter(k=>DUELO.setsDe(d,u,k).length).length;
             const sub= est==='desistiu'? 'desistiu' : (est==='concluiu'? 'terminou' : (est==='recusou'? 'recusou' : (!DUELO.entrou(d,u)? 'convidado' : feitos+'/'+ks.length)));
-            return h('span',{class:'duelo-chip'+(lid===u?' on':'')}, DUELO.nome(d,u)+' · '+sub); }))),
-        h('button',{class:'btn btn-mini',onclick:()=>DUELO.ajuda(d.modo)},'?'),
-        h('button',{class:'btn btn-mini',onclick:()=>UI.vai('duelo',{id:d.id})},'Placar')),
+            return h('span',{class:'duelo-chip'+(lid===u?' on':''),title:DUELO.nome(d,u)+' · '+sub}, DUELO.nome(d,u)+' · '+sub); })),
       h('div',{class:'duelo-lider'+(lid===eu?' on':'')}, txt));
     return el;
   },

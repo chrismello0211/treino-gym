@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.38.1';
+const EXPECTED_VERSION = '11.38.2';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -233,6 +233,7 @@ check(indexHtml.includes('const PRSPUB') && indexHtml.includes("NET.get('/rotina
 check(indexHtml.includes("if(bx[kk]!==undefined) return bx[kk]===ex? Number(b) : null;") && indexHtml.includes("NET.agenda(DUELO.caminho('/bx/'+e._dk), e.exId);") && indexHtml.includes("d.resultado.v!==4) DUELO.fecha(d)") && indexHtml.includes('Cada exercício vale 1 ponto'), 'duelo: normal do exercicio certo (regua do Superacao), criterio claro e duelos antigos refeitos', 'leg press do duelo Chris x Mari: series da Mari descartadas por um normal do exercicio anterior');
 check(indexHtml.includes('ajuda(modo){') && indexHtml.includes('resumoPub(d, r){') && indexHtml.includes('DUELO.abreResumo(du.pub)') && indexHtml.includes("r0.duelo.pub=t.dueloInfo.pub") && indexHtml.includes('blocoRes(nome, badge, linhas){'), 'duelo: criterio explicado, resultado visivel pra quem segue (pelo feed) e visual novo', 'nao dava pra ver o duelo pela publicacao dos outros nem entender o criterio');
 check(!indexHtml.includes('SUSPEITO') && indexHtml.includes("if(val>0) v.push(val); });") && !indexHtml.includes('provável erro de digitação') && indexHtml.includes("d.resultado.v!==4) DUELO.fecha(d)"), 'duelo: nenhuma serie e descartada (o app nao supoe erro de digitacao); duelos refeitos', 'o filtro de 1,6x o normal jogava fora series de verdade');
+check(indexHtml.includes("const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f;") && indexHtml.includes("if(como==='desistiu' && d.a===DUELO.meu() && DUELO.outros(d).every(u=>!DUELO.entrou(d,u)))") && indexHtml.includes("x.a===S.auth.uid && x.status==='convite'") && indexHtml.includes('#duelo-barra .duelo-chip{max-width:100%'), 'duelo: aceitar confere o servidor, abandonar sozinho cancela, convite novo cancela os antigos, barra sem sobreposicao', 'o Chris entrou num duelo morto onde a Mari aparecia como desistiu');
 check(indexHtml.includes("A FICHA E' UMA SO pra todo mundo do duelo") && indexHtml.includes("d.ex[k].rm={por:eu, t:agora()}") && indexHtml.includes("q.trPor=eu") && indexHtml.includes("if(e._dkDe) q.de=e._dkDe;") && indexHtml.includes("DUELO.caminho('/v'), APP_VER") && indexHtml.includes('marcaVolta(d, k){'), 'duelo: ficha igual pra todos (trocar, remover, adicionar e ordem valem pra todos; aviso de versao antiga)', 'com 3 pessoas cada um ficava com uma ficha diferente');
 check(indexHtml.includes("$('#folha').style.zIndex= sobre? '80' : ''") && indexHtml.includes("ev.data.tipo==='notifClick'") && swSource.includes("tipo:'notifClick'"), 'escolher exercicio por cima da edicao de treino; convite aparece na hora pela notificacao', 'a escolha de exercicio ficava atras da folha; convite demorava');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');

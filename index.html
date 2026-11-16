@@ -721,7 +721,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.38.2';
+const APP_VER='11.38.3';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -751,7 +751,7 @@ const CORE = {
     const kg=Number(s.kg)||0, reps=Number(s.reps)||0, vol=CORE.volumeSerie(s), rm=CORE.est1RM(kg,reps);
     const p = prs[exId]||{};
     const bate=[];
-    if(kg>0 && kg > (p.kg?p.kg.v:0)) bate.push(['kg',kg]);
+    if(kg>0 && kg > (p.kg?p.kg.v:0)) bate.push(['kg',kg,reps]);
     if(vol>0 && vol > (p.vol?p.vol.v:0)) bate.push(['vol',vol]);
     if(rm>0 && rm > (p.rm?p.rm.v:0)) bate.push(['rm',rm]);
     const xe=(typeof BIB!=='undefined' && BIB.ex)? BIB.ex(exId) : null;
@@ -786,9 +786,16 @@ const CORE = {
     if(!reg) return [];
     return ['kg','vol','rm','reps'].map(tp=>reg[tp]).filter(Boolean);
   },
+  // repeticoes da serie do recorde de carga (recordes antigos nao guardavam: procura no treino dele)
+  repsDoKg(exId, pk){
+    if(!pk) return 0; if(pk.r!=null) return Number(pk.r)||0;
+    const tr = (typeof S!=='undefined') && ((S.treinos||{})[pk.tid] || (S.ativo && S.ativo.id===pk.tid? S.ativo : null)); if(!tr) return 0;
+    let m=0; (tr.ex||[]).filter(q=>q.exId===exId).forEach(q=>(q.series||[]).forEach(s=>{ if(s.ok && Number(s.kg)===Number(pk.v)) m=Math.max(m, Number(s.reps)||0); }));
+    return m;
+  },
   aplicaPR(prs, exId, tipos, tid, data){
     const p = prs[exId] = prs[exId]||{};
-    tipos.forEach(([t,v])=>{ p[t]={v, tid, data}; });
+    tipos.forEach(([t,v,r])=>{ p[t]={v, tid, data}; if(t==='kg' && r!=null) p[t].r=Number(r)||0; });
     return prs;
   },
   fmtDur(seg){ seg=Math.max(0,Math.round(seg)); const h=Math.floor(seg/3600), m=Math.floor(seg%3600/60), s=seg%60;
@@ -869,7 +876,8 @@ CORE.recomputaPRs = function(lista, resets){
         const kg=Number(s.kg)||0, reps=Number(s.reps)||0, vol=CORE.volumeSerie(s), rm=CORE.est1RM(kg,reps);
         const cand = kg>0 ? {kg, vol, rm} : {reps};
         Object.entries(cand).forEach(([tp,v])=>{
-          if(v>0 && (!melhor[tp] || v>melhor[tp].v)) melhor[tp]={v, s};
+          // maior carga empatada no mesmo treino: vale a serie com mais repeticoes (101x6, nao 101x4)
+          if(v>0 && (!melhor[tp] || v>melhor[tp].v || (tp==='kg' && v===melhor[tp].v && reps>(Number(melhor[tp].s.reps)||0)))) melhor[tp]={v, s};
         });
       });
       // 2) para cada tipo, conta PR só se a melhor série do treino superar a marca anterior — UMA vez
@@ -881,10 +889,15 @@ CORE.recomputaPRs = function(lista, resets){
         if(info.v > marcaAnt){
           prs[e.exId]=prs[e.exId]||{};
           prs[e.exId][tp]={v:info.v, tid:t.id, data:t.inicio};
+          if(tp==='kg') prs[e.exId][tp].r=Number(info.s.reps)||0;
           if(!estreiaEx){
             (info.s.pr = info.s.pr || []).push(tp);
             t.recordes += 1;                            // 1 recorde por tipo, por treino
           }
+        } else if(tp==='kg' && marcaAnt>0 && info.v===marcaAnt && (Number(info.s.reps)||0) > ((base.kg && base.kg.r)||0)){
+          // mesma carga maxima, com mais repeticoes (Rafael: 101x4 e depois 101x6): o recorde passa a
+          // mostrar esta serie, igual ao 1RM. Sem medalha de carga: a carga nao aumentou.
+          prs[e.exId].kg={v:info.v, tid:t.id, data:t.inicio, r:Number(info.s.reps)||0};
         }
       });
     });
@@ -2059,7 +2072,8 @@ function serieDoPR(exId, tipo){
   const x=BIB.ex(exId);
   const rp=s=> x.t==='tempo' ? fmtTempoCampo(s.reps) : (s.reps+' reps');
   if(tipo==='kg'){
-    const s=(ex.series||[]).find(s=>s.ok && Number(s.kg)===Number(p.v));
+    // varias series na carga maxima: a de mais repeticoes (a mesma que o 1RM mostra)
+    let s=null; (ex.series||[]).forEach(q=>{ if(q.ok && Number(q.kg)===Number(p.v) && (!s || (Number(q.reps)||0)>(Number(s.reps)||0))) s=q; });
     return s? (CORE.fmtKg(s.kg)+' kg × '+rp(s)) : '';
   }
   if(tipo==='vol'){
@@ -3105,6 +3119,11 @@ const ATIVO = {
       }
       const estreia = S.ativo._estr[e.exId]; // 1ª sessão (ou 1ª depois de zerar) sem medalha
       const prs=CORE.detectaPR(S.prs, e.exId, {...s});
+      // mesma carga maxima com mais repeticoes: o recorde passa a mostrar esta serie (sem medalha de carga;
+      // desmarcar a serie refaz tudo pelo historico)
+      try{ const pk=(S.prs[e.exId]||{}).kg, kgS=Number(s.kg)||0, rS=Number(s.reps)||0;
+        if(pk && kgS>0 && kgS===Number(pk.v) && !prs.some(p=>p[0]==='kg') && rS>CORE.repsDoKg(e.exId, pk)){
+          S.prs[e.exId].kg={v:pk.v, tid:S.ativo.id, data:S.ativo.inicio, r:rS}; salva('prs'); NET.agenda('prs/'+e.exId+'/kg', S.prs[e.exId].kg); } }catch(_){}
       if(prs.length && estreia){
         s._prBackup=JSON.parse(JSON.stringify(prs.map(([t])=>[t, (S.prs[e.exId]||{})[t]])));
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
@@ -9273,6 +9292,12 @@ function reparaPRsFantasma(){
     return corrigidas;
   }catch(e){ if(DEBUG) console.log('reparaPRs', e); return 0; }
 }
+// uma vez: refaz os recordes com o desempate da carga (quem ja tinha 101x4 e depois 101x6)
+function migraRecordeCarga(){
+  if(S.cfg.recKg1) return;
+  try{ if(Object.keys(S.treinos||{}).length) CORE.reconciliaPRs(); }catch(e){ if(DEBUG) console.log('recKg', e); return; }
+  S.cfg.recKg1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
+}
 function reconciliaRecordes(){
   // corrige treinos gravados com a contagem antiga (1 por exercício) -> conta cada PR
   if(S.cfg.recRecalc3) return;
@@ -10648,7 +10673,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){} await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){} await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); migraRecordeCarga(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
 setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();

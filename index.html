@@ -722,7 +722,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.38.5';
+const APP_VER='11.38.6';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1999,7 +1999,13 @@ const UI = {
     soltaTeclado();
     UI._limpaFolha();
     // aberta por cima da folha de edicao de treino (ex.: escolher exercicio): fica ACIMA dela
-    try{ const sobre=!!(typeof FOLHA2!=='undefined' && FOLHA2.el); $('#folha').style.zIndex= sobre? '80' : ''; $('#veu').style.zIndex= sobre? '75' : ''; }catch(e){}
+    try{
+      const sobre=!!(typeof FOLHA2!=='undefined' && FOLHA2.el);
+      $('#folha').style.zIndex= sobre? '80' : ''; $('#veu').style.zIndex= sobre? '75' : '';
+      // por cima da edicao: ESTA folha recebe os toques e a edicao (atras) fica inerte. Antes a edicao deixava
+      // esta folha inerte: a busca e os exercicios nao respondiam e o toque caia no veu (que fechava tudo)
+      if(sobre){ $('#folha').inert=false; FOLHA2.el.inert=true; }
+    }catch(e){}
     UI._focoAntes=document.activeElement instanceof HTMLElement?document.activeElement:null;
     UI._aoFechar = aoFechar || null;
     UI._folhaObrigatoria=!!(opts&&opts.obrigatoria);
@@ -2021,6 +2027,8 @@ const UI = {
     if(UI._folhaObrigatoria && forcar!==true) return false;
     const estava=$('#folha').classList.contains('on');
     clearTimeout(UI._confT); UI._limpaFolha();
+    // fechou a folha que estava por cima da edicao: a edicao volta a responder (e a base fica inerte de novo)
+    try{ if(typeof FOLHA2!=='undefined' && FOLHA2.el){ FOLHA2.el.inert=false; $('#folha').inert=true; } }catch(e){}
     $('#veu').classList.remove('on'); $('#folha').classList.remove('on');
     $('#veu').setAttribute('aria-hidden','true'); $('#folha').setAttribute('aria-hidden','true');
     ['#topo','#main','#tabbar','#timerbar'].forEach(sel=>{ const el=$(sel); if(el) el.inert=false; });

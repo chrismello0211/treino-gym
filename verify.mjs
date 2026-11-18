@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.38.3';
+const EXPECTED_VERSION = '11.38.5';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -235,6 +235,8 @@ check(indexHtml.includes('ajuda(modo){') && indexHtml.includes('resumoPub(d, r){
 check(!indexHtml.includes('SUSPEITO') && indexHtml.includes("if(val>0) v.push(val); });") && !indexHtml.includes('provável erro de digitação') && indexHtml.includes("d.resultado.v!==4) DUELO.fecha(d)"), 'duelo: nenhuma serie e descartada (o app nao supoe erro de digitacao); duelos refeitos', 'o filtro de 1,6x o normal jogava fora series de verdade');
 check(indexHtml.includes("const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f;") && indexHtml.includes("if(como==='desistiu' && d.a===DUELO.meu() && DUELO.outros(d).every(u=>!DUELO.entrou(d,u)))") && indexHtml.includes("x.a===S.auth.uid && x.status==='convite'") && indexHtml.includes('#duelo-barra .duelo-chip{max-width:100%'), 'duelo: aceitar confere o servidor, abandonar sozinho cancela, convite novo cancela os antigos, barra sem sobreposicao', 'o Chris entrou num duelo morto onde a Mari aparecia como desistiu');
 check(indexHtml.includes("(tp==='kg' && v===melhor[tp].v && reps>(Number(melhor[tp].s.reps)||0))") && indexHtml.includes('prs[e.exId].kg={v:info.v, tid:t.id, data:t.inicio, r:Number(info.s.reps)||0};') && indexHtml.includes('repsDoKg(exId, pk){') && indexHtml.includes('migraRecordeCarga();'), 'recorde de maior carga: empatou na carga, vale a serie com mais repeticoes (igual ao 1RM)', 'Rafael: maior carga mostrava 101x4 e o 1RM 101x6');
+check(indexHtml.includes('ARRASTAFOLHA.solta();') && indexHtml.includes('_limpaFolha(){') && indexHtml.includes('UI._confereFolha(0);') && indexHtml.includes('clearTimeout(UI._confT); UI._limpaFolha();'), 'menu nunca fica preso fora da tela (arrasto interrompido desfeito; abrir/fechar limpa; confere se ficou visivel)', 'iPhone: menu do exercicio sumia, tela escura e travada ate reabrir o app');
+check(indexHtml.includes('negado=/permission denied/i.test(tx') && indexHtml.includes('(r.status!==401 || negado)') && indexHtml.includes('const FOTOFIT = {') && indexHtml.includes('FOTOFIT.reparaFila();') && indexHtml.includes('const BASEFIX = {') && indexHtml.includes('#timerbar,#tabbar{translate:0 var(--lift,0px)}'), 'fila: recusa de regra nao fica pra sempre (foto e recomprimida); cronometro nao fica levantado no meio da tela', 'iPhone do Chris: foto recusada 809 vezes; cronometro no meio da tela');
 check(indexHtml.includes("A FICHA E' UMA SO pra todo mundo do duelo") && indexHtml.includes("d.ex[k].rm={por:eu, t:agora()}") && indexHtml.includes("q.trPor=eu") && indexHtml.includes("if(e._dkDe) q.de=e._dkDe;") && indexHtml.includes("DUELO.caminho('/v'), APP_VER") && indexHtml.includes('marcaVolta(d, k){'), 'duelo: ficha igual pra todos (trocar, remover, adicionar e ordem valem pra todos; aviso de versao antiga)', 'com 3 pessoas cada um ficava com uma ficha diferente');
 check(indexHtml.includes("$('#folha').style.zIndex= sobre? '80' : ''") && indexHtml.includes("ev.data.tipo==='notifClick'") && swSource.includes("tipo:'notifClick'"), 'escolher exercicio por cima da edicao de treino; convite aparece na hora pela notificacao', 'a escolha de exercicio ficava atras da folha; convite demorava');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');

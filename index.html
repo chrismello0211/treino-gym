@@ -156,6 +156,7 @@ main{padding:calc(var(--sat) + 66px) 16px calc(var(--sab) + 92px);max-width:640p
   box-shadow:0 8px 30px rgba(0,0,0,.5)}
 #timerbar.on{display:flex}
 body.tela-ativo #timerbar{bottom:calc(var(--sab) + 12px)}
+#timerbar,#tabbar{translate:0 var(--lift,0px)}
 #tb-tempo{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;min-width:86px}
 .tb-btn{background:var(--surf2);border:1px solid var(--line);border-radius:11px;padding:9px 13px;font-weight:800;font-size:14px}
 .tb-pular{background:var(--brand);border-color:var(--brand);color:#14100C}
@@ -721,7 +722,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.38.3';
+const APP_VER='11.38.5';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1392,11 +1393,23 @@ const NET = {
 
         if(r && r.ok){ S.fila.shift(); seguidas=0; salva('fila'); continue; }
 
+        // o banco responde 401 tanto pra "login vencido" quanto pra "a regra recusou" (Permission denied):
+        // so a mensagem diz qual. Recusa de regra nunca passa (uma foto grande ficou 800+ vezes na fila).
+        let negado=false;
+        if(r && r.status===401){ try{ const tx=await r.clone().text(); negado=/permission denied/i.test(tx||''); }catch(e){} }
+        if(gen!==NET._gen) return;
+        if(negado && /^\/fotos\//.test(it.path) && typeof it.val==='string' && it.val.length>=FOTOFIT.MAX && !it._recomp){
+          // foto acima do limite da regra: recomprime pra caber e tenta de novo (nao perde a foto)
+          let menor=null; try{ menor=await FOTOFIT.encaixa(it.val); }catch(e){}
+          if(gen!==NET._gen) return;
+          if(menor && menor.length<FOTOFIT.MAX){ it.val=menor; it._recomp=1; it.tent=0; delete it.adiado; salva('fila'); continue; }
+        }
+
         // 401 no meio de envio longo: token venceu. Forca renovar no proximo ciclo.
-        if(r && r.status===401){ try{ S.auth.exp=0; }catch(e){} }
+        if(r && r.status===401 && !negado){ try{ S.auth.exp=0; }catch(e){} }
 
         // falhou: conta a tentativa
-        const permanente = !!(r && r.status>=400 && r.status<500 && r.status!==401);
+        const permanente = !!(r && r.status>=400 && r.status<500 && (r.status!==401 || negado));
         it.tent = (it.tent||0)+1;
         const limite = permanente ? 3 : 8;          // erro de regra desiste antes
         S.fila.shift();
@@ -1958,8 +1971,33 @@ const UI = {
       document.body.classList.add('com-sync');
     }catch(e){}
   },
+  // zera deslocamento que tenha sobrado (arrasto interrompido) no menu e no veu
+  _limpaFolha(){
+    try{ if(typeof ARRASTAFOLHA!=='undefined') ARRASTAFOLHA.g=null; }catch(e){}
+    const f=$('#folha'), v=$('#veu');
+    if(f){ f.style.transform=''; f.style.transition=''; }
+    if(v) v.style.opacity='';
+  },
+  // rede de seguranca: o menu aberto tem que estar VISIVEL. Se nao estiver (deslocamento que sobrou,
+  // tela do iPhone deslocada pelo teclado), reposiciona; em ultimo caso fecha (nunca tela escura e travada)
+  _confereFolha(tentativa){
+    clearTimeout(UI._confT);
+    UI._confT=setTimeout(()=>{
+      const f=$('#folha'); if(!f || !f.classList.contains('on')) return;
+      if(typeof ARRASTAFOLHA!=='undefined' && ARRASTAFOLHA.g){ UI._confereFolha(tentativa); return; }   // arrastando de proposito: espera
+      const vv=window.visualViewport, fundo=vv? vv.height+vv.offsetTop : window.innerHeight;
+      const r=f.getBoundingClientRect(), visivel = r.height>0 && r.top < fundo-60;
+      if(visivel) return;
+      if(!tentativa){
+        UI._limpaFolha(); document.body.classList.remove('kb'); document.documentElement.style.setProperty('--kb','0px');
+        try{ recuperaViewport(true); }catch(e){}
+        UI._confereFolha(1);
+      } else if(!UI._folhaObrigatoria){ UI.fechaFolha(); }
+    }, tentativa? 450 : 420);
+  },
   folha(titulo, corpoEls, acao, aoFechar, opts){
     soltaTeclado();
+    UI._limpaFolha();
     // aberta por cima da folha de edicao de treino (ex.: escolher exercicio): fica ACIMA dela
     try{ const sobre=!!(typeof FOLHA2!=='undefined' && FOLHA2.el); $('#folha').style.zIndex= sobre? '80' : ''; $('#veu').style.zIndex= sobre? '75' : ''; }catch(e){}
     UI._focoAntes=document.activeElement instanceof HTMLElement?document.activeElement:null;
@@ -1977,10 +2015,12 @@ const UI = {
     ['#topo','#main','#tabbar','#timerbar'].forEach(sel=>{ const el=$(sel); if(el) el.inert=true; });
     document.body.style.overflow='hidden';
     focaDialogo($('#folha'),fechar);
+    UI._confereFolha(0);
   },
   fechaFolha(forcar){
     if(UI._folhaObrigatoria && forcar!==true) return false;
     const estava=$('#folha').classList.contains('on');
+    clearTimeout(UI._confT); UI._limpaFolha();
     $('#veu').classList.remove('on'); $('#folha').classList.remove('on');
     $('#veu').setAttribute('aria-hidden','true'); $('#folha').setAttribute('aria-hidden','true');
     ['#topo','#main','#tabbar','#timerbar'].forEach(sel=>{ const el=$(sel); if(el) el.inert=false; });
@@ -6445,7 +6485,8 @@ const IMG = {
         g.drawImage(src,0,0,alvoW,alvoH);
         let out=c.toDataURL('image/jpeg', q);
         if(out.length>280000) out=c.toDataURL('image/jpeg', Math.max(0.5,(q||0.72)-0.16));
-        res(out);
+        // ainda grande: reduz ate caber de verdade no limite do banco (senao a foto nunca sobe)
+        if(out.length>=FOTOFIT.MAX) FOTOFIT.encaixa(out).then(x=>res(x||out), ()=>res(out)); else res(out);
       };
       img.src=r.result;
     };
@@ -8627,6 +8668,62 @@ function temFocoDeTexto(){
   return !!(a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable));
 }
 let _recT=0;
+// fotos: o banco aceita no maximo 300.000 caracteres por foto. Reduz qualidade e depois tamanho ate caber.
+const FOTOFIT = {
+  MAX: 280000,
+  encaixa(dataUrl){ return new Promise(res=>{
+    if(typeof dataUrl!=='string' || dataUrl.length<FOTOFIT.MAX){ res(dataUrl); return; }
+    const img=new Image();
+    img.onload=()=>{ try{
+      let esc=1, q=0.66, out=dataUrl;
+      for(let i=0;i<10 && out.length>=FOTOFIT.MAX;i++){
+        const w=Math.max(1,Math.round(img.naturalWidth*esc)), hh=Math.max(1,Math.round(img.naturalHeight*esc));
+        const c=document.createElement('canvas'); c.width=w; c.height=hh;
+        const g=c.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high'; g.drawImage(img,0,0,w,hh);
+        out=c.toDataURL('image/jpeg', q);
+        if(q>0.5) q=Math.max(0.5, q-0.08); else esc*=0.82;
+      }
+      res(out);
+    }catch(e){ res(null); } };
+    img.onerror=()=>res(null);
+    img.src=dataUrl;
+  }); },
+  // fotos que ja estavam presas na fila por serem grandes demais: recomprime e solta
+  async reparaFila(){
+    try{
+      let mudou=false;
+      for(const it of (S.fila||[])){
+        if(!it || !/^\/fotos\//.test(it.path||'') || typeof it.val!=='string' || it.val.length<FOTOFIT.MAX) continue;
+        const menor=await FOTOFIT.encaixa(it.val);
+        if(menor && menor.length<FOTOFIT.MAX){ it.val=menor; it._recomp=1; it.tent=0; delete it.adiado; mudou=true; }
+      }
+      if(mudou){ salva('fila'); NET.despacha(); }
+    }catch(e){}
+  }
+};
+// iPhone: depois que o teclado fecha, o Safari as vezes deixa o que e' preso na base da tela "levantado" na
+// altura do teclado (o cronometro de descanso ficava no meio da tela). Mede onde a base esta de verdade e,
+// sem teclado, compensa ate o Safari se corrigir.
+const BASEFIX = {
+  lift:0,
+  confere(){
+    try{
+      let s=document.getElementById('sonda-base');
+      if(!s){ s=document.createElement('div'); s.id='sonda-base'; s.setAttribute('aria-hidden','true');
+        s.style.cssText='position:fixed;left:0;bottom:0;width:1px;height:1px;pointer-events:none;visibility:hidden'; document.body.appendChild(s); }
+      const vv=window.visualViewport, deitado=window.innerWidth>window.innerHeight;
+      const app=!!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+      let esperado=Math.max(window.innerHeight, vv? vv.offsetTop+vv.height : 0);
+      if(app && window.screen && screen.height){ const alto=deitado? Math.min(screen.width,screen.height) : Math.max(screen.width,screen.height); esperado=Math.max(esperado, alto); }
+      const lift=Math.round(esperado - s.getBoundingClientRect().bottom);
+      const novo=(!temFocoDeTexto() && lift>40 && lift<700)? lift : 0;
+      if(novo!==BASEFIX.lift){
+        BASEFIX.lift=novo; document.documentElement.style.setProperty('--lift', novo+'px');
+        if(novo){ try{ recuperaViewport(true); }catch(e){} }
+      }
+    }catch(e){}
+  }
+};
 function recuperaViewport(forcado){
   const agoraMs=Date.now();
   if(!forcado && agoraMs-_recT<400) return;   // nao martelar
@@ -8655,6 +8752,7 @@ function recuperaViewport(forcado){
     const kb = comFoco ? sobra : 0;
     document.documentElement.style.setProperty('--kb', kb+'px');
     document.body.classList.toggle('kb', kb>60);
+    BASEFIX.confere();
     if(!comFoco && sobra>60){
       if(!presoDesde) presoDesde=Date.now();
       else if(Date.now()-presoDesde>500) { presoDesde=0; recuperaViewport(); }
@@ -8666,7 +8764,9 @@ function recuperaViewport(forcado){
   setInterval(aj, 1200);   // o resize nem sempre dispara quando o layout trava
 })();
 // gatilhos de recuperacao: fechar teclado, voltar pro app, girar a tela
-document.addEventListener('focusout', ()=>setTimeout(()=>{ if(!temFocoDeTexto()) recuperaViewport(); }, 150));
+document.addEventListener('focusout', ()=>{ setTimeout(()=>{ if(!temFocoDeTexto()) recuperaViewport(); }, 150); setTimeout(()=>BASEFIX.confere(), 450); setTimeout(()=>BASEFIX.confere(), 1100); });
+// teclado abrindo: tira a compensacao na hora (o cronometro sobe junto com o teclado, como antes)
+document.addEventListener('focusin', ()=>{ BASEFIX.confere(); });
 // o app fechado no meio do treino tambem volta pro mesmo exercicio
 window.addEventListener('scroll', ()=>{ if(UI.telaAtual==='ativo' && S.ativo){ clearTimeout(UI._lugarT); UI._lugarT=setTimeout(()=>UI.guardaLugarAtivo(), 400); } }, {passive:true});
 window.addEventListener('orientationchange', ()=>setTimeout(()=>recuperaViewport(true), 300));
@@ -10377,8 +10477,12 @@ setInterval(()=>FEED.atualizaSeNovo(110000), 120000);
 
 // ---- folhas: arrastar pra baixo fecha (pela alca/cabecalho, ou pelo corpo quando ja esta no topo) ----
 const ARRASTAFOLHA = { g:null };
+// desfaz o deslocamento de um arrasto que nao terminou (sem isso o menu ficava "grudado" fora do lugar e
+// todo menu aberto depois aparecia deslocado, com a tela escura: so reabrindo o app voltava)
+ARRASTAFOLHA.solta=()=>{ const g=ARRASTAFOLHA.g; ARRASTAFOLHA.g=null; if(!g || !g.f) return;
+  g.f.style.transition=''; g.f.style.transform=''; const v=$('#veu'); if(v) v.style.opacity=''; };
 document.addEventListener('touchstart', ev=>{
-  ARRASTAFOLHA.g=null;
+  ARRASTAFOLHA.solta();
   if(!ev.touches || ev.touches.length!==1 || document.body.classList.contains('kb')) return;
   const el=ev.target; if(!el || !el.closest) return;
   const f=el.closest('.folha.on'); if(!f) return;
@@ -10673,7 +10777,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){} }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){} await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); migraRecordeCarga(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){} await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); migraRecordeCarga(); FOTOFIT.reparaFila(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
 setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
 })();

@@ -722,7 +722,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.38.6';
+const APP_VER='11.38.7';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -8720,11 +8720,14 @@ const BASEFIX = {
       if(!s){ s=document.createElement('div'); s.id='sonda-base'; s.setAttribute('aria-hidden','true');
         s.style.cssText='position:fixed;left:0;bottom:0;width:1px;height:1px;pointer-events:none;visibility:hidden'; document.body.appendChild(s); }
       const vv=window.visualViewport, deitado=window.innerWidth>window.innerHeight;
-      const app=!!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches));
+      // SO no app instalado no iPhone a tela inteira e' do app. No Android a altura da tela inclui as barras
+      // do sistema: usar ela la empurrava a barra de abas pra fora da tela (11.38.5/11.38.6).
+      const iphoneApp = navigator.standalone===true && /iPhone|iPad|iPod/.test(navigator.userAgent||'');
       let esperado=Math.max(window.innerHeight, vv? vv.offsetTop+vv.height : 0);
-      if(app && window.screen && screen.height){ const alto=deitado? Math.min(screen.width,screen.height) : Math.max(screen.width,screen.height); esperado=Math.max(esperado, alto); }
+      if(iphoneApp && window.screen && screen.height){ const alto=deitado? Math.min(screen.width,screen.height) : Math.max(screen.width,screen.height); esperado=Math.max(esperado, alto); }
       const lift=Math.round(esperado - s.getBoundingClientRect().bottom);
-      const novo=(!temFocoDeTexto() && lift>40 && lift<700)? lift : 0;
+      // so compensa o tamanho de um TECLADO (o defeito do Safari); diferencas pequenas nunca
+      const novo=(iphoneApp && !temFocoDeTexto() && lift>150 && lift<700)? lift : 0;
       if(novo!==BASEFIX.lift){
         BASEFIX.lift=novo; document.documentElement.style.setProperty('--lift', novo+'px');
         if(novo){ try{ recuperaViewport(true); }catch(e){} }

@@ -192,6 +192,20 @@
           ".validate": "newData.isNumber()"
         }
       }
+    },
+    "lembretes": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "proxima": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "treino": {
+          "hora": {
+            ".validate": "newData.isString() && newData.val().length === 5"
+          }
+        }
+      }
     }
   }
 }

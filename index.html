@@ -755,7 +755,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.41.0';
+const APP_VER='11.42.0';
 // Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
 // Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
 function errAnota(e, onde){
@@ -3582,6 +3582,7 @@ const ATIVO = {
         try{ DUELO.fimDoTreino('concluiu', salvo); }catch(e){ errAnota(e,'L3552') }
         S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){ errAnota(e,'L3553') } DESC.para(); TELA.solta();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
+        try{ LEMB.agenda(); }catch(e){ errAnota(e,'LEMB.concluir') }      // numeros da semana e "ja treinou hoje" pro lembrete
         if(!navigator.onLine){
           setTimeout(()=>UI.toast('Treino salvo aqui. Vai sincronizar quando você conectar ✓', true), 500);
         }
@@ -3894,6 +3895,59 @@ const SUGCARGA = {
         h('div',{class:'f12 mut',style:'margin-top:2px'},'Última vez: '+CORE.fmtKg(c.de)+' kg × '+c.reps+(c.todas?' em todas as séries':'')+'. Tente '+CORE.fmtKg(c.nova)+' kg hoje.')),
       h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:8px 12px;flex-shrink:0;min-height:44px',onclick:usar},'Usar '+CORE.fmtKg(c.nova)+' kg'),
       h('button',{class:'sug-x',style:'position:relative;padding:6px;flex-shrink:0','aria-label':'Dispensar sugestão de carga',onclick:dispensa},'×'));
+  }
+};
+// Lembrete de treino e resumo semanal (v11.42). O app guarda em /lembretes/<eu> SO o necessario (dias, horario,
+// fuso, nome do proximo treino, dia do ultimo treino e numeros da semana). A funcao agendada "lembretes" (a cada
+// 15 min) le so esse cantinho e manda: o lembrete (se ainda nao treinou no dia) e o resumo (segunda, 8h).
+const LEMB = {
+  NOMES:['domingo','segunda','terça','quarta','quinta','sexta','sábado'],
+  cfg(){ const c=S.cfg.lemb || (S.cfg.lemb={}); c.treino=c.treino||{on:false, dias:[1,2,3,4,5], hora:'18:00'}; c.resumo=c.resumo||{on:false}; return c; },
+  resumoTxt(){ const c=LEMB.cfg(); if(c.treino.on) return c.treino.dias.length+(c.treino.dias.length===1?' dia':' dias')+' · '+c.treino.hora; return c.resumo.on? 'Resumo ligado' : 'Desligado'; },
+  dia(ms){ const d=new Date(ms); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); },
+  payload(){
+    const c=LEMB.cfg(), p={treino:c.treino, resumo:c.resumo};
+    if(!(c.treino.on || c.resumo.on)) return p;              // desligado: so a configuracao (o servidor ignora)
+    const ts=Object.values(S.treinos||{}).filter(t=>t && !t.apagado && t.inicio);
+    const ult=ts.reduce((m,t)=>Math.max(m, t.inicio), 0);
+    const semana=ini=>{ const fim=ini+7*86400000, ss=ts.filter(t=>t.inicio>=ini && t.inicio<fim);
+      return {chave:LEMB.dia(ini), n:ss.length, vol:Math.round(ss.reduce((s,t)=>s+(Number(t.volume)||0),0)), rec:ss.reduce((s,t)=>s+(Number(t.recordes)||0),0)}; };
+    const seg=inicioSemana(agora());
+    let px=null; try{ px=proximaRotina(); }catch(e){ errAnota(e,'LEMB.proxima') }
+    p.tz=new Date().getTimezoneOffset(); p.proxima=px? String(px.titulo||'').slice(0,60) : null; p.ultimoDia=ult? LEMB.dia(ult) : null;
+    p.semana=semana(seg); p.semanaAnt=semana(inicioSemana(seg-86400000));
+    return p;
+  },
+  // envia so quando algo mudou (cada campo no seu caminho: nao apaga as marcas de envio que o servidor grava)
+  sobe(){
+    if(!(S.auth && S.auth.uid)) return;
+    const p=LEMB.payload(), js=JSON.stringify(p);
+    if(js===LEMB._ult) return; LEMB._ult=js;
+    Object.entries(p).forEach(([k,v])=>NET.agenda('/lembretes/'+S.auth.uid+'/'+k, v==null? null : v));
+  },
+  agenda(){ clearTimeout(LEMB._t); LEMB._t=setTimeout(()=>{ try{ LEMB.sobe(); }catch(e){ errAnota(e,'LEMB.sobe') } }, 2500); },
+  folha(){
+    const c=LEMB.cfg(), t=c.treino, r=c.resumo, corpo=h('div',{});
+    const salvaL=()=>{ S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); LEMB.agenda(); desenha(); };
+    const desenha=()=>{
+      corpo.innerHTML='';
+      if(!PUSHDEV.on()) corpo.append(h('div',{class:'f13',style:'background:var(--surf2);border-radius:12px;padding:10px 12px;margin-bottom:12px;line-height:1.45'},
+        'As notificações deste aparelho estão desligadas: os avisos não vão chegar aqui. ',
+        h('button',{class:'btn btn-mini btn-p',style:'width:auto;margin-top:8px;padding:8px 12px;min-height:44px',onclick:async()=>{ try{ await PUSH.ativa(); }catch(e){ errAnota(e,'LEMB.push') } desenha(); }},'Ligar notificações')));
+      corpo.append(
+        h('button',{class:'menu-op',onclick:()=>{ t.on=!t.on; salvaL(); }},'Lembrete de treino', h('span',{class:'esp'}), h('span',{class:'chip'+(t.on?' on':'')}, t.on?'Ligado':'Desligado')),
+        t.on? h('div',{style:'margin:6px 2px 16px'},
+          h('div',{class:'f12 mut',style:'margin-bottom:6px'},'Dias'),
+          h('div',{class:'linha',style:'gap:6px;flex-wrap:wrap'}, ...['D','S','T','Q','Q','S','S'].map((l,i)=>h('button',{class:'chip lemb-dia'+(t.dias.includes(i)?' on':''),'aria-label':LEMB.NOMES[i],'aria-pressed':String(t.dias.includes(i)),style:'min-width:44px;min-height:44px;justify-content:center',
+            onclick:()=>{ t.dias=t.dias.includes(i)? t.dias.filter(x=>x!==i) : t.dias.concat(i).sort(); salvaL(); }}, l))),
+          h('div',{class:'f12 mut',style:'margin:14px 0 6px'},'Horário'),
+          h('input',{type:'time',class:'lemb-hora',value:t.hora,style:'max-width:150px','aria-label':'Horário do lembrete',onchange:ev=>{ if(/^\d\d:\d\d$/.test(ev.target.value)){ t.hora=ev.target.value; salvaL(); } }}),
+          h('div',{class:'f12 mut',style:'margin-top:8px;line-height:1.45'},'Só avisa se você ainda não treinou no dia, com o nome do próximo treino.')) : null,
+        h('button',{class:'menu-op',onclick:()=>{ r.on=!r.on; salvaL(); }},'Resumo semanal', h('span',{class:'esp'}), h('span',{class:'chip'+(r.on?' on':'')}, r.on?'Ligado':'Desligado')),
+        h('div',{class:'f12 mut',style:'margin:4px 2px 0;line-height:1.45'},'Segunda às 8h: treinos, volume e recordes da semana anterior.'));
+    };
+    desenha();
+    UI.folha('Lembretes', [corpo]);
   }
 };
 function addAquecimento(e){
@@ -6527,6 +6581,9 @@ TELAS.config = function(){
       h('button',{class:'menu-op',onclick:()=>{ PUSHDEV.on()? PUSH.desativa() : PUSH.ativa(); }},
         'Notificações push', h('span',{class:'esp'}),
         h('span',{class:'chip'+(PUSHDEV.on()?' on':'')}, PUSHDEV.on()?'Ligado':'Desligado')),
+      h('button',{class:'menu-op',onclick:()=>LEMB.folha()},
+        'Lembrete e resumo semanal', h('span',{class:'esp'}),
+        h('span',{class:'chip'+((LEMB.cfg().treino.on||LEMB.cfg().resumo.on)?' on':'')}, LEMB.resumoTxt())),
       h('button',{class:'menu-op',onclick:async function(){
         await RESTAURA.tudo(this, {silencioso:false});
       }},'Sincronizar agora', h('span',{class:'esp'}), h('span',{class:'f12 mut2'},'enviar tudo')),
@@ -10948,7 +11005,7 @@ TELAS.boasVindas = function(){
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
   }catch(e){ errAnota(e,'L10901') } }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){ errAnota(e,'L10903') } await migraVisibilidadeFeed(); passo('migraAlias', ()=>migraAlias()); passo('migraCorrecoes', ()=>migraCorrecoes()); passo('migraZerarNoTreino', ()=>migraZerarNoTreino()); passo('despacha', ()=>NET.despacha()); passo('DUELO.boot', ()=>DUELO.boot()); passo('ROTPUB.syncTudo', ()=>ROTPUB.syncTudo()); passo('hidrataSocial', ()=>hidrataSocial()); passo('limpaCustomsDuplicados', ()=>limpaCustomsDuplicados()); passo('corrigeTiposCustoms', ()=>corrigeTiposCustoms()); passo('vinculaRidPorTitulo', ()=>vinculaRidPorTitulo()); passo('publicaCustomsIniciais', ()=>publicaCustomsIniciais()); passo('corrigePastasOrfas', ()=>corrigePastasOrfas()); passo('recuperaExsOrfaos', ()=>recuperaExsOrfaos()); passo('reconciliaRecordes', ()=>reconciliaRecordes()); passo('reparaPRsFantasma', ()=>reparaPRsFantasma()); passo('migraRecordeCarga', ()=>migraRecordeCarga()); passo('FOTOFIT.reparaFila', ()=>FOTOFIT.reparaFila()); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){ errAnota(e,'L10903') } await migraVisibilidadeFeed(); passo('migraAlias', ()=>migraAlias()); passo('migraCorrecoes', ()=>migraCorrecoes()); passo('migraZerarNoTreino', ()=>migraZerarNoTreino()); passo('despacha', ()=>NET.despacha()); passo('DUELO.boot', ()=>DUELO.boot()); passo('ROTPUB.syncTudo', ()=>ROTPUB.syncTudo()); passo('hidrataSocial', ()=>hidrataSocial()); passo('limpaCustomsDuplicados', ()=>limpaCustomsDuplicados()); passo('corrigeTiposCustoms', ()=>corrigeTiposCustoms()); passo('vinculaRidPorTitulo', ()=>vinculaRidPorTitulo()); passo('publicaCustomsIniciais', ()=>publicaCustomsIniciais()); passo('corrigePastasOrfas', ()=>corrigePastasOrfas()); passo('recuperaExsOrfaos', ()=>recuperaExsOrfaos()); passo('reconciliaRecordes', ()=>reconciliaRecordes()); passo('reparaPRsFantasma', ()=>reparaPRsFantasma()); passo('migraRecordeCarga', ()=>migraRecordeCarga()); passo('FOTOFIT.reparaFila', ()=>FOTOFIT.reparaFila()); passo('LEMB.agenda', ()=>LEMB.agenda()); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
 setTimeout(()=>{ try{ FPROG.migra(); }catch(e){ errAnota(e,'L10904') } }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){ errAnota(e,'L10904') } })();
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){ errAnota(e,'L10905') } }
 })();

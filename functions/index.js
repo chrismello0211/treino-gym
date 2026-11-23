@@ -228,3 +228,6 @@ exports.pushDescanso = onValueWritten(
 const placar = require('./placar');
 exports.placarDuelo = placar.placarDuelo;
 exports.placarDueloPedido = placar.placarDueloPedido;
+
+// lembrete de treino e resumo semanal (v11.42): funcao agendada a cada 15 minutos
+exports.lembretes = require('./lembretes').lembretes;

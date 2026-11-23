@@ -177,7 +177,7 @@
           ".validate": "newData.isNumber()"
         },
         "resultado": {
-          ".write": "auth != null && (data.parent().child('a').val() === auth.uid || data.parent().child('b').val() === auth.uid || data.parent().child('c').val() === auth.uid)"
+          ".write": "false"
         },
         "ex": {
           ".write": "auth != null && (data.parent().child('a').val() === auth.uid || data.parent().child('b').val() === auth.uid || data.parent().child('c').val() === auth.uid)"
@@ -186,6 +186,10 @@
           "$uid": {
             ".write": "auth != null && auth.uid === $uid && (data.parent().parent().child('a').val() === $uid || data.parent().parent().child('b').val() === $uid || data.parent().parent().child('c').val() === $uid)"
           }
+        },
+        "pedido": {
+          ".write": "auth != null && (data.parent().child('a').val() === auth.uid || data.parent().child('b').val() === auth.uid || data.parent().child('c').val() === auth.uid)",
+          ".validate": "newData.isNumber()"
         }
       }
     }

@@ -1,0 +1,10 @@
+{
+  "name": "forgex-push",
+  "description": "Notificações push do ForgeX (curtida, comentário, seguidor, broadcast, descanso)",
+  "engines": { "node": "22" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.2"
+  }
+}

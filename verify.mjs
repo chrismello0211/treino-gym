@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.40.0';
+const EXPECTED_VERSION = '11.41.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -233,9 +234,9 @@ check(indexHtml.includes('const f=c.foto || fotoIrma(c);') && indexHtml.includes
 check(indexHtml.includes('Modo simples: sempre a ficha SEGUINTE') && !indexHtml.includes('const pendente = ciclo.find'), 'proximo treino: a ficha seguinte a ultima feita (sem insistir na pulada)', 'o app insistia na ficha que a pessoa tinha pulado');
 check(indexHtml.includes('function fichaDoTreino(t, pastaPref)') && indexHtml.includes('const ts=vivos.map(t=>({t, r:fichaDoTreino(t, pastaPref)}))'), 'proximo treino reconhece treino sem ficha (duelo de outra pessoa) pelo nome ou pelos exercicios', 'a Mari fez Braco completo no duelo e o app continuava sugerindo Braco completo');
 check(indexHtml.includes('const PRSPUB') && indexHtml.includes("NET.get('/rotinasPub/'+alvo+'/_prs/'") && indexHtml.includes("if(k.charAt(0)!=='_' && !ativas[k]) ROTPUB.remove(k);"), 'comparacao com amigo usa o resumo dos recordes dele (mesmos numeros do celular dele)', 'a comparacao usava so o feed e nao batia com o Rafael');
-check(indexHtml.includes("if(bx[kk]!==undefined) return bx[kk]===ex? Number(b) : null;") && indexHtml.includes("NET.agenda(DUELO.caminho('/bx/'+e._dk), e.exId);") && indexHtml.includes("d.resultado.v!==4) DUELO.fecha(d)") && indexHtml.includes('Cada exercício vale 1 ponto'), 'duelo: normal do exercicio certo (regua do Superacao), criterio claro e duelos antigos refeitos', 'leg press do duelo Chris x Mari: series da Mari descartadas por um normal do exercicio anterior');
+check(indexHtml.includes("if(bx[kk]!==undefined) return bx[kk]===ex? Number(b) : null;") && indexHtml.includes("NET.agenda(DUELO.caminho('/bx/'+e._dk), e.exId);") && indexHtml.includes("!(d.resultado && d.resultado.srv)) DUELO.fecha(d)") && indexHtml.includes('Cada exercício vale 1 ponto'), 'duelo: normal do exercicio certo (regua do Superacao), criterio claro e duelos antigos refeitos', 'leg press do duelo Chris x Mari: series da Mari descartadas por um normal do exercicio anterior');
 check(indexHtml.includes('ajuda(modo){') && indexHtml.includes('resumoPub(d, r){') && indexHtml.includes('DUELO.abreResumo(du.pub)') && indexHtml.includes("r0.duelo.pub=t.dueloInfo.pub") && indexHtml.includes('blocoRes(nome, badge, linhas){'), 'duelo: criterio explicado, resultado visivel pra quem segue (pelo feed) e visual novo', 'nao dava pra ver o duelo pela publicacao dos outros nem entender o criterio');
-check(!indexHtml.includes('SUSPEITO') && indexHtml.includes("if(val>0) v.push(val); });") && !indexHtml.includes('provável erro de digitação') && indexHtml.includes("d.resultado.v!==4) DUELO.fecha(d)"), 'duelo: nenhuma serie e descartada (o app nao supoe erro de digitacao); duelos refeitos', 'o filtro de 1,6x o normal jogava fora series de verdade');
+check(!indexHtml.includes('SUSPEITO') && indexHtml.includes("if(val>0) v.push(val); });") && !indexHtml.includes('provável erro de digitação') && indexHtml.includes("!(d.resultado && d.resultado.srv)) DUELO.fecha(d)"), 'duelo: nenhuma serie e descartada (o app nao supoe erro de digitacao); duelos refeitos', 'o filtro de 1,6x o normal jogava fora series de verdade');
 check(indexHtml.includes("const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f;") && indexHtml.includes("if(como==='desistiu' && d.a===DUELO.meu() && DUELO.outros(d).every(u=>!DUELO.entrou(d,u)))") && indexHtml.includes("x.a===S.auth.uid && x.status==='convite'") && indexHtml.includes('#duelo-barra .duelo-chip{max-width:100%'), 'duelo: aceitar confere o servidor, abandonar sozinho cancela, convite novo cancela os antigos, barra sem sobreposicao', 'o Chris entrou num duelo morto onde a Mari aparecia como desistiu');
 check(indexHtml.includes("(tp==='kg' && v===melhor[tp].v && reps>(Number(melhor[tp].s.reps)||0))") && indexHtml.includes('prs[e.exId].kg={v:info.v, tid:t.id, data:t.inicio, r:Number(info.s.reps)||0};') && indexHtml.includes('repsDoKg(exId, pk){') && indexHtml.includes("passo('migraRecordeCarga', ()=>migraRecordeCarga());"), 'recorde de maior carga: empatou na carga, vale a serie com mais repeticoes (igual ao 1RM)', 'Rafael: maior carga mostrava 101x4 e o 1RM 101x6');
 check(indexHtml.includes('ARRASTAFOLHA.solta();') && indexHtml.includes('_limpaFolha(){') && indexHtml.includes('UI._confereFolha(0);') && indexHtml.includes('clearTimeout(UI._confT); UI._limpaFolha();'), 'menu nunca fica preso fora da tela (arrasto interrompido desfeito; abrir/fechar limpa; confere se ficou visivel)', 'iPhone: menu do exercicio sumia, tela escura e travada ate reabrir o app');
@@ -253,6 +254,13 @@ check(indexHtml.includes('.fstat-k,.cab-ta .k,.pr-base,.anterior,.gtab.cab,.tab{
 check(indexHtml.includes('const SUGCARGA = {') && indexHtml.includes('SUGCARGA.dica(e),'), 'carga sugerida (dupla progressao) no treino em andamento', 'auditoria: faltava sugerir a carga');
 check(indexHtml.includes('_ancora(){') && indexHtml.includes("UI.vai(ant[0], ant[1], false, ant[2]||0, ant[3]||null)") && !indexHtml.includes("class:'sug-x',style:'position:static"), 'voltar devolve ao mesmo cartao do feed; o x solto nao cobre o cartao inteiro', 'tocar em Usar/Ver relatorio caia no x de dispensar');
 check(indexHtml.includes('.feed-ex .thumb-ini{width:44px;height:44px') && indexHtml.includes('.reo-row .thumb-ini{width:38px;height:38px'), 'iniciais do mesmo tamanho da miniatura (o feed nao pula sem internet)', 'iniciais de 52 no lugar de miniatura de 44');
+{
+  // o placar oficial (servidor) usa o MESMO codigo do app: functions/duelo-core.js tem a impressao do bloco DUELO atual
+  const ls = indexHtmlBruto.split('\n'); const ini = ls.findIndex(l => l.startsWith('const DUELO = {')); let fim = ini; while (fim >= 0 && fim < ls.length && !ls[fim].startsWith('};')) fim++;
+  const imp = ini >= 0 ? createHash('sha256').update(ls.slice(ini, fim + 1).join('\n')).digest('hex').slice(0, 16) : '?';
+  let core = ''; try { core = read('functions/duelo-core.js'); } catch (e) {}
+  check(core.includes('impressao do calculo: ' + imp) && indexHtml.includes('resOficial(d){') && indexHtml.includes("NET.agenda('/duelos/'+d.id+'/pedido', agora());"), 'placar oficial calculado no servidor com o mesmo codigo do app', 'functions/duelo-core.js desatualizado: rode node scripts/extrai-duelo.mjs');
+}
 {
   let regras = null; try { regras = JSON.parse(read('regras-firebase.json')).rules; } catch (e) {}
   const ok = !!regras && /<= 200/.test(JSON.stringify(regras.feed||{})) && /< 300000/.test(JSON.stringify(regras.exsPub||{})) && /<= 200/.test(JSON.stringify(regras.rotinasPub||{}));

@@ -61,6 +61,7 @@ class FirebaseFalso:
     def __init__(self, arvore=None):
         self.arvore = arvore or {}
         self.recusar = None          # funcao(metodo, caminho, corpo) -> (status, corpo) ou None
+        self.regra_leitura = None    # funcao(caminho, uid) -> True/False (simula regra de leitura do banco)
         self.gravacoes = []          # (metodo, caminho, status, tamanho)
 
     def get(self, caminho):
@@ -95,6 +96,11 @@ class FirebaseFalso:
             corpo = 'retry: 400\nevent: put\ndata: ' + json.dumps({'path': '/', 'data': self.get(caminho)}) + '\n\n'
             return route.fulfill(status=200, headers={'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache'}, body=corpo)
         if req.method == 'GET':
+            # regra de leitura opcional (ex.: conta privada): quem le vem no token (tok-<uid>)
+            if self.regra_leitura:
+                quem = (q.get('auth') or [''])[0].replace('tok-', '')
+                if not self.regra_leitura(caminho, quem):
+                    return route.fulfill(status=401, content_type='application/json', body='{"error":"Permission denied"}')
             v = self.get(caminho)
             if 'orderBy' in q and 'equalTo' in q and isinstance(v, dict):
                 campo = json.loads(q['orderBy'][0]); igual = json.loads(q['equalTo'][0])

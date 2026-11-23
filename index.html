@@ -755,7 +755,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.42.1';
+const APP_VER='11.43.0';
 // Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
 // Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
 function errAnota(e, onde){
@@ -6526,7 +6526,7 @@ TELAS.config = function(){
       h('span',{class:'esp'}), h('span',{class:'f12 mut2'}, String(Object.keys(MOD.lista()).length))),
     h('div',{class:'f12 mut2',style:'margin-top:8px;line-height:1.5'},'Seus dados são seus. O CSV abre no Excel; o JSON é um backup de tudo.')));
   const salvaPerfil=()=>{ S.perfil.atualizado=agora(); salva('perfil'); NET.agenda('app/perfil',S.perfil);
-    if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); };
+    if(S.perfil.user && S.auth) NET.agenda('/perfis/'+S.auth.uid, {privado:PRIV.ligado()||null, nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); };
 
   m.appendChild(h('div',{class:'card'},
     h('div',{class:'linha',style:'margin-bottom:12px'},
@@ -6578,6 +6578,10 @@ TELAS.config = function(){
         this.querySelector('.chip').classList.toggle('on',liga);
       }},
         'Rotinas públicas no perfil', h('span',{class:'esp'}), h('span',{class:'chip'+(S.cfg.rotPub!==false?' on':'')},S.cfg.rotPub!==false?'Ligado':'Desligado')),
+      h('button',{class:'menu-op',onclick:async()=>{ const on=!PRIV.ligado(); await PRIV.liga(on);
+          UI.toast(on? 'Conta privada: novos seguidores precisam da sua aprovação' : 'Conta pública de novo', true); UI.refaz(); }},
+        h('div',{class:'esp',style:'text-align:left'}, 'Conta privada', h('div',{class:'f12 mut2',style:'margin-top:2px'},'Só seguidores aprovados veem seus treinos. Quem já te segue continua vendo.')),
+        h('span',{class:'chip'+(PRIV.ligado()?' on':'')}, PRIV.ligado()?'Ligado':'Desligado')),
       h('button',{class:'menu-op',onclick:()=>{ S.cfg.unidade = (S.cfg.unidade==='lb'?'kg':'lb'); salva('cfg'); UI.refaz(); }},
         'Unidade de peso padrão', h('span',{class:'esp'}), h('span',{class:'chip on'}, (S.cfg.unidade==='lb'?'lb':'kg'))),
       h('button',{class:'menu-op',onclick:()=>{ PUSHDEV.on()? PUSH.desativa() : PUSH.ativa(); }},
@@ -8071,6 +8075,8 @@ TELAS.perfilAmigo = function({uid:alvo}){
     if(its.length){
       m.appendChild(h('div',{class:'secao'},'Treinamentos recentes'));
       its.slice(0,10).forEach(r=>m.appendChild(cartaoFeed({meu:false, dono:alvo, r, id:r.id, inicio:r.inicio})));
+    } else if((((FEED.perfis||{})[alvo])||{}).privado===true){
+      m.appendChild(h('div',{class:'vazio'},'🔒 Perfil privado. Os treinos aparecem aqui quando a pessoa aprovar você.'));
     } else {
       m.appendChild(h('div',{class:'vazio'},'Sem treinos publicados ainda.'));
     }
@@ -9117,7 +9123,7 @@ const RESTAURA = {
       // 1) username -> aponta pro meu uid
       try{ await NET.putD('/usernames/'+S.perfil.user, S.auth.uid); n++; }catch(e){ errAnota(e,'L9011') }
       // 2) perfil público
-      try{ await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); n++; }catch(e){ errAnota(e,'L9013') }
+      try{ await NET.putD('/perfis/'+S.auth.uid, {privado:PRIV.ligado()||null, nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); n++; }catch(e){ errAnota(e,'L9013') }
       // 3) feed: republica meus treinos (com foto local quando houver)
       const ts=Object.values(S.treinos).filter(t=>treinoPublicado(t)).sort((a,b)=>b.inicio-a.inicio).slice(0,60);
       for(const t of ts){
@@ -10304,7 +10310,7 @@ const CONTA = {
           if(dono && (!S.auth || dono!==S.auth.uid)) throw new Error('Esse nome de usuário já está em uso.');
           await NET.criarConta(email, senha);
           await NET.putD('/usernames/'+u, S.auth.uid);
-          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil?.nome||'Atleta', user:u, foto:S.perfil?.foto||null, bio:(S.perfil?.bio||'')||null, link:S.perfil?.link||null, atualizado:agora()});
+          await NET.putD('/perfis/'+S.auth.uid, {privado:PRIV.ligado()||null, nome:S.perfil?.nome||'Atleta', user:u, foto:S.perfil?.foto||null, bio:(S.perfil?.bio||'')||null, link:S.perfil?.link||null, atualizado:agora()});
           if(!S.perfil) S.perfil={criado:agora(), nome:'Atleta'};
           S.perfil.email=email; S.perfil.user=u; S.perfil.atualizado=agora();
           salva('perfil'); NET.agenda('app/perfil',S.perfil);
@@ -10525,7 +10531,7 @@ const USERNAME = {
           await NET.putD('/usernames/'+u, S.auth.uid);
           if(!S.perfil) S.perfil={criado:agora()};
           S.perfil.user=u; S.perfil.atualizado=agora(); salva('perfil');
-          await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:u, foto:S.perfil.foto||null, bio:(S.perfil.bio||'')||null, link:S.perfil.link||null, atualizado:agora()});
+          await NET.putD('/perfis/'+S.auth.uid, {privado:PRIV.ligado()||null, nome:S.perfil.nome||'Atleta', user:u, foto:S.perfil.foto||null, bio:(S.perfil.bio||'')||null, link:S.perfil.link||null, atualizado:agora()});
           NET.agenda('app/perfil', S.perfil);
           UI.fechaFolha(); UI.refaz(); UI.toast('Nome de usuário definido: @'+u, true);
           if(aposDefinir) aposDefinir();
@@ -10560,7 +10566,20 @@ const AMIGOS = {
       if(!seg.length) lista.append(h('div',{class:'f13 mut',style:'padding:8px 0'},'Você ainda não segue ninguém.'));
       seg.forEach(([uid,p])=>lista.append(row(uid,p,true)));
     };
+    // conta privada: pedidos pra te seguir, com aprovar e recusar
+    const pedBox=h('div',{});
+    if(PRIV.ligado()) PRIV.pedidos().then(ps=>{
+      const lst=Object.entries(ps||{}); if(!lst.length || !pedBox.isConnected) return;
+      pedBox.append(h('div',{class:'secao',style:'margin:0 0 4px'},'Pedidos para te seguir'));
+      lst.forEach(([f,q])=>{ const lin=h('div',{class:'med-row ped-row'},
+        avatarEl((((FEED.perfis||{})[f])||{}).foto, q.nome||q.user, 36),
+        h('div',{class:'esp',style:'min-width:0'}, h('div',{class:'b700',style:'font-size:14.5px'}, q.nome||('@'+q.user)), h('div',{class:'f12 mut2'},'@'+q.user)),
+        h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:8px 12px;min-height:44px',onclick:()=>{ PRIV.aprova(f); lin.remove(); UI.toast('@'+q.user+' aprovado', true); }},'Aprovar'),
+        h('button',{class:'btn btn-mini',style:'width:auto;padding:8px 12px;min-height:44px;margin-left:6px',onclick:()=>{ PRIV.recusa(f); lin.remove(); }},'Recusar'));
+        pedBox.append(lin); });
+    }).catch(e=>errAnota(e,'pedidos'));
     UI.folha('Amigos',[
+      pedBox,
       h('div',{class:'f13 mut',style:'margin-bottom:8px'},'Seu usuário: ',h('span',{class:'b700',style:'color:var(--tx)'},'@'+S.perfil.user)),
       h('div',{style:'display:flex;gap:8px'}, inp,
         h('button',{class:'btn btn-p',style:'width:auto;padding:0 16px',onclick:async ()=>{
@@ -10581,13 +10600,34 @@ const AMIGOS = {
     await NET.putD('/seguindo/'+S.auth.uid+'/'+uid,{user:p.user,nome:p.nome||'',ts:agora()});
     await NET.putD('/seguidores/'+uid+'/'+S.auth.uid,true);
     S.social.seguindo[uid]={user:p.user,nome:p.nome||'',foto:p.foto||null}; salva('social');
-    UI.toast('Seguindo @'+p.user, true);
+    // conta privada: vira um pedido; os treinos aparecem quando a pessoa aprovar
+    const priv=(await NET.get('/perfis/'+uid+'/privado'))===true;
+    if(priv){ await NET.putD('/pedidos/'+uid+'/'+S.auth.uid, {user:S.perfil.user, nome:S.perfil.nome||'', ts:agora()}); UI.toast('Pedido enviado para @'+p.user, true); }
+    else UI.toast('Seguindo @'+p.user, true);
   },
   async deixar(uid){
     await NET.putD('/seguindo/'+S.auth.uid+'/'+uid,null);
     await NET.putD('/seguidores/'+uid+'/'+S.auth.uid,null);
+    try{ await NET.putD('/pedidos/'+uid+'/'+S.auth.uid,null); }catch(e){ errAnota(e,'pedido-desfaz') }
     delete S.social.seguindo[uid]; salva('social');
   }
+};
+// Conta privada (v11.43): so seguidores aprovados veem treinos, fotos e fichas. As regras do banco garantem isso.
+const PRIV = {
+  ligado(){ return S.cfg.privado===true; },
+  // ligar: publica a marca no perfil e APROVA quem ja segue (ninguem que ja acompanha perde nada)
+  async liga(on){
+    S.cfg.privado=!!on; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg);
+    if(!S.auth) return;
+    if(on){
+      const seg=await NET.get('/seguidores/'+S.auth.uid)||{};
+      Object.keys(seg).forEach(f=>NET.agenda('/aprovados/'+S.auth.uid+'/'+f, true));
+    }
+    NET.agenda('/perfis/'+S.auth.uid+'/privado', on? true : null);
+  },
+  async pedidos(){ if(!S.auth) return {}; return await NET.get('/pedidos/'+S.auth.uid)||{}; },
+  aprova(f){ NET.agenda('/aprovados/'+S.auth.uid+'/'+f, true); NET.agenda('/pedidos/'+S.auth.uid+'/'+f, null); },
+  recusa(f){ NET.agenda('/pedidos/'+S.auth.uid+'/'+f, null); NET.agenda('/seguidores/'+S.auth.uid+'/'+f, null); NET.agenda('/aprovados/'+S.auth.uid+'/'+f, null); }
 };
 const COMENT = {
   conta(dono,tid){ return Object.keys(((FEED.com||{})[dono]||{})[tid]||{}).length; },

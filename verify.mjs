@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.43.0';
+const EXPECTED_VERSION = '11.44.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -255,6 +255,7 @@ check(indexHtml.includes('const SUGCARGA = {') && indexHtml.includes('SUGCARGA.d
 check(indexHtml.includes('_ancora(){') && indexHtml.includes("UI.vai(ant[0], ant[1], false, ant[2]||0, ant[3]||null)") && !indexHtml.includes("class:'sug-x',style:'position:static"), 'voltar devolve ao mesmo cartao do feed; o x solto nao cobre o cartao inteiro', 'tocar em Usar/Ver relatorio caia no x de dispensar');
 check(indexHtml.includes('.feed-ex .thumb-ini{width:44px;height:44px') && indexHtml.includes('.reo-row .thumb-ini{width:38px;height:38px'), 'iniciais do mesmo tamanho da miniatura (o feed nao pula sem internet)', 'iniciais de 52 no lugar de miniatura de 44');
 check(indexHtml.includes('const LEMB = {') && indexHtml.includes("onclick:()=>LEMB.folha()") && indexHtml.includes("passo('LEMB.agenda', ()=>LEMB.agenda());") && (() => { try { return read('functions/lembretes.js').includes("schedule: 'every 15 minutes'") && read('functions/index.js').includes("require('./lembretes')"); } catch (e) { return false; } })(), 'lembrete de treino e resumo semanal (app + funcao agendada)', 'item Futuro do plano');
+check(indexHtml.includes("nc.novid=Math.max(Number(nc.novid)||0, Number(S.cfg.novid)||0);") && indexHtml.includes("localStorage.getItem('tg_novidV')") && (() => { try { return read('functions/index.js').includes('quer te seguir'); } catch (e) { return false; } })(), 'novidades aparecem uma vez so (nuvem nao faz voltar); aviso "quer te seguir" na conta privada', 'a janela de novidades ja repetiu antes');
 {
   let rg = null; try { rg = JSON.parse(read('regras-firebase.json')).rules; } catch (e) {}
   check(indexHtml.includes('const PRIV = {') && indexHtml.includes("NET.putD('/perfis/'+S.auth.uid, {privado:PRIV.ligado()||null,") && !!rg && !!rg.aprovados && !!rg.pedidos && /aprovados/.test(rg.feed['$uid']['.read']) && /aprovados/.test(rg.rotinasPub['$dono']['.read']), 'conta privada: so aprovados leem feed, fotos e fichas (regras do banco)', 'item Futuro do plano');

@@ -755,7 +755,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.43.0';
+const APP_VER='11.44.0';
 // Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
 // Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
 function errAnota(e, onde){
@@ -1540,6 +1540,8 @@ const NET = {
         if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){ errAnota(e,'L1517') } }
         if(nuvem.app.cfg && (nuvem.app.cfg.atualizado||0)>(S.cfg.atualizado||0)){
           const nc=Object.assign({}, nuvem.app.cfg); delete nc.push; delete nc.pushTok;   // isso e' do aparelho
+          // "ja vi as novidades" so sobe: os ajustes de outro aparelho nao fazem a janela voltar
+          nc.novid=Math.max(Number(nc.novid)||0, Number(S.cfg.novid)||0);
           S.cfg=nc; salva('cfg'); m=true;
         }
       }
@@ -4302,25 +4304,33 @@ ACAD.folha = function(atual, aoEscolher, semFechar){
 
 /* ---------- o que mudou desde a ultima vez ---------- */
 const NOVIDADES = {
-  V: 6,     // subir este numero faz a folha aparecer de novo
+  V: 7,     // subir este numero faz a folha aparecer de novo (UMA vez por pessoa). Nao subir a cada versao.
   ITENS: [
-    ['\u2694\ufe0f','Duelo mais completo',
-     'O placar agora mostra série por série e o aquecimento conta. Se o seu adversário trocar de exercício, você recebe um aviso com a opção de trocar também. Seus duelos ficam no perfil e no feed.'],
-    ['\u2705','Série sem carga',
-     'Agora dá pra marcar a série só com as repetições, sem registrar a carga.'],
-    ['\ud83d\uddbc\ufe0f','Galeria no perfil',
-     'As fotos dos seus treinos aparecem no topo do perfil. Toque numa foto para abrir o treino.'],
-    ['\ud83d\udccf','Medições editáveis',
-     'Errou um peso? Toque no gráfico ou no histórico para corrigir o valor, a data, ou apagar.'],
-    ['\ud83d\udd14','Aviso do descanso que chega',
-     'O fim do descanso avisa mesmo com o app minimizado ou o celular bloqueado.']
+    ['\u2694\ufe0f','Placar do duelo oficial',
+     'O resultado agora é calculado no servidor: todo mundo vê o mesmo placar. No duelo, toque em "?" para ver como cada exercício é decidido.'],
+    ['\ud83d\udd14','Lembrete de treino e resumo semanal',
+     'Em Ajustes: escolha os dias e o horário do lembrete e receba, toda segunda, o resumo da sua semana.'],
+    ['\ud83d\udd12','Conta privada',
+     'Em Ajustes: só seguidores que você aprovar veem seus treinos. Quem já te segue continua vendo.'],
+    ['\ud83d\udca1','Carga sugerida',
+     'Bateu 12 repetições em todas as séries? No próximo treino o app sugere a carga seguinte.'],
+    ['\ud83d\udc40','Duelo no feed',
+     'Quem te segue pode tocar no duelo da sua publicação e ver o resultado completo.'],
+    ['\u2728','Mais fácil de usar',
+     'Botões maiores no treino, Início mais leve e recordes mais precisos.']
   ],
   deveMostrar(){
     if(!S.perfil || !S.perfil.nome) return false;          // quem nunca usou nao tem novidade
     if(!Object.keys(S.treinos||{}).length) return false;   // nem quem nunca treinou
+    // o aparelho guarda que ja mostrou (a nuvem nao apaga): assim nunca repete, nem se os ajustes da nuvem
+    // vierem de outro aparelho que ainda nao tinha visto
+    try{ if(Number(localStorage.getItem('tg_novidV')||0) >= NOVIDADES.V) return false; }catch(e){ errAnota(e,'novid-local') }
     return (S.cfg.novid||0) < NOVIDADES.V;
   },
-  marca(){ S.cfg.novid=NOVIDADES.V; S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); },
+  marca(){
+    S.cfg.novid=Math.max(Number(S.cfg.novid)||0, NOVIDADES.V); S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg);
+    try{ localStorage.setItem('tg_novidV', String(NOVIDADES.V)); }catch(e){ errAnota(e,'novid-local') }
+  },
   folha(){
     if($('#folha').classList.contains('on')) return;
     const corpo=[h('div',{class:'f14 mut',style:'padding:2px 2px 14px;line-height:1.6'},
@@ -10282,7 +10292,7 @@ const CONTA = {
   wipeLocal(){
     // Dados da conta nunca atravessam uma troca de usuário. Mantemos apenas
     // identidade deste aparelho, preferências locais de push e o catálogo-base.
-    const manter=new Set(['tg_dev','tg_pushDev','tg_bib','tg_bibv','tg_debug','tg_errlog','tg_errpego']);
+    const manter=new Set(['tg_dev','tg_pushDev','tg_bib','tg_bibv','tg_debug','tg_errlog','tg_errpego','tg_novidV']);
     Object.keys(localStorage).filter(k=>k.startsWith('tg_')&&!manter.has(k)).forEach(k=>localStorage.removeItem(k));
     const cfgAnt=S.cfg||{};
     S.perfil=null; S.rotinas={}; S.pastas={}; S.treinos={}; S.prs={}; S.custom={}; S.medidas={};

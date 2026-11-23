@@ -54,14 +54,35 @@ jobs:
     timeout-minutes: 30
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: '.'
+      # O pacote do site e grande (~250 MB, quase tudo as animacoes): as vezes o GitHub demora alguns
+      # segundos para "ver" o pacote e a publicacao responde "No artifacts named github-pages".
+      # Por isso: tenta, espera e tenta de novo, ate 3 vezes.
       - id: deploy
         uses: actions/deploy-pages@v5
+        continue-on-error: true
         with:
-          timeout: 1800000
+          timeout: 600000
+      - name: Esperar 1 minuto antes de tentar de novo
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - id: deploy2
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v5
+        continue-on-error: true
+        with:
+          timeout: 600000
+      - name: Esperar 2 minutos antes da ultima tentativa
+        if: steps.deploy.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        run: sleep 120
+      - id: deploy3
+        if: steps.deploy.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        uses: actions/deploy-pages@v5
+        with:
+          timeout: 600000

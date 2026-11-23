@@ -22,7 +22,7 @@
     },
     "feed": {
       "$uid": {
-        ".read": "auth != null",
+        ".read": "auth != null && (auth.uid === $uid || (root.child('perfis').child($uid).child('privado').val() !== true || root.child('aprovados').child($uid).child(auth.uid).val() === true))",
         ".write": "auth.uid === $uid",
         ".indexOn": "inicio",
         "$tid": {
@@ -57,7 +57,7 @@
       "$uid": {
         ".read": "auth != null",
         "$f": {
-          ".write": "auth.uid === $f",
+          ".write": "auth.uid === $f || (auth != null && auth.uid === $uid && !newData.exists())",
           ".validate": "newData.isBoolean()"
         },
         ".write": "auth != null && auth.uid === $uid && !newData.exists()"
@@ -90,7 +90,7 @@
     "fotos": {
       "$dono": {
         "$tid": {
-          ".read": "auth.uid === $dono || (auth != null && !$tid.beginsWith('prog_'))",
+          ".read": "auth.uid === $dono || (auth != null && !$tid.beginsWith('prog_') && (root.child('perfis').child($dono).child('privado').val() !== true || root.child('aprovados').child($dono).child(auth.uid).val() === true))",
           ".write": "auth.uid === $dono",
           ".validate": "newData.isString() && newData.val().length < 300000"
         },
@@ -99,7 +99,7 @@
     },
     "rotinasPub": {
       "$dono": {
-        ".read": "auth != null",
+        ".read": "auth != null && (auth.uid === $dono || (root.child('perfis').child($dono).child('privado').val() !== true || root.child('aprovados').child($dono).child(auth.uid).val() === true))",
         ".write": "auth.uid === $dono",
         "$rid": {
           "titulo": {
@@ -190,6 +190,39 @@
         "pedido": {
           ".write": "auth != null && (data.parent().child('a').val() === auth.uid || data.parent().child('b').val() === auth.uid || data.parent().child('c').val() === auth.uid)",
           ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "lembretes": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "proxima": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "treino": {
+          "hora": {
+            ".validate": "newData.isString() && newData.val().length === 5"
+          }
+        }
+      }
+    },
+    "aprovados": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "$f": {
+          ".read": "auth != null && auth.uid === $f",
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+    "pedidos": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$f": {
+          ".write": "auth != null && (auth.uid === $f || auth.uid === $uid)",
+          ".validate": "newData.hasChildren(['user','ts']) && newData.child('user').isString() && newData.child('user').val().length <= 40"
         }
       }
     }

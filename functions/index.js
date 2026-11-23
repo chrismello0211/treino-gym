@@ -133,10 +133,12 @@ exports.pushSeguidor = onValueCreated(
     const { uid, quem } = event.params;
     if (uid === quem) return null;
     const arroba = await arrobaDe(quem);
+    // conta privada (v11.43): seguir vira pedido, entao o aviso e' "quer te seguir"
+    const priv = (await getDatabase().ref(`perfis/${uid}/privado`).get()).val() === true;
     return manda(uid, {
       tipo: 'seguidor', quem,
-      title: `${arroba} começou a te seguir`,
-      body: 'Toque para ver o perfil',
+      title: priv ? `${arroba} quer te seguir` : `${arroba} começou a te seguir`,
+      body: priv ? 'Toque para aprovar ou recusar em Amigos' : 'Toque para ver o perfil',
       url: URL_APP
     });
   }
@@ -228,3 +230,6 @@ exports.pushDescanso = onValueWritten(
 const placar = require('./placar');
 exports.placarDuelo = placar.placarDuelo;
 exports.placarDueloPedido = placar.placarDueloPedido;
+
+// lembrete de treino e resumo semanal (v11.42): funcao agendada a cada 15 minutos
+exports.lembretes = require('./lembretes').lembretes;

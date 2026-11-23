@@ -1,10 +1,12 @@
-# Testa o app a cada envio e so publica o site se tudo passar.
+# Testa o app a cada envio e so publica se tudo passar.
+#   ramo main  -> site de verdade (GitHub Pages)
+#   ramo teste -> copia de teste (Firebase Hosting, canal "teste"), pra validar no celular antes de ir pra todos
 # Requer: Settings > Pages > Build and deployment > Source = "GitHub Actions".
 name: Testar e publicar
 
 on:
   push:
-    branches: [main]
+    branches: [main, teste]
   pull_request:
   workflow_dispatch:
 
@@ -86,3 +88,26 @@ jobs:
         uses: actions/deploy-pages@v5
         with:
           timeout: 600000
+
+  copia-teste:
+    name: Publicar a copia de teste
+    needs: testes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/teste'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      # o GitHub se identifica no Google Cloud sem chave guardada (federacao de identidade);
+      # a conta de servico so pode publicar no Firebase Hosting e so aceita este repositorio
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/614727735456/locations/global/workloadIdentityPools/github/providers/treino-gym
+          service_account: forgex-github-hosting@iron-gym-aa932.iam.gserviceaccount.com
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Publicar no endereco de teste (canal "teste", vale 30 dias)
+        run: npx --yes firebase-tools@15 hosting:channel:deploy teste --project iron-gym-aa932 --expires 30d

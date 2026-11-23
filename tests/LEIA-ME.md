@@ -39,3 +39,12 @@ O fluxo `.github/workflows/publicar.yml` roda o validador e esta bateria a cada 
 node scripts/versao.mjs 11.40.0
 ```
 Troca a versao no app, no cache do service worker e no validador de uma vez.
+
+## Copia de teste (antes de ir pra todos)
+
+1. Envie a versao nova pro ramo `teste` (no VS Code: criar/trocar para o ramo `teste`, commit e push).
+2. O GitHub roda os testes e, passando, publica em **https://iron-gym-aa932--teste-*.web.app** (o endereco exato aparece no fim do passo "Publicar a copia de teste" no GitHub Actions). O endereco vale 30 dias e e renovado a cada envio.
+3. Abra no celular, entre com uma conta de teste e confira. A copia usa o MESMO banco de dados do app de verdade: entre com uma conta de teste, nao com a sua, pra nao mexer nos seus treinos.
+4. Deu tudo certo? Leve a mesma versao pro ramo `main` (merge). Ai sim ela vai pro site de verdade.
+
+A copia de teste fica num endereco diferente do site de verdade, entao o login e os dados guardados no celular sao separados.

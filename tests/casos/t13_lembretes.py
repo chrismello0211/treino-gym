@@ -46,6 +46,12 @@ def rodar(pw, R):
         toca(p, "document.querySelector('#folha .lemb-dia[aria-label=\"sábado\"]')", 400)
         p.evaluate("(()=>{ const i=document.querySelector('#folha .lemb-hora'); i.value='19:30'; i.dispatchEvent(new Event('change',{bubbles:true})); })()"); p.wait_for_timeout(300)
         toca(p, "[...document.querySelectorAll('#folha .menu-op')].find(b=>/Resumo semanal/.test(b.textContent))", 500)
+        # a caixa da opcao em Ajustes (atras da janela) ja mostra ligado, sem precisar sair e voltar
+        chip = p.evaluate("(()=>{ const b=[...document.querySelectorAll('#main .menu-op')].find(b=>/Lembrete e resumo/.test(b.textContent)); return b? b.querySelector('.chip').textContent : null; })()")
+        R.ok('a caixa em Ajustes mostra o lembrete ligado na hora (nao "Desligado")', chip and chip != 'Desligado' and '19:30' in chip, chip)
+        p.evaluate("UI.fechaFolha()"); p.wait_for_timeout(500)
+        chip2 = p.evaluate("(()=>{ const b=[...document.querySelectorAll('#main .menu-op')].find(b=>/Lembrete e resumo/.test(b.textContent)); return b? b.querySelector('.chip').textContent : null; })()")
+        R.ok('...e continua certa depois de fechar a janela', chip2 == chip, chip2)
         ok = espera(p, "true", 1) and p.wait_for_timeout(3500) is None
         g = A.fb.get('/lembretes/CHRIS') or {}
         R.ok('o app grava a configuracao no cantinho do lembrete', (g.get('treino') or {}).get('on') is True and (g.get('treino') or {}).get('hora') == '19:30' and 6 in (g.get('treino') or {}).get('dias', []) and (g.get('resumo') or {}).get('on') is True, g)

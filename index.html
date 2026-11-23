@@ -755,7 +755,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.42.0';
+const APP_VER='11.42.1';
 // Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
 // Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
 function errAnota(e, onde){
@@ -3928,7 +3928,9 @@ const LEMB = {
   agenda(){ clearTimeout(LEMB._t); LEMB._t=setTimeout(()=>{ try{ LEMB.sobe(); }catch(e){ errAnota(e,'LEMB.sobe') } }, 2500); },
   folha(){
     const c=LEMB.cfg(), t=c.treino, r=c.resumo, corpo=h('div',{});
-    const salvaL=()=>{ S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); LEMB.agenda(); desenha(); };
+    // Ajustes (atras da janela) mostra "Ligado/Desligado": redesenha na hora (antes ficava "Desligado" ate sair e voltar)
+    const atualizaAjustes=()=>{ if(UI.telaAtual==='config'){ try{ UI.refaz(); }catch(e){ errAnota(e,'LEMB.ajustes') } } };
+    const salvaL=()=>{ S.cfg.atualizado=agora(); salva('cfg'); NET.agenda('app/cfg', S.cfg); LEMB.agenda(); desenha(); atualizaAjustes(); };
     const desenha=()=>{
       corpo.innerHTML='';
       if(!PUSHDEV.on()) corpo.append(h('div',{class:'f13',style:'background:var(--surf2);border-radius:12px;padding:10px 12px;margin-bottom:12px;line-height:1.45'},
@@ -3947,7 +3949,7 @@ const LEMB = {
         h('div',{class:'f12 mut',style:'margin:4px 2px 0;line-height:1.45'},'Segunda às 8h: treinos, volume e recordes da semana anterior.'));
     };
     desenha();
-    UI.folha('Lembretes', [corpo]);
+    UI.folha('Lembretes', [corpo], null, atualizaAjustes);
   }
 };
 function addAquecimento(e){

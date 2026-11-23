@@ -755,7 +755,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.40.0';
+const APP_VER='11.41.0';
 // Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
 // Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
 function errAnota(e, onde){
@@ -5829,15 +5829,24 @@ const DUELO = {
     return (r.venc===eu? 'Venceu ' : 'Perdeu ')+placar;
   },
   // os dois (ou tres) terminaram: grava o resultado e atualiza o meu treino/feed
+  // resultado OFICIAL: calculado no servidor (funcao placarDuelo), com exatamente este mesmo codigo.
+  // Todo mundo ve o mesmo placar, mesmo com versoes diferentes do app. Sem o oficial, calcula aqui.
+  resOficial(d){ return (d && d.resultado && (d.resultado.srv || d.resultado.v===4))? d.resultado : DUELO.calcula(d); },
+  _pedidos:{},
   fecha(d){
     if(!d || !DUELO.terminou(d)) return;
-    const r=DUELO.calcula(d), eu=DUELO.meu();
-    const guarda={v:4, modo:r.modo, pts:r.pts, ordem:r.ordem, venc:r.venc||'', wo:!!r.wo};
-    if(d.status!=='fim' || !d.resultado || d.resultado.v!==4){
-      d.status='fim'; d.fim=d.fim||agora(); d.resultado=guarda;
-      NET.agenda('/duelos/'+d.id+'/resultado', guarda);
+    const oficial = (d.resultado && d.resultado.srv)? d.resultado : null;
+    const r = oficial || DUELO.calcula(d);
+    const guarda = oficial || {v:4, modo:r.modo, pts:r.pts, ordem:r.ordem, venc:r.venc||'', wo:!!r.wo};
+    if(d.status!=='fim'){
+      // o app grava so que terminou; o servidor calcula e grava o resultado oficial (aqui fica o local, pra mostrar ja)
+      d.status='fim'; d.fim=d.fim||agora(); if(!oficial) d.resultado=guarda;
       NET.agenda('/duelos/'+d.id+'/fim', d.fim);
       NET.agenda('/duelos/'+d.id+'/status', 'fim');
+    } else if(!oficial && !DUELO._pedidos[d.id]){
+      // duelo terminado sem resultado oficial (antigo, ou o servidor ainda nao respondeu): pede o calculo, uma vez
+      DUELO._pedidos[d.id]=1; if(!d.resultado) d.resultado=guarda;
+      NET.agenda('/duelos/'+d.id+'/pedido', agora());
     }
     DUELO.anotaNoTreino(d, guarda);
     if(UI.telaAtual==='duelo') UI.refaz();
@@ -5954,13 +5963,13 @@ const DUELO = {
   },
   // treino ja salvo cujo duelo terminou depois: anota o resultado (e o feed)
   pendentes(todos){
-    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=d.resultado.v===4? d.resultado : DUELO.calcula(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){ errAnota(e,'L5926') }
+    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=DUELO.resOficial(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){ errAnota(e,'L5926') }
   },
   async retrospecto(outro){
     const todos=await DUELO.meus(), eu=DUELO.meu(); let v=0, p=0, e=0;
     todos.forEach(d=>{
       if(!d || d.status!=='fim' || !d.resultado || (outro && !DUELO.jog(d).includes(outro))) return;
-      const r=d.resultado.v===4? d.resultado : DUELO.calcula(d);
+      const r=DUELO.resOficial(d);
       if(!r.venc) e++; else if(r.venc===eu) v++; else p++;
     });
     return {v, p, e, n:v+p+e};
@@ -6135,7 +6144,7 @@ const DUELO = {
     if(!DUELO.cur || DUELO.cur.id!==id) DUELO.conecta(id);
     const d=DUELO.dados();
     if(!d){ m.append(h('div',{class:'vazio'},'Carregando o duelo…')); return; }
-    if(d.status==='fim' && d.resultado && d.resultado.v!==4) DUELO.fecha(d);     // resultado antigo: refaz com as regras novas (v4: toda serie conta)
+    if(d.status==='fim' && !(d.resultado && d.resultado.srv)) DUELO.fecha(d);     // sem resultado oficial: pede ao servidor
     const eu=DUELO.meu(), modo=DUELO.MODOS[d.modo]||DUELO.MODOS.superacao, souA=d.a===eu, P=DUELO.jog(d);
     const cab=h('div',{class:'card duelo-barra',style:'text-align:center'}, h('div',{class:'f12 mut'}, modo.ic+' '+modo.n+' · '+d.titulo));
     m.append(cab);
@@ -6211,7 +6220,7 @@ const DUELO = {
     if(!todos.length){ m.append(h('div',{class:'vazio'},'Nenhum duelo ainda. Desafie alguém pelo perfil.')); return; }
     const lista=h('div',{class:'card'});
     todos.slice(0,40).forEach(d=>{
-      const r=d.status==='fim' && d.resultado? (d.resultado.v===4? d.resultado : DUELO.calcula(d)) : null;
+      const r=d.status==='fim' && d.resultado? (DUELO.resOficial(d)) : null;
       lista.append(h('button',{class:'duelo-item',onclick:()=>UI.vai('duelo',{id:d.id})},
         h('div',{class:'esp',style:'min-width:0;text-align:left'},
           h('div',{class:'b800',style:'font-size:14px'}, 'vs '+DUELO.outros(d).map(u=>DUELO.nome(d,u)).join(' e ')),

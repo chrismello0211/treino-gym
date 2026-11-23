@@ -57,7 +57,10 @@ def rodar(pw, R):
         # duelo antigo aberto num celular sem duelo em andamento
         L = A.celular(semente('CHRIS', 'chris_mello'))
         L.evaluate("(d)=>{ DUELO.cur={id:d.id, dados:JSON.parse(JSON.stringify(d))}; UI.vai('duelo',{id:d.id}); }", sala); L.wait_for_timeout(900)
-        R.ok('resultado gravado com regra antiga e refeito ao abrir', L.evaluate("(DUELO.cur.dados.resultado||{}).v") == 4, L.evaluate("DUELO.cur && DUELO.cur.dados.resultado"))
+        L.evaluate("NET.despacha()"); L.wait_for_timeout(1200)
+        # resultado gravado com a regra antiga: o app pede o oficial ao servidor e, enquanto isso, mostra o calculo atual
+        R.ok('resultado antigo: o app pede o oficial ao servidor', any(g[1].endswith('/duelos/dR/pedido') for g in A.fb.gravacoes))
+        R.ok('...e mostra o calculo atual (a Mari leva o leg press)', L.evaluate("DUELO.resOficial(DUELO.cur.dados).venc") == 'MARI', L.evaluate("DUELO.resOficial(DUELO.cur.dados)"))
         R.ok('placar explica o criterio', L.evaluate("/Cada exercício vale 1 ponto/.test(document.getElementById('main').textContent)"))
         R.ok('sem erros de JavaScript', not (M.erros or C.erros or Rf.erros), (M.erros[:1], C.erros[:1], Rf.erros[:1]))
     finally:

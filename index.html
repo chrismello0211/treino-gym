@@ -267,8 +267,9 @@ button[aria-label^="Mais opções de"]{min-width:44px;min-height:44px}
 .feed-mais{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .stipo::after,.scheck::after{content:'';position:absolute;inset:-4px}
 .scheck{position:relative}
-.anterior.tem{padding-top:14px;padding-bottom:14px;margin-top:-14px;margin-bottom:-14px}
-.desc-linha{padding-top:13px;padding-bottom:13px;margin-top:-13px}
+/* altura minima garantida (nao depende do tamanho da fonte: no GitHub a linha do descanso deu 42) */
+.anterior.tem{padding-top:14px;padding-bottom:14px;margin-top:-14px;margin-bottom:-14px;min-height:44px;box-sizing:border-box}
+.desc-linha{padding-top:14px;padding-bottom:14px;margin-top:-14px;min-height:44px;box-sizing:border-box}
 .heart{position:relative}
 .heart::after{content:'';position:absolute;top:-12px;bottom:-12px;left:-6px;right:-6px}
 .sug-x::after{content:'';position:absolute;inset:-9px}
@@ -743,7 +744,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.39.0';
+const APP_VER='11.39.1';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();

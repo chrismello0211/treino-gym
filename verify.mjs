@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.38.7';
+const EXPECTED_VERSION = '11.39.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -239,6 +239,19 @@ check(indexHtml.includes('ARRASTAFOLHA.solta();') && indexHtml.includes('_limpaF
 check(indexHtml.includes('negado=/permission denied/i.test(tx') && indexHtml.includes('(r.status!==401 || negado)') && indexHtml.includes('const FOTOFIT = {') && indexHtml.includes('FOTOFIT.reparaFila();') && indexHtml.includes('const BASEFIX = {') && indexHtml.includes('#timerbar,#tabbar{translate:0 var(--lift,0px)}'), 'fila: recusa de regra nao fica pra sempre (foto e recomprimida); cronometro nao fica levantado no meio da tela', 'iPhone do Chris: foto recusada 809 vezes; cronometro no meio da tela');
 check(indexHtml.includes("if(sobre){ $('#folha').inert=false; FOLHA2.el.inert=true; }") && indexHtml.includes("FOLHA2.el.inert=false; $('#folha').inert=true;"), 'editar treino finalizado: a escolha de exercicio por cima da edicao recebe os toques (busca e itens)', 'Rafael e Chris: a busca fechava a lista e tocar num exercicio nao adicionava');
 check(indexHtml.includes("const iphoneApp = navigator.standalone===true && /iPhone|iPad|iPod/.test(navigator.userAgent||'');") && indexHtml.includes('(iphoneApp && !temFocoDeTexto() && lift>150 && lift<700)'), 'compensacao da base so no iPhone instalado e so no tamanho de teclado (Android perdia a barra de abas)', 'Android: barra de abas sumiu na 11.38.5');
+check(indexHtml.includes('#topo .btn-mini{min-height:44px;min-width:44px}') && indexHtml.includes('.srow input{min-height:44px}') && indexHtml.includes('.feed-mais{min-width:44px;min-height:44px') && indexHtml.includes(".stipo::after,.scheck::after{content:'';position:absolute;inset:-4px}"), 'alvos de toque de 44 pontos no treino em andamento e no feed', 'auditoria: 86 elementos abaixo do minimo no treino em andamento');
+check(indexHtml.includes('const IMGFALHA = {') && indexHtml.includes('el.replaceWith(ini);') && indexHtml.includes("class:'ex-hero-falha'"), 'imagem que nao carrega mostra substituto na hora (nunca o icone de imagem quebrada)', 'auditoria: icone de imagem quebrada sem internet');
+check(indexHtml.includes('salva(t, ex, confirmado){') && indexHtml.includes("'Voltar e preencher'"), 'editar treino: aviso antes de salvar com exercicio sem serie', 'auditoria: exercicio vazio sumia ao salvar sem aviso');
+{
+  // o arquivo de regras tem que estar igual ao banco: sem as regras dos duelos, publica-lo quebraria os duelos
+  let regras = null; try { regras = JSON.parse(read('regras-firebase.json')).rules; } catch (e) {}
+  check(!!regras && ['duelos', 'descansos', 'config', 'usuarios', 'feed', 'fotos'].every(k => regras[k]) && !!(regras.duelos && regras.duelos['$did'] && regras.duelos['.indexOn']), 'arquivo de regras completo (duelos, descansos, config...)', 'o arquivo de regras antigo nao tinha as regras dos duelos');
+}
+{
+  // o script de versao existe e os tres lugares estao na mesma versao
+  const ap = (indexHtml.match(/const APP_VER='([^']+)'/) || [])[1], ca = (swSource.match(/const CACHE='tg-v([^']+)'/) || [])[1];
+  check(existsSync(resolve(ROOT, 'scripts/versao.mjs')) && ap === EXPECTED_VERSION && ca === EXPECTED_VERSION, 'versao igual nos tres lugares (use: node scripts/versao.mjs X.Y.Z)', 'app ' + ap + ', cache ' + ca + ', validador ' + EXPECTED_VERSION);
+}
 check(indexHtml.includes("A FICHA E' UMA SO pra todo mundo do duelo") && indexHtml.includes("d.ex[k].rm={por:eu, t:agora()}") && indexHtml.includes("q.trPor=eu") && indexHtml.includes("if(e._dkDe) q.de=e._dkDe;") && indexHtml.includes("DUELO.caminho('/v'), APP_VER") && indexHtml.includes('marcaVolta(d, k){'), 'duelo: ficha igual pra todos (trocar, remover, adicionar e ordem valem pra todos; aviso de versao antiga)', 'com 3 pessoas cada um ficava com uma ficha diferente');
 check(indexHtml.includes("$('#folha').style.zIndex= sobre? '80' : ''") && indexHtml.includes("ev.data.tipo==='notifClick'") && swSource.includes("tipo:'notifClick'"), 'escolher exercicio por cima da edicao de treino; convite aparece na hora pela notificacao', 'a escolha de exercicio ficava atras da folha; convite demorava');
 check(!/\(\?<[=!]/.test(indexHtml), 'sem regex lookbehind', 'Safari < 16.4 nao abre o app inteiro');

@@ -258,6 +258,27 @@ input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pessoa{min-width:0}
+/* Alvos de toque: minimo de 44 pontos (recomendacao da Apple). Onde cabe, o botao cresce; onde nao cabe,
+   cresce so a area sensivel ao toque, sem mudar o desenho e sem invadir a area do vizinho. */
+#topo .btn-mini{min-height:44px;min-width:44px}
+.srow input{min-height:44px}
+.add-serie{min-height:44px}
+button[aria-label^="Mais opções de"]{min-width:44px;min-height:44px}
+.feed-mais{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.stipo::after,.scheck::after{content:'';position:absolute;inset:-4px}
+.scheck{position:relative}
+.anterior.tem{padding-top:14px;padding-bottom:14px;margin-top:-14px;margin-bottom:-14px}
+.desc-linha{padding-top:13px;padding-bottom:13px;margin-top:-13px}
+.heart{position:relative}
+.heart::after{content:'';position:absolute;top:-12px;bottom:-12px;left:-6px;right:-6px}
+.sug-x::after{content:'';position:absolute;inset:-9px}
+.bt-tempo{position:relative}
+.bt-tempo::after{content:'';position:absolute;inset:-5px -4px}
+/* imagem que nao carregou: substituto neutro no lugar do icone de imagem quebrada */
+.img-falha{object-fit:contain!important;background:var(--surf2)!important}
+.ex-hero-falha{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:150px;border-radius:18px;background:var(--surf2);color:var(--tx3);font-size:13px;font-weight:600;margin-bottom:12px}
+.ex-hero-falha svg{width:46px;height:46px;opacity:.7}
+
 #duelo-barra .duelo-chips{margin-top:8px}
 #duelo-barra .duelo-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .duelo-bt{flex-shrink:0;width:auto;padding:6px 11px}
@@ -722,7 +743,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.38.7';
+const APP_VER='11.39.0';
 (function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
@@ -1844,12 +1865,30 @@ function thumbEl(exId, tam){
     if(eq) gifId = eq.id;
   }
   const src = BIB.gif(gifId);
-  if(src) return h('img',{class:'thumb', src, loading:'lazy', alt:'', onerror:function(){
-    if(!this._r){ this._r=1; const s0=this.src.split('?')[0]; setTimeout(()=>{ this.src=s0+'?r='+Date.now(); }, 900); }
-    else this.replaceWith(thumbIni(exId));
+  if(src) return h('img',{class:'thumb', src, loading:'lazy', alt:'', 'data-fb':'proprio', onerror:function(){
+    // falhou: as iniciais aparecem NA HORA (antes ficava o icone de imagem quebrada por ~1 s) e uma nova
+    // tentativa roda escondida; se der certo, a animacao volta pro lugar
+    if(this._fb) return; this._fb=1;
+    const el=this, ini=thumbIni(exId), s0=el.src.split('?')[0];
+    el.replaceWith(ini);
+    setTimeout(()=>{ const t=new Image(); t.onload=()=>{ if(ini.isConnected){ el.src=t.src; ini.replaceWith(el); } }; t.src=s0+'?r='+Date.now(); }, 900);
   }});
   return thumbIni(exId);
 }
+// rede de seguranca: qualquer imagem que falhe sem tratamento proprio mostra um halter neutro no lugar do
+// icone de imagem quebrada (avatar, foto de treino, grupos musculares...)
+const IMGFALHA = {
+  svg(){ const s=document.createElementNS('http://www.w3.org/2000/svg','svg'); s.setAttribute('viewBox','0 0 64 64'); s.setAttribute('aria-hidden','true');
+    s.innerHTML="<g fill='currentColor'><rect x='16' y='29' width='32' height='6' rx='2'/><rect x='11' y='21' width='6' height='22' rx='2'/><rect x='47' y='21' width='6' height='22' rx='2'/><rect x='6' y='25' width='5' height='14' rx='2'/><rect x='53' y='25' width='5' height='14' rx='2'/></g>"; return s; },
+  url: "data:image/svg+xml;charset=utf-8,"+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='#2a2e35'/><g fill='#8a909a'><rect x='16' y='29' width='32' height='6' rx='2'/><rect x='11' y='21' width='6' height='22' rx='2'/><rect x='47' y='21' width='6' height='22' rx='2'/><rect x='6' y='25' width='5' height='14' rx='2'/><rect x='53' y='25' width='5' height='14' rx='2'/></g></svg>")
+};
+document.addEventListener('error', ev=>{
+  const t=ev.target;
+  // imagens com tratamento proprio (miniaturas, imagem grande do exercicio) ficam com ele: este escutador roda
+  // ANTES do delas (fase de captura) e, se agisse, o substituto delas nunca apareceria
+  if(!t || t.tagName!=='IMG' || t._fbG || t.getAttribute('data-fb')==='proprio' || typeof t.onerror==='function' || (t.src||'').indexOf('data:image/svg')===0) return;
+  t._fbG=1; t.classList.add('img-falha'); t.src=IMGFALHA.url;
+}, true);
 function thumbIni(exId){
   const x=BIB.ex(exId); const ini=(x.n||'?').split(' ').slice(0,2).map(p=>p[0]).join('').toUpperCase();
   return h('div',{class:'thumb-ini'}, ini);
@@ -3534,7 +3573,7 @@ TELAS.ativo = function(){
   m.appendChild(h('div',{class:'card',style:'position:sticky;top:calc(var(--sat) + 58px);z-index:30'},
     h('div',{class:'linha',style:'align-items:flex-start;gap:8px'},
       h('div',{class:'stats3 cab-ta',style:'flex:1;min-width:0'},
-        h('button',{style:'background:none;border:none;text-align:left;padding:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k',id:'ta-cron-k'}, ATIVO.rotTempo(t)),h('div',{class:'v cron'+(t.pausaDesde?' pausado':''),id:'ta-cron',style:'color:var(--brand2)'}, CORE.fmtRelogioCurto(ATIVO.decorridoMs(t)/1000))),
+        h('button',{class:'bt-tempo',style:'background:none;border:none;text-align:left;padding:0;overflow:hidden',onclick:()=>ATIVO.editaTempo()},h('div',{class:'k',id:'ta-cron-k'}, ATIVO.rotTempo(t)),h('div',{class:'v cron'+(t.pausaDesde?' pausado':''),id:'ta-cron',style:'color:var(--brand2)'}, CORE.fmtRelogioCurto(ATIVO.decorridoMs(t)/1000))),
         h('div',{class:'col-vol',style:'cursor:pointer',title:'Toque para alternar entre exato e resumido',onclick:()=>{
           S.cfg.volCurto = !S.cfg.volCurto; salva('cfg'); ATIVO.pinta();
         }},
@@ -3581,7 +3620,7 @@ TELAS.ativo = function(){
         h('button',{class:'btn btn-mini',style:'width:38px','aria-label':'Mais opções de '+x.n,onclick:()=>menuEx(e,ix)},'⋯')),
       campoNotas(e.notas, v=>{ e.notas=v; salva('ativo'); }, 'Notas de '+x.n, 'Notas…', 'margin-bottom:8px'),
       (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
-      h('div',{class:'linha f13',style:'color:var(--azul);margin-bottom:6px',onclick:()=>mudaDescanso(e)},'⏱ Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
+      h('div',{class:'linha f13 desc-linha',style:'color:var(--azul);margin-bottom:6px',onclick:()=>mudaDescanso(e)},'⏱ Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
       (x.e==='peso-corporal' && x.t==='peso_reps') ? h('div',{class:'f12',style:'color:var(--tx2);margin:-2px 0 8px',onclick:()=>MED.registrar()},
         'Peso corporal: '+(pesoCorporalAtual()>0? CORE.fmtKg(pesoCorporalAtual())+' kg' : 'não informado')+' · ', h('span',{style:'text-decoration:underline'},'atualizar')) : h('span',{style:'display:none'}),
       h('div',{class:'gtab cab'},h('div',{},'Série'),h('div',{style:'text-align:center'},'Anterior'),
@@ -3590,7 +3629,7 @@ TELAS.ativo = function(){
           : h('div',{style:'text-align:center'},rot[0])),
         h('div',{style:'text-align:center'},rot[1]),h('div',{style:'text-align:center'},'✓')),
       ...e.series.map((s,si)=>linha(e,s,si,x)),
-      h('button',{class:'btn btn-mini',style:'width:100%;margin-top:8px',onclick:()=>{
+      h('button',{class:'btn btn-mini add-serie',style:'width:100%;margin-top:8px',onclick:()=>{
         e.series.push({tipo:'N',kg:'',reps:'',ok:false}); salva('ativo'); UI.refaz(); }},'＋ Adicionar série'));
     return card;
   }
@@ -4794,7 +4833,19 @@ const EDTREINO = {
     };
     render();
   },
-  salva(t, ex){
+  salva(t, ex, confirmado){
+    // exercicio sem nenhuma serie preenchida sai do treino ao salvar: avisa antes (antes sumia sem aviso)
+    const vazios = ex.filter(e=>!(e.series||[]).some(s=>(Number(s.kg)||0)>0 || (Number(s.reps)||0)>0));
+    if(vazios.length && vazios.length<ex.length && !confirmado){
+      const nomes=vazios.map(e=>(BIB.ex(e.exId)||{}).n||'Exercício'), um=vazios.length===1;
+      UI.folha(um? 'Exercício sem série' : vazios.length+' exercícios sem série', [
+        h('div',{class:'f14',style:'line-height:1.5;margin-bottom:10px'}, um? 'Este exercício não tem nenhuma série preenchida e vai sair do treino ao salvar:' : 'Estes exercícios não têm nenhuma série preenchida e vão sair do treino ao salvar:'),
+        h('div',{class:'b700',style:'margin-bottom:16px;line-height:1.5'}, nomes.join(' · ')),
+        h('button',{class:'btn btn-p',style:'margin-bottom:8px',onclick:()=>{ UI.fechaFolha(); EDTREINO.salva(t, ex, true); }}, um? 'Salvar sem ele' : 'Salvar sem eles'),
+        h('button',{class:'btn',onclick:()=>UI.fechaFolha()}, 'Voltar e preencher')
+      ]);
+      return;
+    }
     const limpo = ex.map(e=>({ ...e, series:(e.series||[]).filter(s=>{
         const k=Number(s.kg)||0, r=Number(s.reps)||0; return k>0 || r>0;
       }).map(s=>({ ...s, ok:true })) })).filter(e=>e.series.length);
@@ -4888,9 +4939,9 @@ TELAS.exercicio = function({id}){
      h('span',{class:'f12 mut'}, S.custom[id].ocultoPub? 'oculto no perfil' : 'visível no perfil')));
   const src=srcEx(id);
   if(src){
-    const hero=h('img',{class:'ex-hero fzoom',src,alt:x.n,
+    const hero=h('img',{class:'ex-hero fzoom',src,alt:x.n,'data-fb':'proprio',
       title:'Toque para ampliar',
-      onerror:function(){ this.remove(); }});
+      onerror:function(){ if(this._fb) return; this._fb=1; this.replaceWith(h('div',{class:'ex-hero-falha',role:'img','aria-label':'Animação indisponível'}, IMGFALHA.svg(), 'Animação indisponível agora')); }});
     m.appendChild(hero);
     // foto do próprio usuário salva em versão antiga: 256px, fica ruim ampliada
     if(x.custom && x.foto){

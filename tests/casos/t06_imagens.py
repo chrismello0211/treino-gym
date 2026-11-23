@@ -37,6 +37,10 @@ def rodar(pw, R):
         R.ok('tela do exercicio: a imagem grande mostra o substituto', p.evaluate("!!document.querySelector('#main .ex-hero-falha')") and p.evaluate(QUEBRADAS) == 0)
         p.evaluate("(()=>{ const i=document.createElement('img'); i.id='teste-img'; i.src='nao-existe.png'; i.style.width='40px'; i.style.height='40px'; document.getElementById('main').appendChild(i); })()"); p.wait_for_timeout(700)
         R.ok('qualquer outra imagem que falhe mostra o halter neutro', p.evaluate("(()=>{ const i=document.getElementById('teste-img'); return i.classList.contains('img-falha') && i.src.indexOf('data:image/svg')===0 && i.naturalWidth>0; })()"))
+        # no feed, as iniciais tem o tamanho da miniatura (antes eram maiores e o cartao pulava ao trocar)
+        p.evaluate("UI.vai('inicio')"); p.wait_for_timeout(900)
+        tam = p.evaluate("(()=>{ const i=document.querySelector('#main .feed-ex .thumb-ini'); if(!i) return null; const r=i.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })()")
+        R.ok('feed: as iniciais tem o mesmo tamanho da miniatura (44 x 44)', tam == [44, 44], tam)
         R.ok('sem erros de JavaScript', not p.erros, p.erros[:2])
     finally:
         A.fecha()

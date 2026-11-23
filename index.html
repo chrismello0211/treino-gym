@@ -258,6 +258,13 @@ input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pessoa{min-width:0}
+/* as iniciais (quando a animacao nao carrega) tem o MESMO tamanho da miniatura em cada lugar: antes, no feed
+   (44) e no reordenar (38) as iniciais tinham 52 e cada troca empurrava o cartao pra baixo */
+.feed-ex .thumb-ini{width:44px;height:44px;font-size:14px}
+.reo-row .thumb-ini{width:38px;height:38px;font-size:13px}
+/* rotulos dos numeros com no minimo 12 px (eram 10 a 11,5): leitura com o celular longe do rosto, na academia */
+.fstat-k,.cab-ta .k,.pr-base,.anterior,.gtab.cab,.tab{font-size:12px!important}
+.sug-carga{display:flex;align-items:center;gap:10px;background:rgba(255,106,0,.08);border:1px solid rgba(255,106,0,.35);border-radius:12px;padding:10px 12px;margin-bottom:10px}
 /* Alvos de toque: minimo de 44 pontos (recomendacao da Apple). Onde cabe, o botao cresce; onde nao cabe,
    cresce so a area sensivel ao toque, sem mudar o desenho e sem invadir a area do vizinho. */
 #topo .btn-mini{min-height:44px;min-width:44px}
@@ -273,6 +280,7 @@ button[aria-label^="Mais opções de"]{min-width:44px;min-height:44px}
 .heart{position:relative}
 .heart::after{content:'';position:absolute;top:-12px;bottom:-12px;left:-6px;right:-6px}
 .sug-x::after{content:'';position:absolute;inset:-9px}
+/* o "x" solto no fluxo precisa ser a referencia da propria area ampliada (senao ela cobre o cartao inteiro) */
 .bt-tempo{position:relative}
 .bt-tempo::after{content:'';position:absolute;inset:-5px -4px}
 /* imagem que nao carregou: substituto neutro no lugar do icone de imagem quebrada */
@@ -550,7 +558,10 @@ body.kb .folha .folha-corpo{max-height:38vh}
 .cab-ta>*:first-child{flex:.92}
 .cab-ta .col-vol{flex:1.45}
 .cab-ta .col-ser{flex:.95}
-.cab-ta .col-rec{flex:.9}
+.cab-ta .col-rec{flex:1.1}  /* com o rotulo em 12 px, "Recordes" precisa de mais espaco */
+/* a linha do topo do treino tem 4 numeros lado a lado: em telas estreitas o rotulo encolhe um pouco pra nao cortar */
+@media (max-width:370px){ .cab-ta .k{font-size:11px!important} }
+@media (max-width:340px){ .cab-ta>*:first-child{flex:1} .cab-ta{gap:2px} .cab-ta .k{font-size:10.5px!important} }
 @keyframes skel-p{0%,100%{opacity:.45}50%{opacity:.9}}
 .skel{background:var(--surf3);animation:skel-p 1.1s ease-in-out infinite}
 
@@ -718,9 +729,9 @@ body.puxa-volta #main{transition:transform .28s var(--ease)}
 let DEBUG=false;
 (function(){
   // Barra visível desativada para o público. Ative com localStorage.setItem('tg_debug','1') para diagnóstico.
-  try{ DEBUG = localStorage.getItem('tg_debug')==='1'; }catch(e){}
+  try{ DEBUG = localStorage.getItem('tg_debug')==='1'; }catch(e){ errAnota(e,'L724') }
   function mostra(msg){
-    try{ console.warn('[TreinoGym]', msg); }catch(e){}
+    try{ console.warn('[TreinoGym]', msg); }catch(e){ errAnota(e,'L726') }
     if(!DEBUG) return;
     try{
       var b=document.getElementById('errbar');
@@ -733,7 +744,7 @@ let DEBUG=false;
         (document.body||document.documentElement).appendChild(b);
       }
       var p=document.createElement('div'); p.textContent='⚠ '+msg; b.appendChild(p);
-    }catch(e){}
+    }catch(e){ errAnota(e,'L739') }
   }
   window.addEventListener('error', function(ev){
     mostra((ev.message||'erro')+(ev.filename?(' · linha '+ev.lineno):''));
@@ -744,8 +755,23 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.39.1';
-(function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){} }
+const APP_VER='11.40.0';
+// Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
+// Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
+function errAnota(e, onde){
+  try{
+    const m=String((e && e.message) || e).slice(0,140), k=onde+'|'+m;
+    const vistos=errAnota._v || (errAnota._v=new Set());
+    if(vistos.has(k)) return; vistos.add(k);
+    const l=JSON.parse(localStorage.getItem('tg_errpego')||'[]');
+    l.push({t:new Date().toISOString().slice(5,19), m, s:String(onde||'').slice(0,40)});
+    while(l.length>30) l.shift();
+    localStorage.setItem('tg_errpego', JSON.stringify(l));
+  }catch(_x){}
+}
+// etapa da abertura isolada: se uma quebrar, as seguintes rodam do mesmo jeito (antes paravam todas, em silencio)
+function passo(nome, f){ try{ const r=f(); if(r && typeof r.catch==='function') r.catch(e=>errAnota(e,'abertura:'+nome)); }catch(e){ errAnota(e,'abertura:'+nome); } }
+(function(){ function reg(m,s){ try{ const k='tg_errlog'; const l=JSON.parse(localStorage.getItem(k)||'[]'); l.push({t:new Date().toISOString().slice(5,19), m:String(m).slice(0,180), s:String(s||'').slice(0,60)}); while(l.length>20) l.shift(); localStorage.setItem(k, JSON.stringify(l)); }catch(e){ errAnota(e,'L751') } }
   window.addEventListener('error', ev=>reg(ev.message, (ev.filename||'').split('/').pop()+':'+ev.lineno));
   window.addEventListener('unhandledrejection', ev=>reg('promise: '+(ev.reason&&ev.reason.message||ev.reason), '')); })();
 
@@ -1016,7 +1042,7 @@ function migraAlias(){
     if(S.ativo){
       S.ativo._estr=S.ativo._estr||{};
       (S.ativo.ex||[]).forEach(e=>{ if(S.ativo._estr[e.exId]===undefined) S.ativo._estr[e.exId]=!CORE.marcasDe(S.prs[e.exId]).length; });
-      salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+      salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L1022') }
     }
     return true;
   }catch(e){ return false; }
@@ -1197,11 +1223,11 @@ const LS = {
     try{ localStorage.setItem('tg_'+k, JSON.stringify(v)); return true; }
     catch(e){
       window.__tgStorageError=true;
-      try{ window.dispatchEvent(new CustomEvent('tg-storage-error',{detail:{campo:k}})); }catch(_){}
+      try{ window.dispatchEvent(new CustomEvent('tg-storage-error',{detail:{campo:k}})); }catch(_){ errAnota(_,'L1203') }
       return false;
     }
   },
-  del(k){ try{ localStorage.removeItem('tg_'+k); }catch(e){} }
+  del(k){ try{ localStorage.removeItem('tg_'+k); }catch(e){ errAnota(e,'L1207') } }
 };
 
 const S = {
@@ -1223,9 +1249,9 @@ const S = {
 };
 function salva(campo,opts){
   const ok=LS.set(campo,S[campo]);
-  if(campo==='prs'){ try{ PRSPUB.publica(); }catch(e){} }     // recordes mudaram: os amigos veem o certo na comparacao
+  if(campo==='prs'){ try{ PRSPUB.publica(); }catch(e){ errAnota(e,'L1229') } }     // recordes mudaram: os amigos veem o certo na comparacao
   if(campo==='ativo' && !(opts&&opts.semSync)){
-    setTimeout(()=>{ try{ SYNCATIVO.agenda(); }catch(e){} },0);
+    setTimeout(()=>{ try{ SYNCATIVO.agenda(); }catch(e){ errAnota(e,'L1231') } },0);
   }
   return ok;
 }
@@ -1248,7 +1274,7 @@ const PUSHDEV = {
     // o token antigo NAO e' confiavel (pode ser de outro aparelho): o renova() busca o verdadeiro
     PUSHDEV.set(d);
     delete S.cfg.push; delete S.cfg.pushTok; salva('cfg');
-  }catch(e){}
+  }catch(e){ errAnota(e,'L1254') }
 })();
 
 // id fixo por instalacao: permite dizer "outro aparelho" com honestidade
@@ -1353,7 +1379,7 @@ const NET = {
     else {
       S.fila.push({path, val, ts:Date.now()});
     }
-    salva('fila'); try{ UI.pintaSync(); }catch(e){} NET.despacha();
+    salva('fila'); try{ UI.pintaSync(); }catch(e){ errAnota(e,'L1359') } NET.despacha();
   },
   _retryT:null,
   _desde:0,
@@ -1365,7 +1391,7 @@ const NET = {
   // (rede ruim, app em segundo plano) travava a fila inteira pra sempre.
   async fetchT(url, opts, ms){
     const ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
-    const t = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){} }, ms||25000);
+    const t = setTimeout(()=>{ try{ ctrl && ctrl.abort(); }catch(e){ errAnota(e,'L1371') } }, ms||25000);
     try{
       return await fetch(url, Object.assign({}, opts||{}, {signal:ctrl?ctrl.signal:undefined}));
     } finally { clearTimeout(t); }
@@ -1418,17 +1444,17 @@ const NET = {
         // o banco responde 401 tanto pra "login vencido" quanto pra "a regra recusou" (Permission denied):
         // so a mensagem diz qual. Recusa de regra nunca passa (uma foto grande ficou 800+ vezes na fila).
         let negado=false;
-        if(r && r.status===401){ try{ const tx=await r.clone().text(); negado=/permission denied/i.test(tx||''); }catch(e){} }
+        if(r && r.status===401){ try{ const tx=await r.clone().text(); negado=/permission denied/i.test(tx||''); }catch(e){ errAnota(e,'L1424') } }
         if(gen!==NET._gen) return;
         if(negado && /^\/fotos\//.test(it.path) && typeof it.val==='string' && it.val.length>=FOTOFIT.MAX && !it._recomp){
           // foto acima do limite da regra: recomprime pra caber e tenta de novo (nao perde a foto)
-          let menor=null; try{ menor=await FOTOFIT.encaixa(it.val); }catch(e){}
+          let menor=null; try{ menor=await FOTOFIT.encaixa(it.val); }catch(e){ errAnota(e,'L1428') }
           if(gen!==NET._gen) return;
           if(menor && menor.length<FOTOFIT.MAX){ it.val=menor; it._recomp=1; it.tent=0; delete it.adiado; salva('fila'); continue; }
         }
 
         // 401 no meio de envio longo: token venceu. Forca renovar no proximo ciclo.
-        if(r && r.status===401 && !negado){ try{ S.auth.exp=0; }catch(e){} }
+        if(r && r.status===401 && !negado){ try{ S.auth.exp=0; }catch(e){ errAnota(e,'L1434') } }
 
         // falhou: conta a tentativa
         const permanente = !!(r && r.status>=400 && r.status<500 && (r.status!==401 || negado));
@@ -1460,7 +1486,7 @@ const NET = {
     }catch(e){ parouPorErro=true; UI.pingSync(false); }
     if(gen!==NET._gen) return;                      // perdeu a vez: nao mexe em nada
     NET.sincronizando = false; NET._desde = 0;
-    try{ UI.pintaSync(); }catch(e){}
+    try{ UI.pintaSync(); }catch(e){ errAnota(e,'L1466') }
     if(S.fila.length && navigator.onLine){
       NET._falhas = parouPorErro ? Math.min((NET._falhas||0)+1, 6) : 0;
       NET.reagenda(parouPorErro ? Math.min(2000*Math.pow(2,NET._falhas), 60000) : 400);
@@ -1511,7 +1537,7 @@ const NET = {
       try{ SYNCATIVO.resolve(nuvem.ativo||null); }catch(e){ if(DEBUG) console.log('syncativo',e); }
       if(nuvem.app){
         if(nuvem.app.perfil && (!S.perfil || (nuvem.app.perfil.atualizado||0)>(S.perfil.atualizado||0))){ S.perfil=nuvem.app.perfil; salva('perfil'); m=true; }
-        if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){} }
+        if(S.perfil && !S.perfil.user && S.auth){ try{ const pub=await NET.get('/perfis/'+S.auth.uid); if(pub && pub.user){ S.perfil.user=pub.user; if(pub.foto && !S.perfil.foto) S.perfil.foto=pub.foto; salva('perfil'); m=true; } }catch(e){ errAnota(e,'L1517') } }
         if(nuvem.app.cfg && (nuvem.app.cfg.atualizado||0)>(S.cfg.atualizado||0)){
           const nc=Object.assign({}, nuvem.app.cfg); delete nc.push; delete nc.pushTok;   // isso e' do aparelho
           S.cfg=nc; salva('cfg'); m=true;
@@ -1653,7 +1679,7 @@ const BIB = {
     try{
       const r = await fetch('exercicios.json'+(dados?'?v='+versao:''));
       if(r.ok){ dados = await r.json(); LS.set('bib', dados); LS.set('bibv', Date.now()); }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L1659') }
     BIB.lista = (dados||[]).concat(Object.values(S.custom));
     BIB.indexa();
   },
@@ -1744,16 +1770,16 @@ function soltaTeclado(){
       a.blur();
       // o Safari pode deixar a tela deslocada depois que o teclado fecha: forca medir de novo,
       // logo apos e depois da animacao do teclado
-      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){} }, 60);
-      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){} }, 380);
+      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){ errAnota(e,'L1750') } }, 60);
+      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){ errAnota(e,'L1751') } }, 380);
     }
     if(!texto || !naFolha){ document.body.classList.remove('kb'); document.documentElement.style.setProperty('--kb','0px'); }
-  }catch(e){}
+  }catch(e){ errAnota(e,'L1754') }
 }
 // tela que falha ao desenhar: aviso com o detalhe tecnico, em vez de uma tela vazia
 function telaComErro(tela, e){
-  try{ console.error('tela', tela, e); }catch(_){}
-  try{ localStorage.setItem('tg_ultimoErro', JSON.stringify({tela, msg:String((e&&e.message)||e).slice(0,300), stack:String((e&&e.stack)||'').slice(0,900), v:APP_VER, quando:Date.now()})); }catch(_){}
+  try{ console.error('tela', tela, e); }catch(_){ errAnota(_,'L1758') }
+  try{ localStorage.setItem('tg_ultimoErro', JSON.stringify({tela, msg:String((e&&e.message)||e).slice(0,300), stack:String((e&&e.stack)||'').slice(0,900), v:APP_VER, quando:Date.now()})); }catch(_){ errAnota(_,'L1759') }
   try{
     const m=document.getElementById('main'); if(!m) return;
     m.innerHTML='';
@@ -1762,7 +1788,7 @@ function telaComErro(tela, e){
       h('div',{class:'f13 mut',style:'margin-bottom:12px'},'Seus dados estão salvos. Se puder, tire um print desta mensagem.'),
       h('div',{class:'f12 mut2',style:'font-family:ui-monospace,Menlo,monospace;word-break:break-word;margin-bottom:14px'}, String(tela||'')+' · '+String((e&&e.message)||e).slice(0,180)+' · v'+APP_VER),
       h('button',{class:'btn btn-p',onclick:()=>{ UI.pilha=[]; UI.vai('inicio',null,false); }},'Voltar ao início')));
-  }catch(_){}
+  }catch(_){ errAnota(_,'L1768') }
 }
 function h(tag, attrs, ...filhos){
   const el=document.createElement(tag);
@@ -1913,7 +1939,7 @@ function focaDialogo(modal, preferido){
     // nenhum botao parece selecionado); Tab entra no conteudo normalmente
     const alvo=(preferido&&preferido.isConnected?preferido:null)||modal;
     if(!modal.hasAttribute('tabindex')) modal.tabIndex=-1;
-    try{ alvo.focus({preventScroll:true}); }catch(e){}
+    try{ alvo.focus({preventScroll:true}); }catch(e){ errAnota(e,'L1919') }
   };
   aplicar(); requestAnimationFrame(aplicar); setTimeout(aplicar,40);
 }
@@ -1922,26 +1948,32 @@ function focaDialogo(modal, preferido){
 const UI = {
   telaAtual:null, args:null, pilha:[],
   toastT:null, syncT:null, _focoAntes:null, _folhaObrigatoria:false,
-  vai(tela, args, empilha=true, rolagem){
-    try{ UI.fechaFolha(); }catch(e){}
+  vai(tela, args, empilha=true, rolagem, ancora){
+    try{ UI.fechaFolha(); }catch(e){ errAnota(e,'L1929') }
     // treino em andamento: ao sair, guarda onde estava; ao voltar (por qualquer caminho), volta pro mesmo exercicio
     try{
       if(UI.telaAtual==='ativo' && tela!=='ativo' && S.ativo) UI.guardaLugarAtivo();
       if(tela==='ativo' && !rolagem && S.ativo){ const l=UI.lugarAtivo(); if(l && l.id===S.ativo.id && l.y>0) rolagem=l.y; }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L1934') }
     const dirFx = UI._semAnim ? '' : (UI._dirFx || ((empilha && UI.telaAtual)? 'fx-ir' : ''));
     UI._dirFx='';
-    if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0]);
+    if(empilha && UI.telaAtual) UI.pilha.push([UI.telaAtual, UI.args, window.scrollY||0, UI._ancora()]);
     UI.telaAtual = tela; UI.args = args||null;
+    UI._rolagemAlvo = rolagem||0;          // o feed do Inicio desenha o suficiente pra chegar ate aqui
     try{ TELAS[tela](args||{}); }catch(e){ telaComErro(tela, e); }
     try{ const mm=$('#main'); mm.classList.remove('fx-tela','fx-ir','fx-voltar'); void mm.offsetWidth;
       if(!UI._semAnim){ mm.classList.add('fx-tela'); if(dirFx) mm.classList.add(dirFx); }
       // a entrada anima SO na navegacao; redesenhar a tela nao repete a animacao
-      clearTimeout(UI._fxT); UI._fxT=setTimeout(()=>{ try{ mm.classList.remove('fx-tela','fx-ir','fx-voltar'); }catch(e){} }, 420); }catch(e){}
+      clearTimeout(UI._fxT); UI._fxT=setTimeout(()=>{ try{ mm.classList.remove('fx-tela','fx-ir','fx-voltar'); }catch(e){ errAnota(e,'L1944') } }, 420); }catch(e){ errAnota(e,'L1944') }
     if(rolagem){
       // a tela acabou de ser montada; espera o layout assentar antes de rolar
       const alvo=rolagem;
-      const poe=()=>window.scrollTo(0, Math.min(alvo, Math.max(0, document.body.scrollHeight-window.innerHeight)));
+      const poe=()=>{
+        if(ancora){ const el=[...document.querySelectorAll('#main [data-fid]')].find(x=>x.getAttribute('data-fid')===ancora.id);
+          // posicao pela estrutura da pagina (offsetTop): a animacao de entrada desloca a posicao VISUAL e enganava a conta
+          if(el){ let y=0, q=el; while(q){ y+=q.offsetTop||0; q=q.offsetParent; } window.scrollTo(0, Math.max(0, y - ancora.top)); return; } }
+        window.scrollTo(0, Math.min(alvo, Math.max(0, document.body.scrollHeight-window.innerHeight)));
+      };
       poe(); requestAnimationFrame(poe); setTimeout(poe, 60); setTimeout(poe, 220);
     } else window.scrollTo(0,0);
     $$('#tabbar .tab').forEach(t=>{
@@ -1953,13 +1985,16 @@ const UI = {
     document.body.classList.toggle('tela-ativo', tela==='ativo');
     document.body.classList.toggle('tela-boas-vindas', tela==='boasVindas');
   },
-  guardaLugarAtivo(){ try{ UI._lugarAtivo={id:S.ativo.id, y:window.scrollY||0}; localStorage.setItem('tg_ativoY', JSON.stringify(UI._lugarAtivo)); }catch(e){} },
+  guardaLugarAtivo(){ try{ UI._lugarAtivo={id:S.ativo.id, y:window.scrollY||0}; localStorage.setItem('tg_ativoY', JSON.stringify(UI._lugarAtivo)); }catch(e){ errAnota(e,'L1960') } },
   lugarAtivo(){ if(UI._lugarAtivo) return UI._lugarAtivo; try{ return JSON.parse(localStorage.getItem('tg_ativoY')||'null'); }catch(e){ return null; } },
-  volta(){ const ant = UI.pilha.pop(); UI._dirFx='fx-voltar'; if(ant) UI.vai(ant[0], ant[1], false, ant[2]||0); else UI.vai('treino', null, false); },
+  volta(){ const ant = UI.pilha.pop(); UI._dirFx='fx-voltar'; if(ant) UI.vai(ant[0], ant[1], false, ant[2]||0, ant[3]||null); else UI.vai('treino', null, false); },
+  // o cartao do feed que esta no topo da tela (para o voltar devolver a pessoa ao MESMO cartao, nao so ao mesmo numero)
+  _ancora(){ try{ const c=[...document.querySelectorAll('#main [data-fid]')].find(el=>el.getBoundingClientRect().bottom>90); return c? {id:c.getAttribute('data-fid'), top:c.getBoundingClientRect().top} : null; }catch(e){ errAnota(e,'ancora'); return null; } },
   refaz(){
     // limpeza defensiva: remove qualquer clone de drag preso e reseta opacidades
     if(window.__tgDrag){ window.__tgDrag=false; document.querySelectorAll('[style*="z-index:9999"]').forEach(el=>el.remove()); document.body.style.userSelect=''; document.body.style.webkitUserSelect=''; }
     const y=window.scrollY||0;
+    UI._rolagemAlvo = y;
     if(UI.telaAtual){ try{ TELAS[UI.telaAtual](UI.args||{}); }catch(e){ telaComErro(UI.telaAtual, e); } }
     if(y>0){ const poe=()=>window.scrollTo(0, Math.min(y, Math.max(0, document.body.scrollHeight-window.innerHeight)));
       poe(); requestAnimationFrame(poe); }
@@ -2009,11 +2044,11 @@ const UI = {
       el.classList.toggle('erro', off || preso);
       el.classList.add('on');
       document.body.classList.add('com-sync');
-    }catch(e){}
+    }catch(e){ errAnota(e,'L2017') }
   },
   // zera deslocamento que tenha sobrado (arrasto interrompido) no menu e no veu
   _limpaFolha(){
-    try{ if(typeof ARRASTAFOLHA!=='undefined') ARRASTAFOLHA.g=null; }catch(e){}
+    try{ if(typeof ARRASTAFOLHA!=='undefined') ARRASTAFOLHA.g=null; }catch(e){ errAnota(e,'L2021') }
     const f=$('#folha'), v=$('#veu');
     if(f){ f.style.transform=''; f.style.transition=''; }
     if(v) v.style.opacity='';
@@ -2030,7 +2065,7 @@ const UI = {
       if(visivel) return;
       if(!tentativa){
         UI._limpaFolha(); document.body.classList.remove('kb'); document.documentElement.style.setProperty('--kb','0px');
-        try{ recuperaViewport(true); }catch(e){}
+        try{ recuperaViewport(true); }catch(e){ errAnota(e,'L2038') }
         UI._confereFolha(1);
       } else if(!UI._folhaObrigatoria){ UI.fechaFolha(); }
     }, tentativa? 450 : 420);
@@ -2045,7 +2080,7 @@ const UI = {
       // por cima da edicao: ESTA folha recebe os toques e a edicao (atras) fica inerte. Antes a edicao deixava
       // esta folha inerte: a busca e os exercicios nao respondiam e o toque caia no veu (que fechava tudo)
       if(sobre){ $('#folha').inert=false; FOLHA2.el.inert=true; }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L2053') }
     UI._focoAntes=document.activeElement instanceof HTMLElement?document.activeElement:null;
     UI._aoFechar = aoFechar || null;
     UI._folhaObrigatoria=!!(opts&&opts.obrigatoria);
@@ -2068,17 +2103,17 @@ const UI = {
     const estava=$('#folha').classList.contains('on');
     clearTimeout(UI._confT); UI._limpaFolha();
     // fechou a folha que estava por cima da edicao: a edicao volta a responder (e a base fica inerte de novo)
-    try{ if(typeof FOLHA2!=='undefined' && FOLHA2.el){ FOLHA2.el.inert=false; $('#folha').inert=true; } }catch(e){}
+    try{ if(typeof FOLHA2!=='undefined' && FOLHA2.el){ FOLHA2.el.inert=false; $('#folha').inert=true; } }catch(e){ errAnota(e,'L2076') }
     $('#veu').classList.remove('on'); $('#folha').classList.remove('on');
     $('#veu').setAttribute('aria-hidden','true'); $('#folha').setAttribute('aria-hidden','true');
     ['#topo','#main','#tabbar','#timerbar'].forEach(sel=>{ const el=$(sel); if(el) el.inert=false; });
     document.body.style.overflow='';
-    try{ if(typeof recuperaViewport==='function') setTimeout(()=>recuperaViewport(), 200); }catch(e){}
+    try{ if(typeof recuperaViewport==='function') setTimeout(()=>recuperaViewport(), 200); }catch(e){ errAnota(e,'L2081') }
     const fn=UI._aoFechar; UI._aoFechar=null;
     UI._folhaObrigatoria=false;
-    if(estava && fn){ try{ fn(); }catch(e){} }
+    if(estava && fn){ try{ fn(); }catch(e){ errAnota(e,'L2084') } }
     const foco=UI._focoAntes; UI._focoAntes=null;
-    if(estava && foco && foco.isConnected) requestAnimationFrame(()=>{ try{ foco.focus({preventScroll:true}); }catch(e){} });
+    if(estava && foco && foco.isConnected) requestAnimationFrame(()=>{ try{ foco.focus({preventScroll:true}); }catch(e){ errAnota(e,'L2086') } });
     return estava;
   }
 };
@@ -2101,7 +2136,7 @@ function aplicaTema(t){
   const mt=document.querySelector('meta[name="theme-color"]');
   if(mt) mt.setAttribute('content', t==='claro' ? '#F4F5F7' : '#0D0D0F');
 }
-try{ aplicaTema(S.cfg && S.cfg.tema); }catch(e){}
+try{ aplicaTema(S.cfg && S.cfg.tema); }catch(e){ errAnota(e,'L2109') }
 $('#veu').addEventListener('click', UI.fechaFolha);
 // (o gesto de arrastar da borda que ficava aqui rodava em todo celular, e no iPhone junto com o voltar do
 // proprio Safari: duas navegacoes no mesmo arrasto, redesenhando no meio da animacao do Safari. Agora o
@@ -2127,17 +2162,17 @@ $$('#tabbar .tab').forEach(t=>t.addEventListener('click', ()=>{
   // tocar de novo na aba em que ja esta (como no Instagram): sobe pro topo; ja no topo do Inicio, atualiza o feed
   if(UI.telaAtual===aba && !UI.pilha.length && !document.querySelector('.folha.on')){
     if((window.scrollY||0)>4){ rolaProTopo(); return; }
-    if(aba==='inicio' && S.auth){ try{ PUXA.atualiza(); return; }catch(e){} }
+    if(aba==='inicio' && S.auth){ try{ PUXA.atualiza(); return; }catch(e){ errAnota(e,'L2135') } }
   }
   // (o reajuste da tela do Safari devolve a rolagem pro lugar: por isso so roda ao trocar de aba de verdade)
-  try{ if(typeof recuperaViewport==='function') recuperaViewport(true); }catch(e){}
+  try{ if(typeof recuperaViewport==='function') recuperaViewport(true); }catch(e){ errAnota(e,'L2138') }
   UI.pilha=[]; UI.vai(aba, null, false);
 }));
 
 /* ---------- sons ---------- */
 const SOM = {
   ctx:null,
-  init(){ if(!SOM.ctx){ try{ SOM.ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(SOM.ctx&&SOM.ctx.state==='suspended') SOM.ctx.resume(); },
+  init(){ if(!SOM.ctx){ try{ SOM.ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ errAnota(e,'L2145') } } if(SOM.ctx&&SOM.ctx.state==='suspended') SOM.ctx.resume(); },
   bip(freq=880, dur=.12, ganho=.25, quando=0){
     if(!S.cfg.som || !SOM.ctx) return;
     const t=SOM.ctx.currentTime+quando, o=SOM.ctx.createOscillator(), g=SOM.ctx.createGain();
@@ -2218,7 +2253,7 @@ function digitosTempo(v){
 }
 function mascaraTempo(inp, aoMudar){
   inp.setAttribute('inputmode','numeric'); inp.setAttribute('autocomplete','off');
-  const fim=()=>{ try{ const n=inp.value.length; inp.setSelectionRange(n,n); }catch(e){} };
+  const fim=()=>{ try{ const n=inp.value.length; inp.setSelectionRange(n,n); }catch(e){ errAnota(e,'L2226') } };
   inp.addEventListener('focus', ()=>{ inp._antes=inp.value; if(!inp.value) inp.value='00:00'; setTimeout(fim,0); });
   inp.addEventListener('click', fim);
   inp.addEventListener('input', ()=>{ const r=digitosTempo(inp.value); inp.value=r.txt; fim(); aoMudar(r.seg||''); });
@@ -2266,13 +2301,13 @@ const TELA = {
       TELA.lock.addEventListener('release', ()=>{ TELA.lock=null; });
     }catch(e){ TELA.lock=null; }
   },
-  solta(){ try{ if(TELA.lock) TELA.lock.release(); }catch(e){} TELA.lock=null; }
+  solta(){ try{ if(TELA.lock) TELA.lock.release(); }catch(e){ errAnota(e,'L2274') } TELA.lock=null; }
 };
 // o sistema solta a trava quando o app some da tela; pega de novo na volta
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState!=='visible') return;
   TELA.pega();
-  try{ DESC.checaServidor(); }catch(e){}
+  try{ DESC.checaServidor(); }catch(e){ errAnota(e,'L2280') }
   // o aviso que chegou com o app fora da tela ja cumpriu o papel: tira da central
   if(!DESC.fim && navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(reg=>{
     if(reg) reg.getNotifications({tag:'forgex-descanso'}).then(ns=>ns.forEach(n=>n.close()));
@@ -2302,9 +2337,9 @@ const VIB = {
       if(typeof navigator.vibrate==='function'){ navigator.vibrate(p); return; }
       const n = Array.isArray(p) ? Math.ceil(p.length/2) : 1;   // pulsos do padrao
       const lb = VIB._ios();
-      try{ lb.click(); }catch(e){}            // sincrono: ainda dentro do toque
-      for(let i=1; i<Math.min(3, n); i++) setTimeout(()=>{ try{ lb.click(); }catch(e){} }, i*150);
-    }catch(e){}
+      try{ lb.click(); }catch(e){ errAnota(e,'L2310') }            // sincrono: ainda dentro do toque
+      for(let i=1; i<Math.min(3, n); i++) setTimeout(()=>{ try{ lb.click(); }catch(e){ errAnota(e,'L2311') } }, i*150);
+    }catch(e){ errAnota(e,'L2312') }
   }
 };
 const DESC = {
@@ -2371,9 +2406,9 @@ const DESC = {
         // com o app aberto ela so existe pra vibrar: some em 4s e nao acumula
         setTimeout(async()=>{ try{
           (await reg.getNotifications({tag:'forgex-descanso'})).forEach(n=>n.close());
-        }catch(e){} }, 4000);
+        }catch(e){ errAnota(e,'L2379') } }, 4000);
       }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L2381') }
   },
   para(cancela){
     clearInterval(DESC.intervalo); $('#timerbar').classList.remove('on'); DESC.fim=0;
@@ -2399,7 +2434,7 @@ $('#tb-pular').addEventListener('click',()=>DESC.para());
 document.addEventListener('visibilitychange', ()=>{
   if(!document.hidden && DESC.fim) DESC.tic();
   // saindo do app: garante que o que esta aqui subiu, sem esperar o atraso
-  if(document.hidden && S.ativo){ try{ SYNCATIVO.sobeJa(); }catch(e){} }
+  if(document.hidden && S.ativo){ try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L2407') } }
 });
 
 /* ---------- gráfico canvas ---------- */
@@ -2644,7 +2679,7 @@ const PICKER = {
     UI.folha(PICKER.modo==='consulta'?'Exercícios':'Adicionar exercício', corpo,
       h('button',{class:'btn btn-mini btn-p',style:'margin-right:8px',onclick:()=>PICKER.criarCustom()},'＋ Criar'));
     PICKER.lista();
-    setTimeout(()=>{ try{$('#pk-q').focus();}catch(e){} }, 250);
+    setTimeout(()=>{ try{$('#pk-q').focus();}catch(e){ errAnota(e,'L2652') } }, 250);
   },
   filtroMeus(){
     PICKER.filtros.meus = !PICKER.filtros.meus;
@@ -2667,7 +2702,7 @@ const PICKER = {
         const tile=h('span',{style:'flex-shrink:0;margin-right:2px;width:54px;height:54px;display:inline-flex;align-items:center;justify-content:center'});
         if(v){
           const img=h('img',{src:'grupos/'+v+'.webp', loading:'lazy', alt:'', style:'width:46px;height:46px;border-radius:50%;object-fit:cover;background:#fff'});
-          img.onerror=()=>{ try{ img.replaceWith(corpoSVG(new Map([[alias[v]||v,1]]),54)); }catch(e){} };
+          img.onerror=()=>{ try{ img.replaceWith(corpoSVG(new Map([[alias[v]||v,1]]),54)); }catch(e){ errAnota(e,'L2675') } };
           tile.appendChild(img);
         } else tile.appendChild(corpoSVG(new Map(),54));
         filhos.push(tile); }
@@ -2830,7 +2865,7 @@ const PICKER = {
           if(!BIB.porId[ed.id]) BIB.lista.push(ed);
           BIB.indexa();
           FOLHA2.fecha();
-          try{ if(UI.telaAtual==='exercicio') UI.refaz(); else PICKER.lista(); }catch(e2){}
+          try{ if(UI.telaAtual==='exercicio') UI.refaz(); else PICKER.lista(); }catch(e2){ errAnota(e2,'L2838') }
           UI.toast('Exercício atualizado ✓', true);
           return;
         }
@@ -2874,7 +2909,7 @@ const FOLHA2 = {
     FOLHA2.el.remove(); FOLHA2.el=null;
     const base=$('#folha'); if(base) base.inert=false;
     const foco=FOLHA2.focoAntes; FOLHA2.focoAntes=null;
-    if(foco && foco.isConnected) requestAnimationFrame(()=>{ try{ foco.focus({preventScroll:true}); }catch(e){} });
+    if(foco && foco.isConnected) requestAnimationFrame(()=>{ try{ foco.focus({preventScroll:true}); }catch(e){ errAnota(e,'L2882') } });
   }
 };
 document.addEventListener('keydown',e=>{
@@ -3007,7 +3042,7 @@ const ROT = {
         UI.fechaFolha(); UI.refaz();
         UI.desfazer('Rotina excluída', ()=>{
           delete r.apagada; r.atualizado=agora(); salva('rotinas'); NET.agenda('rotinas/'+r.id, r);
-          try{ ROTPUB.envia(r); }catch(e){}
+          try{ ROTPUB.envia(r); }catch(e){ errAnota(e,'L3015') }
           UI.refaz(); UI.toast('Rotina restaurada ✓', true);
         });
       }},'Excluir rotina')
@@ -3020,7 +3055,7 @@ const ROT = {
         const n=(inp.value||'').trim(); if(!n) return;
         const id=uid(); S.pastas[id]={id,nome:n,ordem:Object.keys(S.pastas).length,atualizado:agora()};
         salva('pastas'); NET.agenda('pastas/'+id, S.pastas[id]);
-        try{ ROTPUB.syncTudo(); }catch(e){}
+        try{ ROTPUB.syncTudo(); }catch(e){ errAnota(e,'L3028') }
         UI.fechaFolha(); UI.refaz();
       }},'Criar pasta')]);
   },
@@ -3035,7 +3070,7 @@ const ROT = {
         p.ordem=i; p.atualizado=agora(); NET.agenda('pastas/'+p.id, p);
       });
       salva('pastas');
-      try{ ROTPUB.syncTudo(); }catch(e){}     // o perfil publico segue a mesma ordem
+      try{ ROTPUB.syncTudo(); }catch(e){ errAnota(e,'L3043') }     // o perfil publico segue a mesma ordem
     }, {
       titulo:'Reordenar pastas',
       dica:'Arraste pelo ≡. A pasta que você está treinando agora fica melhor no topo.',
@@ -3066,7 +3101,7 @@ TELAS.rotinaEditor = function(){
   clearInterval(TELAS._rascT);
   TELAS._rascT=setInterval(()=>{
     if(UI.telaAtual!=='rotinaEditor'){ clearInterval(TELAS._rascT); return; }
-    try{ if(r.titulo || (r.ex&&r.ex.length)) LS.set('rascunho', {r:JSON.parse(JSON.stringify(r)), ts:Date.now()}); }catch(e){}
+    try{ if(r.titulo || (r.ex&&r.ex.length)) LS.set('rascunho', {r:JSON.parse(JSON.stringify(r)), ts:Date.now()}); }catch(e){ errAnota(e,'L3074') }
   }, 1500);
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'}, r.titulo||'Nova rotina'),
     h('button',{class:'btn btn-mini btn-p',onclick:salvar},'Salvar'));
@@ -3163,7 +3198,7 @@ const ATIVO = {
         series: e.series.map(s=>({tipo:s.tipo, kg:'', reps:'', ok:false, _planKg:(s.kg!==''&&s.kg!=null?s.kg:null), _planReps:(s.reps!==''&&s.reps!=null?s.reps:null)})) })) : []
     };
     CORE.marcaEstreias(S.ativo);
-    salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+    salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L3171') }
     UI.pilha=[]; UI.vai('ativo',null,false);
   },
   serieAnterior(exId, si){
@@ -3211,7 +3246,7 @@ const ATIVO = {
       // desmarcar a serie refaz tudo pelo historico)
       try{ const pk=(S.prs[e.exId]||{}).kg, kgS=Number(s.kg)||0, rS=Number(s.reps)||0;
         if(pk && kgS>0 && kgS===Number(pk.v) && !prs.some(p=>p[0]==='kg') && rS>CORE.repsDoKg(e.exId, pk)){
-          S.prs[e.exId].kg={v:pk.v, tid:S.ativo.id, data:S.ativo.inicio, r:rS}; salva('prs'); NET.agenda('prs/'+e.exId+'/kg', S.prs[e.exId].kg); } }catch(_){}
+          S.prs[e.exId].kg={v:pk.v, tid:S.ativo.id, data:S.ativo.inicio, r:rS}; salva('prs'); NET.agenda('prs/'+e.exId+'/kg', S.prs[e.exId].kg); } }catch(_){ errAnota(_,'L3219') }
       if(prs.length && estreia){
         s._prBackup=JSON.parse(JSON.stringify(prs.map(([t])=>[t, (S.prs[e.exId]||{})[t]])));
         CORE.aplicaPR(S.prs, e.exId, prs, S.ativo.id, S.ativo.inicio); salva('prs');
@@ -3299,7 +3334,7 @@ const ATIVO = {
         // espera a tela assentar (no iPhone o teclado fecha e a pagina desce um pouco) e garante que aparece
         if(rr && row && row.closest && row.closest('.card')===el.closest('.card')) setTimeout(()=>ATIVO.mostraRecorde(el, row), 380);
       });
-    }catch(e){}
+    }catch(e){ errAnota(e,'L3307') }
   },
   // a linha do recorde ficou embaixo do placar fixo do topo: sobe so o necessario (sem esconder a serie
   // que acabou de ser marcada) e recomeca o brilho. Se nao der, fica o aviso de recorde de baixo.
@@ -3326,7 +3361,7 @@ const ATIVO = {
         if(k<1) requestAnimationFrame(passo); else { window.removeEventListener('touchstart', para); brilha(); }
       };
       requestAnimationFrame(passo);
-    }catch(e){}
+    }catch(e){ errAnota(e,'L3334') }
   },
   diaRetro(t){
     t=t||S.ativo; if(!t || !t.retro) return '';
@@ -3343,14 +3378,14 @@ const ATIVO = {
   },
   pausa(){
     const t=S.ativo; if(!t || t.pausaDesde || t.retro) return;
-    t.pausaDesde=agora(); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+    t.pausaDesde=agora(); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L3351') }
     UI.fechaFolha(); ATIVO.pintaTempo(); VIB.v(15); UI.toast('Treino pausado ⏸');
   },
   // auto: retomou porque marcou uma serie (a folha nao esta aberta)
   retoma(auto){
     const t=S.ativo; if(!t || !t.pausaDesde) return;
     t.pausadoMs=(Number(t.pausadoMs)||0)+Math.max(0, agora()-t.pausaDesde); t.pausaDesde=null;
-    salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+    salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L3358') }
     if(!auto) UI.fechaFolha();
     ATIVO.pintaTempo(); VIB.v(15); UI.toast('Treino retomado ▶');
   },
@@ -3403,7 +3438,7 @@ const ATIVO = {
         if(ini>agora()){ UI.toast('Escolha um dia que já passou'); return; }
         if(ini+dur*60000>agora()){ UI.toast('O início mais a duração passam de agora'); return; }
         t.pausaDesde=null; t.pausadoMs=0; t.inicio=ini; t.retro=1; t.durFixa=dur*60000;
-        salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+        salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L3411') }
         UI.fechaFolha(); UI.refaz();
         const r=ATIVO.diaRetro(t); UI.toast('📅 Treino de '+(/^\d/.test(r)? r : r.toLowerCase()), true);
         return;
@@ -3420,7 +3455,7 @@ const ATIVO = {
         novoInicio=(t.pausaDesde||agora())-(Number(t.pausadoMs)||0)-dur*60000;
       }
       if(eraRetro){ delete t.retro; delete t.durFixa; t.pausadoMs=0; }
-      t.inicio=novoInicio; salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+      t.inicio=novoInicio; salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L3428') }
       ATIVO.pintaTempo(); UI.fechaFolha(); if(eraRetro) UI.refaz(); UI.toast('Tempo ajustado');
     };
     UI.folha('Tempo do treino',[
@@ -3440,10 +3475,10 @@ const ATIVO = {
       h('div',{class:'f14 mut',style:'padding:4px 2px 14px'},'As séries registradas hoje serão perdidas. Essa ação não tem volta.'),
       h('button',{class:'btn btn-err',onclick:()=>{
         ATIVO.paraCron(false); ATIVO._rasc=null;
-        try{ DUELO.fimDoTreino('desistiu'); }catch(e){}
+        try{ DUELO.fimDoTreino('desistiu'); }catch(e){ errAnota(e,'L3448') }
         S.ativo=null; salva('ativo');
         CORE.reconciliaPRs({incluiAtivo:false});
-        try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); TELA.solta(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
+        try{ SYNCATIVO.limpa(); }catch(e){ errAnota(e,'L3451') } DESC.para(); TELA.solta(); UI.fechaFolha(); UI.pilha=[]; UI.vai('treino',null,false);
       }},'Descartar treino')]);
   },
   cron:null,
@@ -3544,19 +3579,19 @@ const ATIVO = {
           FOTOS.cache[S.auth.uid]=FOTOS.cache[S.auth.uid]||{}; FOTOS.cache[S.auth.uid][salvo.id]=foto; }
         if(S.perfil?.user && S.auth) NET.agenda('/feed/'+S.auth.uid+'/'+salvo.id, pubAgora?resumoTreino(salvo):null);
         // sugere atualizar rotina com as cargas de hoje
-        try{ DUELO.fimDoTreino('concluiu', salvo); }catch(e){}
-        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){} DESC.para(); TELA.solta();
+        try{ DUELO.fimDoTreino('concluiu', salvo); }catch(e){ errAnota(e,'L3552') }
+        S.ativo=null; salva('ativo'); try{ SYNCATIVO.limpa(); }catch(e){ errAnota(e,'L3553') } DESC.para(); TELA.solta();
         UI.fechaFolha(); UI.pilha=[]; UI.vai('concluido',{id:salvo.id},false);
         if(!navigator.onLine){
           setTimeout(()=>UI.toast('Treino salvo aqui. Vai sincronizar quando você conectar ✓', true), 500);
         }
-        setTimeout(()=>{ try{ ROTFIM.oferece(salvo); }catch(e){} }, 900);
+        setTimeout(()=>{ try{ ROTFIM.oferece(salvo); }catch(e){ errAnota(e,'L3558') } }, 900);
       }},'Concluir e salvar')]);
   }
 };
 
 TELAS.ativo = function(){
-  try{ DUELO.reconcilia(); }catch(e){}
+  try{ DUELO.reconcilia(); }catch(e){ errAnota(e,'L3564') }
   const t=S.ativo;
   if(!t){ UI.vai('treino',null,false); return; }
   UI.topo(
@@ -3584,8 +3619,8 @@ TELAS.ativo = function(){
         h('div',{class:'col-rec'},h('div',{class:'k'},'Recordes'),h('div',{class:'v',id:'ta-rec'},'0'))),
       h('div',{id:'ta-musc','aria-label':'Ver distribuição muscular',style:'flex-shrink:0;width:58px;display:flex;justify-content:flex-end;cursor:pointer',onclick:()=>{ if(S.ativo) distMuscularFolha(S.ativo); }}))));
 
-  if(DUELO.emDuelo()){ try{ m.appendChild(DUELO.barra()); }catch(e){} }
-  t.ex.forEach((e,ix)=>{ const c=cartao(e,ix); if(DUELO.emDuelo()){ try{ c.appendChild(DUELO.blocoOponente(e)); }catch(err){} } m.appendChild(c); });
+  if(DUELO.emDuelo()){ try{ m.appendChild(DUELO.barra()); }catch(e){ errAnota(e,'L3592') } }
+  t.ex.forEach((e,ix)=>{ const c=cartao(e,ix); if(DUELO.emDuelo()){ try{ c.appendChild(DUELO.blocoOponente(e)); }catch(err){ errAnota(err,'L3593') } } m.appendChild(c); });
   holdReordenar(m, ()=>reordenar(t.ex, ()=>salva('ativo')));
   m.appendChild(h('button',{class:'btn',onclick:()=>PICKER.abre(id=>{
     const x=BIB.ex(id);
@@ -3621,6 +3656,7 @@ TELAS.ativo = function(){
         h('button',{class:'btn btn-mini',style:'width:38px','aria-label':'Mais opções de '+x.n,onclick:()=>menuEx(e,ix)},'⋯')),
       campoNotas(e.notas, v=>{ e.notas=v; salva('ativo'); }, 'Notas de '+x.n, 'Notas…', 'margin-bottom:8px'),
       (S.exNotas[e.exId]&&S.exNotas[e.exId].txt)? h('div',{class:'f13',style:'color:var(--tx2);margin:-2px 0 8px;line-height:1.45;cursor:pointer',onclick:()=>notaFixaFolha(e.exId)},'📌 '+S.exNotas[e.exId].txt) : h('span',{style:'display:none'}),
+      SUGCARGA.dica(e),
       h('div',{class:'linha f13 desc-linha',style:'color:var(--azul);margin-bottom:6px',onclick:()=>mudaDescanso(e)},'⏱ Descanso: '+(e.descanso>0?CORE.fmtDur(e.descanso):'desligado')),
       (x.e==='peso-corporal' && x.t==='peso_reps') ? h('div',{class:'f12',style:'color:var(--tx2);margin:-2px 0 8px',onclick:()=>MED.registrar()},
         'Peso corporal: '+(pesoCorporalAtual()>0? CORE.fmtKg(pesoCorporalAtual())+' kg' : 'não informado')+' · ', h('span',{style:'text-decoration:underline'},'atualizar')) : h('span',{style:'display:none'}),
@@ -3821,6 +3857,43 @@ const PLACAS={
     };
     inp.oninput=pinta;
     UI.folha('Calculadora de anilhas',[inp, selBarra, res]); pinta();
+  }
+};
+// Carga sugerida (dupla progressao): se na ultima vez a pessoa bateu 12 repeticoes ou mais (ou passou 2 das
+// planejadas) em todas as series da carga mais alta, sugere subir a carga hoje. So muda algo com o toque em "Usar".
+const SUGCARGA = {
+  passo(x){ const q=(x&&x.e)||''; return q==='halter'? 2 : (q==='maquina'||q==='cabo')? 5 : q==='kettlebell'? 4 : 2.5; },
+  ultima(exId){
+    let best=null;
+    Object.values(S.treinos||{}).forEach(t=>{ if(!t || t.apagado) return;
+      (t.ex||[]).forEach(q=>{ if(q.exId!==exId) return;
+        const ss=(q.series||[]).filter(s=>s && s.ok!==false && s.tipo!=='W' && Number(s.kg)>0 && Number(s.reps)>0);
+        if(ss.length && (!best || t.inicio>best.t)) best={t:t.inicio, ss}; }); });
+    return best;
+  },
+  calcula(e){
+    const x=BIB.ex(e.exId)||{};
+    if((x.t||'peso_reps')!=='peso_reps' || x.e==='peso-corporal' || e._sugFeita) return null;
+    if((e.series||[]).some(s=>s.ok && s.tipo!=='W')) return null;          // ja comecou o exercicio: nao atrapalha
+    const u=SUGCARGA.ultima(e.exId); if(!u) return null;
+    const topo=Math.max(...u.ss.map(s=>Number(s.kg)));
+    const noTopo=u.ss.filter(s=>Number(s.kg)===topo);
+    const plan=Math.max(0, ...(e.series||[]).filter(s=>s.tipo!=='W').map(s=>Number(s._planReps)||0));
+    const meta= plan>0? plan+2 : 12;
+    if(!noTopo.every(s=>Number(s.reps)>=meta)) return null;
+    return {de:topo, reps:Math.min(...noTopo.map(s=>Number(s.reps))), nova:Math.round((topo+SUGCARGA.passo(x))*100)/100, todas:noTopo.length===u.ss.length};
+  },
+  dica(e){
+    let c=null; try{ c=SUGCARGA.calcula(e); }catch(err){ errAnota(err,'SUGCARGA'); }
+    if(!c) return null;
+    const usar=()=>{ (e.series||[]).forEach(s=>{ if(s.tipo!=='W' && !s.ok) s.kg=String(c.nova); }); e._sugFeita=1; salva('ativo'); UI.refaz(); UI.toast('Carga de '+CORE.fmtKg(c.nova)+' kg nas séries de trabalho', true); };
+    const dispensa=ev=>{ ev.stopPropagation(); e._sugFeita=1; salva('ativo'); UI.refaz(); };
+    return h('div',{class:'sug-carga'},
+      h('div',{class:'esp',style:'min-width:0'},
+        h('div',{class:'f13 b700'},'💡 Hora de subir a carga'),
+        h('div',{class:'f12 mut',style:'margin-top:2px'},'Última vez: '+CORE.fmtKg(c.de)+' kg × '+c.reps+(c.todas?' em todas as séries':'')+'. Tente '+CORE.fmtKg(c.nova)+' kg hoje.')),
+      h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:8px 12px;flex-shrink:0;min-height:44px',onclick:usar},'Usar '+CORE.fmtKg(c.nova)+' kg'),
+      h('button',{class:'sug-x',style:'position:relative;padding:6px;flex-shrink:0','aria-label':'Dispensar sugestão de carga',onclick:dispensa},'×'));
   }
 };
 function addAquecimento(e){
@@ -4034,7 +4107,7 @@ const ACAD = {
       ? (coord ? ('maps://?ll='+a.lat+','+a.lon+'&q='+nome) : ('maps://?q='+nome))
       : (coord ? ('geo:'+a.lat+','+a.lon+'?q='+a.lat+','+a.lon+'('+nome+')')
                : ('geo:0,0?q='+nome));
-    try{ location.href=nativo; }catch(e){ try{ window.open(web,'_blank','noopener'); }catch(e2){} }
+    try{ location.href=nativo; }catch(e){ try{ window.open(web,'_blank','noopener'); }catch(e2){ errAnota(e2,'L4080') } }
   },
   // quantas vezes voce treinou naquele lugar
   vezes(a){
@@ -4056,7 +4129,7 @@ const ACAD = {
     for(const url of ACAD.ESPELHOS){
       try{
         const ctrl=(typeof AbortController!=='undefined')? new AbortController() : null;
-        const tt=setTimeout(()=>{ try{ ctrl&&ctrl.abort(); }catch(e){} }, 15000);
+        const tt=setTimeout(()=>{ try{ ctrl&&ctrl.abort(); }catch(e){ errAnota(e,'L4102') } }, 15000);
         const rr=await fetch(url,{method:'POST',
           headers:{'Content-Type':'application/x-www-form-urlencoded'},
           body:'data='+encodeURIComponent(q), signal:ctrl?ctrl.signal:undefined});
@@ -4246,7 +4319,7 @@ function skeletonCard(){
     b('100%',12), h('div',{style:'height:8px'}), b('80%',12));
 }
 function diagnostico(){
-  let log=[]; try{ log=JSON.parse(localStorage.getItem('tg_errlog')||'[]'); }catch(e){}
+  let log=[]; try{ log=JSON.parse(localStorage.getItem('tg_errlog')||'[]'); }catch(e){ errAnota(e,'L4292') }
   const rots=Object.values(S.rotinas||{}).filter(r=>!r.apagada);
   const vivas=new Set(Object.values(S.pastas||{}).filter(p=>!p.apagada).map(p=>p.id));
   const orfas=rots.filter(r=>r.pasta && !vivas.has(r.pasta));
@@ -4261,7 +4334,8 @@ function diagnostico(){
     'Fila: '+(S.fila||[]).length+' pendente(s)'+((S.fila||[]).length? ' · 1º: '+S.fila[0].path : ''),
     'Treino ativo: '+(S.ativo? (S.ativo.titulo+' · estreias: '+JSON.stringify(S.ativo._estr||{})) : 'nenhum'),
     'Erros de envio: '+JSON.stringify(LS.get('filaErr', []).slice(-6)),
-    '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']).join('\n');
+    '', 'Últimos erros:' ].concat(log.length? log.map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)'])
+    .concat(['', 'Erros tratados (o app seguiu funcionando):'], (()=>{ let p=[]; try{ p=JSON.parse(localStorage.getItem('tg_errpego')||'[]'); }catch(_x){} return p.length? p.slice(-15).map(e=>'['+e.t+'] '+e.m+(e.s?' @'+e.s:'')) : ['(nenhum)']; })()).join('\n');
   if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(tx).then(()=>UI.toast('Diagnóstico copiado ✓', true)).catch(()=>UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px','aria-label':'Diagnóstico técnico'},tx)])); }
   else UI.folha('Diagnóstico',[h('textarea',{rows:'9',style:'font-size:11px','aria-label':'Diagnóstico técnico'},tx)]);
 }
@@ -4447,7 +4521,7 @@ const PROGSUG={
       h('div',{class:'esp'},
         h('div',{class:'b800',style:'font-size:15.5px'},'Hora de evoluir? 📈'),
         h('div',{class:'f13 mut',style:'margin-top:3px;line-height:1.5'},'Você roda "'+a.nomePasta+'" há '+a.semanas+' semanas ('+a.execs+' treinos). Seu corpo se adapta, bora subir o estímulo.')),
-      h('button',{class:'sug-x',style:'position:static;padding:6px','aria-label':'Dispensar sugestão de progressão',onclick:ev=>{ ev.stopPropagation(); PROGSUG.snooze(a.pid); ban.remove(); }},'✕')),
+      h('button',{class:'sug-x',style:'position:relative;padding:6px','aria-label':'Dispensar sugestão de progressão',onclick:ev=>{ ev.stopPropagation(); PROGSUG.snooze(a.pid); ban.remove(); }},'✕')),
       h('button',{class:'btn btn-p',style:'margin-top:10px',onclick:()=>PROGSUG.folha(a)},'Ver opções'));
     return ban;
   },
@@ -4663,7 +4737,7 @@ TELAS.treinoDet = function({id}){
           NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t));
         UI.fechaFolha(); UI.refaz(); UI.toast('Treino renomeado \u2713', true);
       }},'Salvar')]);
-    setTimeout(()=>{ try{ inp.focus(); inp.select(); }catch(e){} }, 120);
+    setTimeout(()=>{ try{ inp.focus(); inp.select(); }catch(e){ errAnota(e,'L4709') } }, 120);
   }
   function menu(){
     UI.folha(t.titulo,[
@@ -4724,13 +4798,13 @@ const EXDEL = {
     const bkEx  = c ? JSON.parse(JSON.stringify(c)) : null;
     const bkPrs = (S.prs && S.prs[id]) ? JSON.parse(JSON.stringify(S.prs[id])) : null;
     delete S.custom[id]; salva('custom'); NET.agenda('custom/'+id, null);
-    try{ EXSPUB.remove(id); }catch(e){}
+    try{ EXSPUB.remove(id); }catch(e){ errAnota(e,'L4770') }
     if(bkPrs){ delete S.prs[id]; salva('prs'); NET.agenda('prs/'+id, null); }
     BIB.lista = BIB.lista.filter(x=>x.id!==id); BIB.indexa();
     UI.pilha=[]; UI.vai('treino',null,false);
     UI.desfazer('\u201c'+((c&&c.n)||'Exercício')+'\u201d apagado', ()=>{
       if(bkEx){ S.custom[id]=bkEx; salva('custom'); NET.agenda('custom/'+id, bkEx);
-        if(!bkEx.oc && !bkEx.ocultoPub){ try{ EXSPUB.publica(bkEx); }catch(e){} }
+        if(!bkEx.oc && !bkEx.ocultoPub){ try{ EXSPUB.publica(bkEx); }catch(e){ errAnota(e,'L4776') } }
         if(!BIB.porId[id]) BIB.lista.push(bkEx); BIB.indexa(); }
       if(bkPrs){ S.prs[id]=bkPrs; salva('prs');
         Object.keys(bkPrs).forEach(tp=>NET.agenda('prs/'+id+'/'+tp, bkPrs[tp])); }
@@ -4754,7 +4828,7 @@ const EXDEL = {
       usado ? h('button',{class:'btn',style:'margin-bottom:8px',onclick:()=>{
         const cc=S.custom[id]; cc.oc=1; cc.atualizado=agora();
         salva('custom'); NET.agenda('custom/'+id, cc); BIB.indexa();
-        try{ EXSPUB.remove(id); }catch(e){}
+        try{ EXSPUB.remove(id); }catch(e){ errAnota(e,'L4800') }
         UI.fechaFolha(); UI.refaz(); UI.toast('Arquivado: sai da busca, histórico preservado ✓', true);
       }},'Arquivar em vez de apagar') : null,
       h('button',{class:'btn btn-err',onclick:()=>{ UI.fechaFolha(); EXDEL.apaga(id); }},'Apagar para sempre')
@@ -5037,7 +5111,7 @@ function linkBonito(url){
   if((host==='x.com'||host==='twitter.com') && segs.length===1 && /^[A-Za-z0-9_]{1,15}$/.test(segs[0]))
     return {href:'https://x.com/'+segs[0], rotulo:'@'+segs[0], rede:'X'};
   let rot=host+(segs.length? '/'+segs.join('/') : '');
-  try{ rot=decodeURIComponent(rot); }catch(e){}
+  try{ rot=decodeURIComponent(rot); }catch(e){ errAnota(e,'L5083') }
   return {href:u.href, rotulo:rot, rede:null};
 }
 function linkEl(url){
@@ -5408,7 +5482,7 @@ const DUELO = {
   async aceitar(d){
     if(S.ativo && S.ativo.duelo!==d.id){ UI.toast('Conclua ou descarte o treino atual antes de entrar no duelo'); return; }
     // confere a situacao ATUAL no servidor (o cartao do convite pode ser velho: duelo ja cancelado ou encerrado)
-    try{ const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f; else if(f===null && navigator.onLine){ UI.toast('Esse desafio não existe mais'); DUELO.verConvites(true); return; } }catch(e){}
+    try{ const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f; else if(f===null && navigator.onLine){ UI.toast('Esse desafio não existe mais'); DUELO.verConvites(true); return; } }catch(e){ errAnota(e,'L5454') }
     if(!DUELO.podeEntrar(d)){ UI.toast(d.status==='cancelado'? 'Esse desafio foi cancelado' : (d.status==='fim'? 'Esse desafio já terminou' : 'Esse desafio não está mais disponível')); DUELO.verConvites(true); return; }
     if(d.status==='convite'){ NET.agenda('/duelos/'+d.id+'/status', 'ativo'); NET.agenda('/duelos/'+d.id+'/inicio', agora()); d.status='ativo'; d.inicio=agora(); }
     DUELO.conecta(d.id, d);
@@ -5437,7 +5511,7 @@ const DUELO = {
       EXFOTO.busca(dono, id).then(f=>{
         const cc=S.custom[id]; if(!f || !cc || cc.foto) return;
         cc.foto=f; salva('custom');
-        try{ if(UI.telaAtual==='ativo' && !temFocoDeTexto()) UI.refaz(); }catch(_){}
+        try{ if(UI.telaAtual==='ativo' && !temFocoDeTexto()) UI.refaz(); }catch(_){ errAnota(_,'L5483') }
       });
     }
   },
@@ -5454,10 +5528,10 @@ const DUELO = {
       const nt=DUELO.notasDoDono(d);
       if(nt.porChave) S.ativo.ex.forEach(e=>{ if(nt.porChave[e._dk]) e.notas=nt.porChave[e._dk]; });
       else if(nt.porEx){ const usados=new Set(); S.ativo.ex.forEach(e=>{ const i=nt.porEx.findIndex((q,ix)=>!usados.has(ix) && q && q.exId===e.exId && q.notas); if(i>=0){ usados.add(i); e.notas=nt.porEx[i].notas; } }); }
-    }catch(_){}
-    CORE.marcaEstreias(S.ativo); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){}
+    }catch(_){ errAnota(_,'L5500') }
+    CORE.marcaEstreias(S.ativo); salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L5501') }
     DUELO.publica(); DUELO.estado('treinando');
-    VIB.v(30); setTimeout(()=>{ try{ TELA.pega(); }catch(e){} }, 50);
+    VIB.v(30); setTimeout(()=>{ try{ TELA.pega(); }catch(e){ errAnota(e,'L5503') } }, 50);
     UI.pilha=[]; UI.vai('ativo',null,false);
     return true;
   },
@@ -5468,7 +5542,7 @@ const DUELO = {
       if(Object.keys(m||{}).length) tb[id]={m, ts:agora()};
       Object.keys(tb).sort((a,b)=>(tb[b].ts||0)-(tb[a].ts||0)).slice(20).forEach(x=>delete tb[x]);
       LS.set('dueloNotas', tb);
-    }catch(e){}
+    }catch(e){ errAnota(e,'L5514') }
   },
   notasDoDono(d){
     if(!d || d.por!==DUELO.meu()) return {};
@@ -5698,7 +5772,7 @@ const DUELO = {
       const v=((d.j||{})[u]||{}).v;
       if(!v || DUELO.versaoMenor(v, '11.37.0')){ A._avisoVer[u]=1; DUELO._avisos.push('⚠️ '+nomeDe(u)+' está com o app desatualizado: peça pra atualizar, senão a ficha fica diferente'); }
     });
-    if(DUELO._avisos.length){ const av=DUELO._avisos.splice(0); setTimeout(()=>{ try{ UI.toast(av.slice(0,2).join(' · ')); }catch(_){} }, 0); }
+    if(DUELO._avisos.length){ const av=DUELO._avisos.splice(0); setTimeout(()=>{ try{ UI.toast(av.slice(0,2).join(' · ')); }catch(_){ errAnota(_,'L5744') } }, 0); }
     if(mudou){ salva('ativo'); DUELO.publica(); }
     return mudou;
   },
@@ -5712,7 +5786,7 @@ const DUELO = {
     if(!alvo || alvo===e.exId) return;
     DUELO.garanteEx(alvo, cx, u);
     const deEx=e.exId, modo=substituiExAtivo(e, alvo); if(!modo) return;
-    try{ PICKER.registraTroca(deEx, alvo); }catch(_){}
+    try{ PICKER.registraTroca(deEx, alvo); }catch(_){ errAnota(_,'L5758') }
     salva('ativo'); DUELO.reconcilia(); DUELO.publica(); UI.refaz();
     UI.toast('Trocado ✓', true);
   },
@@ -5724,7 +5798,7 @@ const DUELO = {
     if(salvo){
       salvo.duelo=id;
       if(d && d.id===id) salvo.dueloInfo={id, modo:d.modo, com:DUELO.outros(d).filter(u=>DUELO.entrou(d,u) || DUELO.estadoDe(d,u)===null).map(u=>DUELO.nome(d,u))};
-      try{ salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo); }catch(e){}
+      try{ salva('treinos'); NET.agenda('treinos/'+salvo.id, salvo); }catch(e){ errAnota(e,'L5770') }
     }
     if(d && d.id===id){
       d.j=d.j||{}; (d.j[DUELO.meu()]=d.j[DUELO.meu()]||{}).estado=como;
@@ -5771,10 +5845,10 @@ const DUELO = {
   anotaNoTreino(d, r){
     const t=Object.values(S.treinos||{}).find(t=>t && t.duelo===d.id && !t.apagado); if(!t) return;
     const info={id:d.id, modo:d.modo, com:DUELO.outros(d).filter(u=>DUELO.entrou(d,u)).map(u=>DUELO.nome(d,u)), res:DUELO.textoRes(d, Object.assign({}, r), DUELO.meu())};
-    try{ info.pub=DUELO.resumoPub(d, DUELO.calcula(d)); }catch(_){}    // quem segue tambem ve o duelo pelo feed
+    try{ info.pub=DUELO.resumoPub(d, DUELO.calcula(d)); }catch(_){ errAnota(_,'L5817') }    // quem segue tambem ve o duelo pelo feed
     if(JSON.stringify(t.dueloInfo||{})===JSON.stringify(info)) return;
     t.dueloInfo=info; t.atualizado=agora(); salva('treinos'); NET.agenda('treinos/'+t.id, t);
-    try{ if(S.perfil?.user && S.auth && treinoPublicado(t)) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); }catch(e){}
+    try{ if(S.perfil?.user && S.auth && treinoPublicado(t)) NET.agenda('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); }catch(e){ errAnota(e,'L5820') }
   },
 
   /* ---------------- tempo real ---------------- */
@@ -5793,13 +5867,13 @@ const DUELO = {
       const es=new EventSource(FB.db+'/duelos/'+id+'.json?auth='+encodeURIComponent(tk));
       es.addEventListener('put', ev=>DUELO.evento(ev,'put'));
       es.addEventListener('patch', ev=>DUELO.evento(ev,'patch'));
-      const refaz=()=>{ try{ es.close(); }catch(e){} if(DUELO.es===es){ DUELO.es=null; setTimeout(()=>{ if(DUELO.cur && DUELO.cur.id===id && !DUELO.es) DUELO.abreStream(id); }, 1500); } };
+      const refaz=()=>{ try{ es.close(); }catch(e){ errAnota(e,'L5839') } if(DUELO.es===es){ DUELO.es=null; setTimeout(()=>{ if(DUELO.cur && DUELO.cur.id===id && !DUELO.es) DUELO.abreStream(id); }, 1500); } };
       es.addEventListener('auth_revoked', refaz);
       es.addEventListener('cancel', refaz);
       DUELO.es=es;
-    }catch(e){}
+    }catch(e){ errAnota(e,'L5843') }
   },
-  desconecta(){ try{ DUELO.es && DUELO.es.close(); }catch(e){} DUELO.es=null; clearInterval(DUELO._poll); DUELO._poll=null; },
+  desconecta(){ try{ DUELO.es && DUELO.es.close(); }catch(e){ errAnota(e,'L5845') } DUELO.es=null; clearInterval(DUELO._poll); DUELO._poll=null; },
   async puxa(){
     const id=DUELO.cur && DUELO.cur.id; if(!id) return;
     const v=await NET.get('/duelos/'+id);
@@ -5832,7 +5906,7 @@ const DUELO = {
       if(d.status==='ativo' && d.a===eu && !DUELO.estadoDe(d,eu) && !DUELO.terminou(d) && UI.telaAtual==='duelo' && !S.ativo){ DUELO.comeca(d); return; }
       if(DUELO.emDuelo() && S.ativo.duelo===d.id){
         const mexeu=DUELO.reconcilia();
-        if(DUELO._reordenado){ DUELO._reordenado=false; try{ UI.toast('A ordem dos exercícios do duelo foi atualizada'); }catch(_){} }
+        if(DUELO._reordenado){ DUELO._reordenado=false; try{ UI.toast('A ordem dos exercícios do duelo foi atualizada'); }catch(_){ errAnota(_,'L5878') } }
         if(mexeu && UI.telaAtual==='ativo'){
           // so espera quem esta digitando DE VERDADE (tecla nos ultimos 2,5 s). No iPhone o campo continua com
           // foco depois de tocar num botao, e a tela so atualizava abrindo e fechando outra tela.
@@ -5843,7 +5917,7 @@ const DUELO = {
       if(DUELO.terminou(d)) DUELO.fecha(d);
       DUELO.desenha();
       if(UI.telaAtual==='duelo') UI.refaz();
-    }catch(e){ try{ console.error('duelo', e); }catch(_){} }
+    }catch(e){ try{ console.error('duelo', e); }catch(_){ errAnota(_,'L5889') } }
   },
   digitando(){ const f=document.activeElement; return !!(f && /^(INPUT|TEXTAREA)$/.test(f.tagName) && Date.now()-(DUELO._tecla||0)<2500); },
   refazTela(){ DUELO._pend=false; clearTimeout(DUELO._pendT); if(UI.telaAtual==='ativo') UI.refaz(); },
@@ -5880,7 +5954,7 @@ const DUELO = {
   },
   // treino ja salvo cujo duelo terminou depois: anota o resultado (e o feed)
   pendentes(todos){
-    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=d.resultado.v===4? d.resultado : DUELO.calcula(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){}
+    try{ (todos||[]).forEach(d=>{ if(d && d.status==='fim' && d.resultado){ const r=d.resultado.v===4? d.resultado : DUELO.calcula(d); DUELO.anotaNoTreino(d, r); } }); }catch(e){ errAnota(e,'L5926') }
   },
   async retrospecto(outro){
     const todos=await DUELO.meus(), eu=DUELO.meu(); let v=0, p=0, e=0;
@@ -5986,7 +6060,7 @@ const DUELO = {
       document.querySelectorAll('.duelo-op').forEach(el=>{
         const e=S.ativo.ex.find(q=>q._dk===el.dataset.dk); if(e) el.replaceWith(DUELO.blocoOponente(e));
       });
-    }catch(e){ try{ console.error('duelo', e); }catch(_){} }
+    }catch(e){ try{ console.error('duelo', e); }catch(_){ errAnota(_,'L6032') } }
   },
   // convites no Inicio
   cartoesInicio(){
@@ -6156,9 +6230,9 @@ const DUELO = {
     try{ await NET.putD('/duelos/'+id, nd); }catch(e){ UI.toast('Não consegui enviar a revanche. Tente de novo.'); return; }
     UI.toast('Revanche enviada ⚔️', true); DUELO.conecta(id, nd); UI.vai('duelo',{id});
   },
-  async lerChave(){ try{ DUELO.tres = (await NET.get('/config/duelo3'))===true; }catch(e){} },
+  async lerChave(){ try{ DUELO.tres = (await NET.get('/config/duelo3'))===true; }catch(e){ errAnota(e,'L6202') } },
   boot(){
-    try{ if(S.ativo && S.ativo.duelo) DUELO.conecta(S.ativo.duelo); }catch(e){}
+    try{ if(S.ativo && S.ativo.duelo) DUELO.conecta(S.ativo.duelo); }catch(e){ errAnota(e,'L6204') }
     DUELO.lerChave();
     DUELO.verConvites(true);
   }
@@ -6166,14 +6240,14 @@ const DUELO = {
 TELAS.duelo = function({id}){ DUELO.tela(id); };
 TELAS.duelos = function(){ DUELO.telaLista(); };
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState!=='visible'){ try{ DUELO.es && DUELO.es.close(); }catch(e){} DUELO.es=null; return; }
+  if(document.visibilityState!=='visible'){ try{ DUELO.es && DUELO.es.close(); }catch(e){ errAnota(e,'L6212') } DUELO.es=null; return; }
   if(DUELO.cur && (DUELO.emDuelo() || UI.telaAtual==='duelo')){ const c=DUELO.cur; DUELO.cur=null; DUELO.conecta(c.id, c.dados); }
   DUELO.verConvites(true);                         // na hora (o convite que chegou pela notificacao aparece ja)
 });
 // tocou numa notificacao com o app aberto: o service worker avisa e o app busca os convites na hora
 try{ navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', ev=>{
-  if(ev.data && ev.data.tipo==='notifClick'){ DUELO.verConvites(true); try{ if(S.ativo && S.ativo.duelo) DUELO.puxa(); }catch(_){} }
-}); }catch(e){}
+  if(ev.data && ev.data.tipo==='notifClick'){ DUELO.verConvites(true); try{ if(S.ativo && S.ativo.duelo) DUELO.puxa(); }catch(_){ errAnota(_,'L6218') } }
+}); }catch(e){ errAnota(e,'L6219') }
 document.addEventListener('focusout', ()=>DUELO.aoSairDoCampo());
 document.addEventListener('input', ()=>{ DUELO._tecla=Date.now(); }, true);
 document.addEventListener('keydown', ()=>{ DUELO._tecla=Date.now(); }, true);
@@ -6187,14 +6261,14 @@ document.addEventListener('focusin', ev=>{ if(ev.target && /^(INPUT|TEXTAREA)$/.
   substituiExAtivo=function(e, novoId){
     const ix=S.ativo? S.ativo.ex.indexOf(e) : -1;
     const r=sub0.apply(this, arguments);
-    try{ if(r==='dividido' && ix>=0 && e && e._dk){ const n=S.ativo.ex[ix+1]; if(n && !n._dk) n._dkDe=e._dk; } }catch(_){}
+    try{ if(r==='dividido' && ix>=0 && e && e._dk){ const n=S.ativo.ex[ix+1]; if(n && !n._dk) n._dkDe=e._dk; } }catch(_){ errAnota(_,'L6233') }
     return r;
   };
 })();
 (function(){
   const marca0=ATIVO.marca;
-  ATIVO.marca=function(e, s, row){ const r=marca0.apply(this, arguments); try{ DUELO.serieMudou(e, s); }catch(_){}
-    try{ if(S.ativo && S.ativo.pausaDesde && s && s.ok) ATIVO.retoma(true); }catch(_){}   // marcou serie pausado: volta a contar
+  ATIVO.marca=function(e, s, row){ const r=marca0.apply(this, arguments); try{ DUELO.serieMudou(e, s); }catch(_){ errAnota(_,'L6239') }
+    try{ if(S.ativo && S.ativo.pausaDesde && s && s.ok) ATIVO.retoma(true); }catch(_){ errAnota(_,'L6240') }   // marcou serie pausado: volta a contar
     return r; };
 })();
 
@@ -6221,7 +6295,7 @@ const VOLTAR = {
   },
   sync(){
     if(VOLTAR.semHistorico || VOLTAR.guarda || !VOLTAR.temAlgo()) return;
-    try{ history.pushState({fxVoltar:1}, ''); VOLTAR.guarda=true; }catch(e){}
+    try{ history.pushState({fxVoltar:1}, ''); VOLTAR.guarda=true; }catch(e){ errAnota(e,'L6267') }
   },
   aoVoltar(){
     VOLTAR.guarda=false;
@@ -6239,15 +6313,15 @@ const VOLTAR = {
       else if(VOLTAR.folhaAberta()){ if(!UI._folhaObrigatoria) UI.fechaFolha(); }
       else if(UI.pilha.length) UI.volta();
       else if(UI.telaAtual && UI.telaAtual!=='inicio') UI.vai('inicio', null, false);   // Treino/Perfil/treino em andamento -> Inicio
-    }catch(e){}
+    }catch(e){ errAnota(e,'L6285') }
   },
   // Safari (fora do app instalado): obriga a pintar a tela de novo depois do gesto, pra nao ficar a "foto"
   repinta(){
     try{
       const r=document.documentElement;
       requestAnimationFrame(()=>{ r.style.opacity='0.999'; requestAnimationFrame(()=>{ r.style.opacity=''; }); });
-      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){} }, 60);
-    }catch(e){}
+      setTimeout(()=>{ try{ recuperaViewport(true); }catch(e){ errAnota(e,'L6292') } }, 60);
+    }catch(e){ errAnota(e,'L6293') }
   }
 };
 window.addEventListener('popstate', ()=>VOLTAR.aoVoltar());
@@ -6281,7 +6355,7 @@ setTimeout(()=>{ try{
   [FOLHA2, FOTOVIEW].forEach(o=>['abre','fecha'].forEach(n=>{ const f=o[n]; if(typeof f!=='function') return;
     o[n]=function(){ const r=f.apply(this, arguments); setTimeout(VOLTAR.sync, 0); return r; }; }));
   VOLTAR.sync();
-}catch(e){} }, 0);
+}catch(e){ errAnota(e,'L6327') } }, 0);
 
 TELAS.perfil = function(){
   UI.topo(h('div',{class:'topo-tit'},'Perfil'),
@@ -6708,10 +6782,10 @@ const SHARE = {
           g=c.createLinearGradient(0,H*0.4,0,H); g.addColorStop(0,'rgba(8,9,12,0)'); g.addColorStop(1,'rgba(8,9,12,.94)');
           c.fillStyle=g; c.fillRect(0,H*0.4,W,H*0.6);
         }
-      }catch(e){}
+      }catch(e){ errAnota(e,'L6754') }
     }
     if(!temFundoFoto){
-      let bg=null; try{ bg=await SHARE._img('share-bg.webp'); }catch(e){}
+      let bg=null; try{ bg=await SHARE._img('share-bg.webp'); }catch(e){ errAnota(e,'L6757') }
       if(bg){ const r=Math.max(W/bg.width, H/bg.height); c.drawImage(bg,(W-bg.width*r)/2,(H-bg.height*r)/2,bg.width*r,bg.height*r); }
       else{
         const g=c.createLinearGradient(0,0,W,H); g.addColorStop(0,'#15161B'); g.addColorStop(.55,'#0E0F12'); g.addColorStop(1,'#180D06');
@@ -6794,7 +6868,7 @@ const SHARE = {
     const prev=h('img',{alt:'Prévia do cartão do treino',style:'width:58%;max-width:230px;display:block;margin:4px auto 14px;border-radius:14px;border:1px solid var(--line)'});
     let vivo=true, timer=null;
     const regera=()=>{ clearTimeout(timer); timer=setTimeout(async()=>{
-      try{ const cv=await SHARE.card(t,o); if(vivo) prev.src=cv.toDataURL('image/jpeg',0.6); }catch(e){}
+      try{ const cv=await SHARE.card(t,o); if(vivo) prev.src=cv.toDataURL('image/jpeg',0.6); }catch(e){ errAnota(e,'L6840') }
     }, 60); };
     const chip=(rot,k,cond=true)=>!cond?null:h('button',{class:'chip'+(o[k]?' on':''),onclick:function(){ o[k]=o[k]?0:1; this.classList.toggle('on',!!o[k]); S.cfg.shareOpts=o; salva('cfg'); regera(); }},rot);
     regera();
@@ -6977,7 +7051,7 @@ const SYNCATIVO = {
             UI.toast(guardou? 'Guardado no seu histórico ✓' : 'Treino descartado', true);
             UI.refaz();
           }}, SYNCATIVO.temTrabalho(remoto)? 'Encerrar e guardar no histórico' : 'Descartar')]);
-      }catch(e){} }, 900);
+      }catch(e){ errAnota(e,'L7023') } }, 900);
       return;
     }
 
@@ -6999,7 +7073,7 @@ const SYNCATIVO = {
           UI.fechaFolha(); SYNCATIVO.arquiva(local); SYNCATIVO.assume(remoto);
           UI.pilha=[]; UI.vai('ativo',null,false);
         }}, 'Continuar o do '+ondeR)]);
-    }catch(e){} }, 900);
+    }catch(e){ errAnota(e,'L7045') } }, 900);
   }
 };
 
@@ -7145,7 +7219,7 @@ function reordenar(lista, aoCommit, opts){
       alca.addEventListener('pointerdown', ev=>{
         ev.preventDefault();
         // o iOS pode ter iniciado uma seleção antes do CSS agir: desfaz
-        try{ const sl=window.getSelection&&window.getSelection(); if(sl&&sl.removeAllRanges) sl.removeAllRanges(); }catch(e){}
+        try{ const sl=window.getSelection&&window.getSelection(); if(sl&&sl.removeAllRanges) sl.removeAllRanges(); }catch(e){ errAnota(e,'L7191') }
         document.body.classList.add('arrastando');
         const iIni=rows.indexOf(row); let cur=iIni;
         const y0=ev.clientY;
@@ -7413,7 +7487,7 @@ function anelSVG(pct, tam){
     '<svg width="'+tam+'" height="'+tam+'"><circle cx="'+tam/2+'" cy="'+tam/2+'" r="'+r+'" fill="none" stroke="var(--surf3)" stroke-width="7"/>'+
     '<circle cx="'+tam/2+'" cy="'+tam/2+'" r="'+r+'" fill="none" stroke="var(--brand)" stroke-width="7" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+tam/2+' '+tam/2+')"/></svg>'});
 }
-function cardSemana(){
+function cardSemana(semConvite){
   const meta=S.cfg.metaSem||0;
   const n=treinosNaSemana(inicioSemana(agora()));
   const px=proximaRotina();
@@ -7427,15 +7501,17 @@ function cardSemana(){
       h('div',{class:'b800',style:'font-size:15.5px'}, n>=meta? 'Meta da semana batida! 💪' : (meta-n)+(meta-n===1?' treino':' treinos')+' pra bater a meta'),
       h('div',{class:'f13 mut',style:'margin-top:3px'}, st>0? ('🔥 '+st+(st===1?' semana seguida':' semanas seguidas')) : 'Comece sua sequência esta semana'),
       h('button',{class:'f12',style:'background:none;border:1px solid var(--line);border-radius:8px;color:var(--tx2);padding:4px 10px;margin-top:4px;min-height:44px;text-align:left;cursor:pointer;display:inline-flex;align-items:center;gap:5px',onclick:()=>METAUI.folha()},'✎ ajustar meta')));
+  } else if(semConvite){
+    if(!px || S.ativo) return null;           // outro destaque no topo: so o proximo treino
   } else {
     topo.append(h('div',{style:'font-size:30px'},'🎯'), h('div',{class:'esp'},
       h('div',{class:'b800',style:'font-size:15.5px'},'Defina uma meta semanal'),
       h('div',{class:'f13 mut',style:'margin-top:2px'},'Anel de progresso e sequência de semanas.')),
       h('button',{class:'btn btn-mini btn-p',style:'width:auto;padding:9px 14px',onclick:()=>METAUI.folha()},'Definir'));
   }
-  card.append(topo);
+  if(topo.childNodes.length) card.append(topo);
   if(px && !S.ativo){
-    card.append(h('div',{style:'border-top:1px solid var(--surf2);margin:12px 0 10px'}));
+    if(topo.childNodes.length) card.append(h('div',{style:'border-top:1px solid var(--surf2);margin:12px 0 10px'}));
     card.append(h('div',{class:'linha'},
       h('div',{class:'esp',style:'min-width:0'},
         h('div',{class:'f12 mut2'},'Próximo treino'),
@@ -7452,7 +7528,9 @@ TELAS.inicio = function(){
     h('button',{class:'btn btn-mini',style:'width:46px;height:44px','aria-label':'Amigos',onclick:()=>AMIGOS.folha(),
       html:'<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>'}));
   const m=$('#main'); m.innerHTML='';
-  try{ const dc=DUELO.cartoesInicio(); if(dc) m.appendChild(dc); }catch(e){}
+  try{ const dc=DUELO.cartoesInicio(); if(dc) m.appendChild(dc); }catch(e){ errAnota(e,'L7500') }
+  // um destaque por vez no topo: relatorio do mes > "Hora de evoluir?" > "Defina uma meta" (o proximo treino aparece sempre)
+  let destaque=false;
   const hj=new Date();
   if(hj.getDate()<=5){
     const py=hj.getMonth()===0? hj.getFullYear()-1 : hj.getFullYear();
@@ -7467,23 +7545,30 @@ TELAS.inicio = function(){
           h('div',{class:'esp'},
             h('div',{class:'b800',style:'font-size:15.5px'},'Seu relatório de '+nomeMes+' está pronto'),
             h('div',{class:'f13 mut',style:'margin-top:2px'},'Treinos, volume, recordes e divisão muscular do mês.')),
-          h('button',{class:'sug-x',style:'position:static;padding:6px','aria-label':'Dispensar aviso do relatório mensal',onclick:ev=>{ ev.stopPropagation(); marcaVisto(); ban.remove(); }},'✕')),
+          h('button',{class:'sug-x',style:'position:relative;padding:6px','aria-label':'Dispensar aviso do relatório mensal',onclick:ev=>{ ev.stopPropagation(); marcaVisto(); ban.remove(); }},'✕')),
         h('button',{class:'btn btn-p',style:'margin-top:10px',onclick:()=>{ REL.y=py; REL.m=pm; marcaVisto(); UI.vai('relatorioMensal'); }},'Ver relatório'));
-      m.appendChild(ban);
+      m.appendChild(ban); destaque=true;
     }
   }
   if(S.ativo){
     m.appendChild(h('button',{class:'btn btn-ok',style:'margin-bottom:12px',onclick:()=>UI.vai('ativo')},
       'Retomar treino em andamento · '+CORE.fmtDur(ATIVO.decorridoMs()/1000)+(S.ativo.pausaDesde?' · pausado':'')+(S.ativo.retro?' · 📅 '+ATIVO.diaRetro():'')));
   }
-  m.appendChild(cardSemana());
-  const _pg=PROGSUG.banner(); if(_pg) m.appendChild(_pg);
+  const _pg = destaque? null : PROGSUG.banner(); if(_pg) destaque=true;
+  const _cs=cardSemana(destaque); if(_cs) m.appendChild(_cs);
+  if(_pg) m.appendChild(_pg);
   const box=h('div',{});
   m.appendChild(box);
   desenhaFeed(box, false); NOTIF.atualizaDot();
   FEED.carrega().then(()=>{ if(UI.telaAtual==='inicio' && box.isConnected){ desenhaFeed(box, true); NOTIF.atualizaDot(); } });
 };
 function desenhaFeed(box, pronto){
+  // redesenhar (ex.: os dados dos amigos chegaram) mantem no mesmo lugar o cartao que estava no topo da tela;
+  // antes, o cartao de sugestoes entrando acima empurrava o feed e a pessoa perdia o ponto
+  // posicoes pela estrutura da pagina (offsetTop), imunes a animacao de entrada da tela
+  const topoDoc=el=>{ let y=0; while(el){ y+=el.offsetTop||0; el=el.offsetParent; } return y; };
+  let anc=null;
+  try{ const c=[...box.querySelectorAll('[data-fid]')].find(el=>el.getBoundingClientRect().bottom>90); if(c) anc={id:c.getAttribute('data-fid'), rel:topoDoc(c)-(window.scrollY||0)}; }catch(e){ errAnota(e,'feed-ancora') }
   box.innerHTML='';
   FEED.hidrata();
   const its=FEED.itens();
@@ -7498,8 +7583,22 @@ function desenhaFeed(box, pronto){
     return;
   }
   const rk=rankMiniCard(); if(rk) box.appendChild(rk);
-  its.forEach((i,ix)=>{ box.appendChild(cartaoFeed(i)); if(ix===0 && sug) box.appendChild(sug); });
-  if(!its.length && sug) box.appendChild(sug);
+  // os cartoes entram em lotes, conforme a rolagem (antes: ~80 cartoes e 5.700 elementos de uma vez).
+  // Desenha de cara o suficiente pra cobrir a posicao que o "voltar" vai restaurar.
+  const LOTE=12, sent=h('div',{class:'feed-sent','aria-hidden':'true',style:'height:1px'});
+  box.appendChild(sent);
+  let ate=0, io=null;
+  const lote=()=>{ const fim=Math.min(its.length, ate+LOTE);
+    for(let ix=ate; ix<fim; ix++){ box.insertBefore(cartaoFeed(its[ix]), sent); if(ix===0 && sug) box.insertBefore(sug, sent); }
+    ate=fim; if(ate>=its.length){ sent.remove(); if(io) io.disconnect(); } };
+  const alvo=Math.max(UI._rolagemAlvo||0, window.scrollY||0) + 2*window.innerHeight;
+  lote();
+  while(ate<its.length && box.isConnected && (box.getBoundingClientRect().bottom + (window.scrollY||0)) < alvo) lote();
+  const segue=()=>{ if(ate<its.length && sent.isConnected && sent.getBoundingClientRect().top < window.innerHeight+900){ lote(); requestAnimationFrame(segue); } };
+  if(ate<its.length){ try{ io=new IntersectionObserver(es=>{ if(es.some(x=>x.isIntersecting)) segue(); }, {rootMargin:'900px 0px'}); io.observe(sent); }catch(e){ while(ate<its.length) lote(); } }
+  FEED._lotes={total:its.length, desenhados:()=>ate};
+  if(anc){ try{ const el=[...box.querySelectorAll('[data-fid]')].find(x=>x.getAttribute('data-fid')===anc.id);
+    if(el){ const alvoY=Math.max(0, topoDoc(el)-anc.rel); if(Math.abs(alvoY-(window.scrollY||0))>2) window.scrollTo(0, alvoY); } }catch(e){ errAnota(e,'feed-ancora') } }
 }
 function sugeridosCard(){
   if(!FEED.perfis || !S.auth) return null;
@@ -7514,7 +7613,7 @@ function sugeridosCard(){
       h('button',{class:'btn btn-mini',style:'width:auto;padding:6px 12px',onclick:()=>{
         const url='https://chrismello0211.github.io/treino-gym/';
         if(navigator.share) navigator.share({title:'ForgeX', text:'Bora treinar junto no ForgeX', url}).catch(()=>{});
-        else { try{ navigator.clipboard.writeText(url); UI.toast('Link copiado'); }catch(e){} }
+        else { try{ navigator.clipboard.writeText(url); UI.toast('Link copiado'); }catch(e){ errAnota(e,'L7577') } }
       }},'Convidar amigos')),
     scroll);
   cand.forEach(([u,p])=>{
@@ -7541,7 +7640,7 @@ function cartaoFeed(i){
   const user=i.meu? S.perfil?.user : t.user;
   const exs=i.meu? (t.ex||[]).map(e=>({n:BIB.ex(e.exId).n, s:e.series.length, id:e.exId}))
               : (t.ex||[]).map(e=> (e.id&&BIB.porId[e.id])? Object.assign({}, e, {n:BIB.porId[e.id].n}) : e);
-  const card=h('div',{class:'card'});
+  const card=h('div',{class:'card','data-fid':String((i.dono||'')+':'+(i.id||''))});
   const fotoCab=i.meu? S.perfil?.foto : (((FEED.perfis||{})[i.dono])||{}).foto;
   const linhaEx=e=>h('div',{class:'feed-ex'}, EXFOTO.thumb(e.id, i.meu? null : i.dono, e.n),
     h('div',{style:'min-width:0'},
@@ -7933,7 +8032,7 @@ function abreRotinaPub(alvo, r){
     h('button',{class:'btn btn-p',onclick:async function(){
       this.disabled=true; this.textContent='Copiando\u2026';
       // acervo do dono: e de la que vem foto e grupos secundarios do custom
-      let acervo={}; try{ acervo = await NET.get('/exsPub/'+alvo) || {}; }catch(e){}
+      let acervo={}; try{ acervo = await NET.get('/exsPub/'+alvo) || {}; }catch(e){ errAnota(e,'L7996') }
       const acervoPorNome={};
       Object.values(acervo).forEach(x=>{ if(x && x.n) acervoPorNome[BIB.norm(x.n)]=x; });
       const nova={ id:uid(), titulo:r.titulo, pasta:'', criado:agora(), atualizado:agora(),
@@ -8004,7 +8103,7 @@ const PRSPUB = {
     });
     return out;
   },
-  publica(){ if(!PRSPUB.pode()) return; clearTimeout(PRSPUB._t); PRSPUB._t=setTimeout(()=>{ try{ NET.agenda('/rotinasPub/'+S.auth.uid+'/_prs', PRSPUB.monta()); }catch(e){} }, 1500); }
+  publica(){ if(!PRSPUB.pode()) return; clearTimeout(PRSPUB._t); PRSPUB._t=setTimeout(()=>{ try{ NET.agenda('/rotinasPub/'+S.auth.uid+'/_prs', PRSPUB.monta()); }catch(e){ errAnota(e,'L8067') } }, 1500); }
 };
 TELAS.comparaEx = function({uid:alvo, nome}){
   UI.topo(UI.btVoltar(), h('div',{class:'topo-tit',style:'font-size:19px'},'Comparação'));
@@ -8706,7 +8805,7 @@ TELAS.relatorioMensal = function(){
       const txt='Meu mês no ForgeX ('+nome+'): '+A.t+' treinos, '+Math.round(A.dur/3600)+'h, '+CORE.fmtKg(A.vol)+' kg movidos, '+A.rec+' recordes.';
       const url='https://chrismello0211.github.io/treino-gym/';
       if(navigator.share) navigator.share({title:'ForgeX', text:txt, url}).catch(()=>{});
-      else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){} }
+      else { try{ navigator.clipboard.writeText(txt+' '+url); UI.toast('Copiado'); }catch(e){ errAnota(e,'L8769') } }
     }},'Compartilhar meu mês')));
 };
 
@@ -8758,7 +8857,7 @@ const FOTOFIT = {
         if(menor && menor.length<FOTOFIT.MAX){ it.val=menor; it._recomp=1; it.tent=0; delete it.adiado; mudou=true; }
       }
       if(mudou){ salva('fila'); NET.despacha(); }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L8821') }
   }
 };
 // iPhone: depois que o teclado fecha, o Safari as vezes deixa o que e' preso na base da tela "levantado" na
@@ -8782,9 +8881,9 @@ const BASEFIX = {
       const novo=(iphoneApp && !temFocoDeTexto() && lift>150 && lift<700)? lift : 0;
       if(novo!==BASEFIX.lift){
         BASEFIX.lift=novo; document.documentElement.style.setProperty('--lift', novo+'px');
-        if(novo){ try{ recuperaViewport(true); }catch(e){} }
+        if(novo){ try{ recuperaViewport(true); }catch(e){ errAnota(e,'L8845') } }
       }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L8847') }
   }
 };
 function recuperaViewport(forcado){
@@ -8801,7 +8900,7 @@ function recuperaViewport(forcado){
     try{
       document.body.classList.remove('kb');
       de.style.setProperty('--kb','0px');
-    }catch(e){}
+    }catch(e){ errAnota(e,'L8864') }
   });
 }
 (function(){
@@ -8836,12 +8935,12 @@ window.addEventListener('orientationchange', ()=>setTimeout(()=>recuperaViewport
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(()=>recuperaViewport(true), 150); });
 window.addEventListener('pageshow', ev=>{
   setTimeout(()=>recuperaViewport(true), 100);
-  if(ev && ev.persisted){ try{ UI.refaz(); }catch(e){} }   // voltou do cache do navegador: desenha de novo
+  if(ev && ev.persisted){ try{ UI.refaz(); }catch(e){ errAnota(e,'L8899') } }   // voltou do cache do navegador: desenha de novo
 });
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', ev=>{
     const d=ev.data||{};
-    if(d && d.tipo==='push-fg' && d.title && d.k!=='descanso'){ try{ UI.toast(d.title, true); }catch(e){} }
+    if(d && d.tipo==='push-fg' && d.title && d.k!=='descanso'){ try{ UI.toast(d.title, true); }catch(e){ errAnota(e,'L8904') } }
   });
 }
 function carregaScript(u){ return new Promise((res,rej)=>{ if(document.querySelector('script[src="'+u+'"]')) return res(); const s=document.createElement('script'); s.src=u; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
@@ -8849,7 +8948,7 @@ const EXSVIEW = {
   async folha(alvo, perfil){
     UI.folha('Exercícios de '+((perfil&&(perfil.nome||perfil.user))||'atleta'), [h('div',{class:'vazio'},'Carregando…')]);
     let exs={};
-    try{ exs = await NET.get('/exsPub/'+alvo) || {}; }catch(e){}
+    try{ exs = await NET.get('/exsPub/'+alvo) || {}; }catch(e){ errAnota(e,'L8912') }
     const lista = Object.values(exs).filter(x=>x && x.n).sort((a,b)=>(a.n||'').localeCompare(b.n||'','pt'));
     if(!lista.length){
       UI.folha('Exercícios de '+((perfil&&(perfil.nome||perfil.user))||'atleta'),
@@ -8926,7 +9025,7 @@ const EXSPUB = {
   },
   publicaUm(c){
     if(c.ocultoPub){ EXSPUB.remove(c.id); return; }
-    const pub={ id:c.id, n:c.n, g:c.g, e:c.e||'outro', t:c.t, atualizado:c.atualizado||agora() };
+    const pub={ id:c.id, n:String(c.n||'').slice(0,120), g:c.g, e:c.e||'outro', t:c.t, atualizado:c.atualizado||agora() };
     if(c.gs) pub.gs=c.gs;
     const f=c.foto || fotoIrma(c);                 // sem foto propria: a do irmao com o mesmo nome
     if(f) pub.foto=f;
@@ -8948,13 +9047,13 @@ const RESTAURA = {
     try{
       await NET.despacha();
       // 1) username -> aponta pro meu uid
-      try{ await NET.putD('/usernames/'+S.perfil.user, S.auth.uid); n++; }catch(e){}
+      try{ await NET.putD('/usernames/'+S.perfil.user, S.auth.uid); n++; }catch(e){ errAnota(e,'L9011') }
       // 2) perfil público
-      try{ await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); n++; }catch(e){}
+      try{ await NET.putD('/perfis/'+S.auth.uid, {nome:S.perfil.nome||'Atleta', user:S.perfil.user, foto:S.perfil.foto||null, bio:(S.perfil.bio||'').slice(0,150)||null, link:S.perfil.link||null, atualizado:agora()}); n++; }catch(e){ errAnota(e,'L9013') }
       // 3) feed: republica meus treinos (com foto local quando houver)
       const ts=Object.values(S.treinos).filter(t=>treinoPublicado(t)).sort((a,b)=>b.inicio-a.inicio).slice(0,60);
       for(const t of ts){
-        try{ await NET.putD('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); n++; }catch(e){}
+        try{ await NET.putD('/feed/'+S.auth.uid+'/'+t.id, resumoTreino(t)); n++; }catch(e){ errAnota(e,'L9017') }
       }
       // 4) seguidores/seguindo: reescreve a partir da minha lista local
       const seg=Object.entries(S.social.seguindo||{});
@@ -8963,18 +9062,18 @@ const RESTAURA = {
           await NET.putD('/seguindo/'+S.auth.uid+'/'+uid2, {user:p.user||'', nome:p.nome||'', ts:agora()});
           await NET.putD('/seguidores/'+uid2+'/'+S.auth.uid, true);
           n++;
-        }catch(e){}
+        }catch(e){ errAnota(e,'L9026') }
       }
       // 5) exercícios personalizados visíveis no perfil
-      try{ EXSPUB.sincronizaTodos(); }catch(e){}
+      try{ EXSPUB.sincronizaTodos(); }catch(e){ errAnota(e,'L9029') }
       // 6) fotos de progresso: migra as do formato antigo e reenvia as fichas de data
       try{
         n += await FPROG.migra();
-        for(const [id,mm] of Object.entries(S.fotosProg||{})){ if(mm && !mm.b64){ try{ await NET.putD('fotosProg/'+id, mm); n++; }catch(e){} } }
-      }catch(e){}
+        for(const [id,mm] of Object.entries(S.fotosProg||{})){ if(mm && !mm.b64){ try{ await NET.putD('fotosProg/'+id, mm); n++; }catch(e){ errAnota(e,'L9033') } } }
+      }catch(e){ errAnota(e,'L9034') }
       // 7) rotinas públicas
-      try{ if(S.cfg.rotPub!==false) ROTPUB.syncTudo(); }catch(e){}
-      try{ await FEED.carrega(); }catch(e){}
+      try{ if(S.cfg.rotPub!==false) ROTPUB.syncTudo(); }catch(e){ errAnota(e,'L9036') }
+      try{ await FEED.carrega(); }catch(e){ errAnota(e,'L9037') }
       if(!opts.silencioso){
         if(typeof UI.fechaFolha==='function') UI.fechaFolha();
         UI.toast(S.fila.length? ('Sincronizado. Pendências: '+S.fila.length) : 'Tudo sincronizado ✓', !S.fila.length);
@@ -9031,8 +9130,8 @@ const MOD = {
     NET.agenda('bloq/'+alvo, MOD.lista()[alvo]);
     if(S.social.seguindo && S.social.seguindo[alvo]){
       delete S.social.seguindo[alvo]; salva('social');
-      try{ await NET.putD('/seguindo/'+S.auth.uid+'/'+alvo, null); }catch(e){}
-      try{ await NET.putD('/seguidores/'+alvo+'/'+S.auth.uid, null); }catch(e){}
+      try{ await NET.putD('/seguindo/'+S.auth.uid+'/'+alvo, null); }catch(e){ errAnota(e,'L9094') }
+      try{ await NET.putD('/seguidores/'+alvo+'/'+S.auth.uid, null); }catch(e){ errAnota(e,'L9095') }
     }
     delete FEED.amigos[alvo]; FEED.salvaCache();
   },
@@ -9118,7 +9217,7 @@ const TERMOS = {
       h('button',{class:'btn btn-p',onclick:()=>{
         TERMOS.marca(); UI.fechaFolha(true);
         if(!UI.telaAtual) UI.vai(S.ativo?'ativo':'inicio',null,false);
-        setTimeout(()=>{ try{ if(NOVIDADES.deveMostrar()) NOVIDADES.folha(); }catch(e){} },500);
+        setTimeout(()=>{ try{ if(NOVIDADES.deveMostrar()) NOVIDADES.folha(); }catch(e){ errAnota(e,'L9181') } },500);
       }},'Li e concordo')],null,null,{obrigatoria:true});
   }
 };
@@ -9144,7 +9243,7 @@ const ROTFIM = {
     });
     rot.atualizado=agora();
     S.rotinas[rot.id]=rot; salva('rotinas'); NET.agenda('rotinas/'+rot.id, rot);
-    try{ ROTPUB.envia(rot); }catch(e){}
+    try{ ROTPUB.envia(rot); }catch(e){ errAnota(e,'L9207') }
   },
   oferece(t){
     const rot = t.rid && S.rotinas[t.rid];
@@ -9201,7 +9300,7 @@ const FALA = {
   },
   async caixa(){
     UI.folha('Caixa de entrada',[h('div',{class:'f13 mut',style:'padding:10px 2px'},'Carregando\u2026')]);
-    let v=null; try{ v=await NET.get('/feedback'); }catch(e){}
+    let v=null; try{ v=await NET.get('/feedback'); }catch(e){ errAnota(e,'L9264') }
     const arr=Object.entries(v||{}).map(([id,f])=>Object.assign({id},f)).sort((a,b)=>(b.ts||0)-(a.ts||0));
     const ROT={sugestao:'Sugest\u00e3o', bug:'Problema', outro:'Outro'};
     const COR={sugestao:'var(--azul)', bug:'var(--err)', outro:'var(--tx3)'};
@@ -9279,8 +9378,8 @@ const PUSH = {
   },
   async desativa(){
     const tok=PUSHDEV.tok();
-    try{ if(tok && S.auth) await NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, null); }catch(e){}
-    try{ const m=await PUSH.sdk(); await m.deleteToken(); }catch(e){}
+    try{ if(tok && S.auth) await NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, null); }catch(e){ errAnota(e,'L9342') }
+    try{ const m=await PUSH.sdk(); await m.deleteToken(); }catch(e){ errAnota(e,'L9343') }
     PUSHDEV.set({on:0});
     UI.toast('Notificações desativadas', true); UI.refaz();
   },
@@ -9298,7 +9397,7 @@ const PUSH = {
       PUSHDEV.set({on:1, tok});
       // registra SEMPRE: se outro aparelho apagou este token por engano, conserta sozinho
       NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+tok, {ts:agora(), ua:(navigator.userAgent||'').slice(0,80)}).catch(()=>{});
-    }catch(e){}
+    }catch(e){ errAnota(e,'L9361') }
   }
 };
 async function autocuraNuvem(){
@@ -9326,7 +9425,7 @@ async function autocuraNuvem(){
         setTimeout(()=>UI.toast('Dados sincronizados com a nuvem', true), 400);
       }
     }
-  }catch(e){}
+  }catch(e){ errAnota(e,'L9389') }
 }
 // treino apontando pra exercicio que nao existe (importacao que veio pela
 // metade): recria a partir do id, que guarda o nome.
@@ -9389,7 +9488,7 @@ function recuperaExsOrfaos(){
         h('div',{class:'f13 mut2',style:'padding:0 2px 14px;line-height:1.6'},
           'O grupo muscular foi deduzido do nome. Confira no seletor de exerc\u00edcios, filtro Meus, e ajuste o que estiver errado.'),
         h('button',{class:'btn btn-p',onclick:function(){ UI.fechaFolha(); }},'Entendi')]);
-    }catch(e){} }, 1800);
+    }catch(e){ errAnota(e,'L9452') } }, 1800);
     return n;
   }catch(e){ if(DEBUG) console.log('orfaos', e); return 0; }
 }
@@ -9451,7 +9550,7 @@ function reparaPRsFantasma(){
         h('div',{class:'f13 mut2',style:'padding:0 2px 14px;line-height:1.6'},
           tocados.slice(0,8).map(ex=>BIB.ex(ex).n).join(', ')+(tocados.length>8?'\u2026':'')),
         h('button',{class:'btn btn-p',onclick:()=>UI.fechaFolha()},'Entendi')]);
-    }catch(e){} }, 1400);
+    }catch(e){ errAnota(e,'L9514') } }, 1400);
     return corrigidas;
   }catch(e){ if(DEBUG) console.log('reparaPRs', e); return 0; }
 }
@@ -9488,11 +9587,11 @@ function publicaCustomsIniciais(){
     try{
       Object.values(S.custom||{}).forEach(c=>{ if(c && c.custom && !c.oc && !c.ocultoPub && !c.foto && fotoIrma(c)) EXSPUB.publicaUm(c); });
       S.cfg.exsIrma1=1; salva('cfg'); NET.agenda('app/cfg', S.cfg);
-    }catch(e){}
+    }catch(e){ errAnota(e,'L9551') }
   }
   if(S.cfg.exsPubInit) return;
   if(!S.auth || !S.perfil?.user) return;
-  try{ EXSPUB.sincronizaTodos(); S.cfg.exsPubInit=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); }catch(e){}
+  try{ EXSPUB.sincronizaTodos(); S.cfg.exsPubInit=1; salva('cfg'); NET.agenda('app/cfg', S.cfg); }catch(e){ errAnota(e,'L9555') }
 }
 function corrigeTiposCustoms(){
   const LOAD=['anilha','halter','barra','maquina','cabo','kettlebell','smith','polia','barra-w'];
@@ -9555,14 +9654,14 @@ async function hidrataSocial(){
       });
     }
     if(mudou){ salva('social'); if(['inicio','perfil','perfilAmigo'].includes(UI.telaAtual)) UI.refaz(); }
-  }catch(e){}
+  }catch(e){ errAnota(e,'L9618') }
 }
 const ROTPUB = {
   pode(){ return !!(S.auth && S.perfil?.user && S.cfg.rotPub!==false); },
   envia(r){
     if(!ROTPUB.pode()||!r) return;
     if(r.apagada){ ROTPUB.remove(r.id); return; }   // apagada sai, nao entra
-    NET.agenda('/rotinasPub/'+S.auth.uid+'/'+r.id, pubRotina(r));
+    { const pr=pubRotina(r); if(pr && typeof pr.titulo==='string') pr.titulo=pr.titulo.slice(0,200); NET.agenda('/rotinasPub/'+S.auth.uid+'/'+r.id, pr); }
   },
   remove(id){ if(S.auth && S.perfil?.user) NET.agenda('/rotinasPub/'+S.auth.uid+'/'+id, null); },
   // as pastas viram um nó reservado, pra quem visita ver a organização real
@@ -9585,7 +9684,7 @@ const ROTPUB = {
     try{
       const nuv=await NET.get('/rotinasPub/'+S.auth.uid);
       Object.keys(nuv||{}).forEach(k=>{ if(k.charAt(0)!=='_' && !ativas[k]) ROTPUB.remove(k); });   // '_p', '_prs': nao sao fichas
-    }catch(e){}
+    }catch(e){ errAnota(e,'L9648') }
   }
 };
 
@@ -9754,7 +9853,7 @@ const ASSIST = {
       return {titulo:mod.n, ex};
     });
     ASSIST.ficha={split, rotinas, resumo:{objetivo:r.objetivo, dias:r.dias, nivel:r.nivel, foco:r.foco, cardio:cardioFim, local:r.local}};
-    try{ S.cfg.assistResp={objetivo:r.objetivo,dias:r.dias,foco:r.foco,cardio:r.cardio,local:r.local,duracao:r.duracao,nivel:r.nivel}; S.cfg.atualizado=agora(); salva('cfg'); }catch(e){}
+    try{ S.cfg.assistResp={objetivo:r.objetivo,dias:r.dias,foco:r.foco,cardio:r.cardio,local:r.local,duracao:r.duracao,nivel:r.nivel}; S.cfg.atualizado=agora(); salva('cfg'); }catch(e){ errAnota(e,'L9817') }
   },
 
   trocaExercicio(ri, ei){
@@ -10109,7 +10208,7 @@ const CONTA = {
   wipeLocal(){
     // Dados da conta nunca atravessam uma troca de usuário. Mantemos apenas
     // identidade deste aparelho, preferências locais de push e o catálogo-base.
-    const manter=new Set(['tg_dev','tg_pushDev','tg_bib','tg_bibv','tg_debug','tg_errlog']);
+    const manter=new Set(['tg_dev','tg_pushDev','tg_bib','tg_bibv','tg_debug','tg_errlog','tg_errpego']);
     Object.keys(localStorage).filter(k=>k.startsWith('tg_')&&!manter.has(k)).forEach(k=>localStorage.removeItem(k));
     const cfgAnt=S.cfg||{};
     S.perfil=null; S.rotinas={}; S.pastas={}; S.treinos={}; S.prs={}; S.custom={}; S.medidas={};
@@ -10176,7 +10275,7 @@ const CONTA = {
         }catch(err){
           if(mexeu){
             CONTA.restoreLocal(snap);
-            try{ sessionStorage.setItem('tg_login_erro',err.message||'Não foi possível baixar a conta. Seus dados locais foram preservados.'); }catch(e){}
+            try{ sessionStorage.setItem('tg_login_erro',err.message||'Não foi possível baixar a conta. Seus dados locais foram preservados.'); }catch(e){ errAnota(e,'L10239') }
             location.reload(); return;
           }
           UI.toast(err.message||'Erro ao entrar'); this.disabled=false; this.removeAttribute('aria-busy'); this.textContent='Entrar';
@@ -10231,14 +10330,14 @@ const CONTA = {
     // exclusao principal continua funcionando.
     const completa=['/fotos/'+u, '/comentarios/'+u, '/curtidas/'+u, '/seguidores/'+u]
       .concat(Object.keys(seguidores).map(f=>'/seguindo/'+f+'/'+u));
-    for(const p of completa){ try{ await NET.fetchT(NET.caminho(p)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){} }
+    for(const p of completa){ try{ await NET.fetchT(NET.caminho(p)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){ errAnota(e,'L10294') } }
     try{ const ds=Object.assign({}, await DUELO.consulta('a'), await DUELO.consulta('b'));
-      for(const did of Object.keys(ds)){ try{ await NET.fetchT(NET.caminho('/duelos/'+did)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){} } }catch(e){}
+      for(const did of Object.keys(ds)){ try{ await NET.fetchT(NET.caminho('/duelos/'+did)+'?auth='+tk,{method:'DELETE'},10000); }catch(e){ errAnota(e,'L10296') } } }catch(e){ errAnota(e,'L10296') }
     // apaga a credencial no Firebase Auth (a conta deixa de existir)
     const r=await NET.fetchT('https://identitytoolkit.googleapis.com/v1/accounts:delete?key='+FB.key,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken:tk})},20000);
     if(!r.ok){
-      let c=''; try{ c=(await r.json()).error?.message||''; }catch(e){}
+      let c=''; try{ c=(await r.json()).error?.message||''; }catch(e){ errAnota(e,'L10301') }
       throw new Error(c.includes('CREDENTIAL_TOO_OLD')
         ? 'Os dados foram apagados, mas a sessão precisa ser confirmada novamente para remover o acesso. Tente de novo sem sair da conta.'
         : 'Os dados foram apagados, mas a credencial ainda precisa ser removida. Tente novamente sem sair da conta.');
@@ -10285,7 +10384,7 @@ const CONTA = {
         this.disabled=true; this.textContent='Saindo...';
         if(PUSHDEV.tok() && S.auth){
           try{ await Promise.race([ NET.putD('/usuarios/'+S.auth.uid+'/fcm/'+PUSHDEV.tok(), null),
-                                    new Promise(r=>setTimeout(r,4000)) ]); }catch(e){}
+                                    new Promise(r=>setTimeout(r,4000)) ]); }catch(e){ errAnota(e,'L10348') }
         }
         Object.keys(localStorage).filter(k=>k.startsWith('tg_')).forEach(k=>localStorage.removeItem(k));
         location.reload();
@@ -10324,7 +10423,7 @@ async function migraVisibilidadeFeed(){
 }
 
 function resumoTreino(t){
-  const r0={ id:t.id, v:2, nome:S.perfil?.nome||'Atleta', user:S.perfil?.user||'', titulo:t.titulo,
+  const r0={ id:t.id, v:2, nome:String(S.perfil?.nome||'Atleta').slice(0,100), user:String(S.perfil?.user||'').slice(0,40), titulo:String(t.titulo||'').slice(0,200),
     inicio:t.inicio, fim:t.fim, volume:t.volume||0, series:t.series||0, recordes:t.recordes||0,
     ex:(t.ex||[]).map(e=>({ id:e.exId, n:BIB.ex(e.exId).n, g:BIB.ex(e.exId).g, s:e.series.length,
       sr:e.series.map(s=>{ const o={t:s.tipo, k:s.kg, r:s.reps}; if(s.pr) o.p=s.pr; if(s.rpe) o.rpe=s.rpe; return o; }) })),
@@ -10332,7 +10431,7 @@ function resumoTreino(t){
   if(t.temFoto) r0.f=1;
   if(t.dueloInfo){ r0.duelo={id:t.dueloInfo.id, modo:t.dueloInfo.modo, com:(t.dueloInfo.com||[]).slice(0,2), res:t.dueloInfo.res||''}; if(t.dueloInfo.pub) r0.duelo.pub=t.dueloInfo.pub; }
   if(t.academia && t.academia.n){
-    r0.acad={n:t.academia.n, id:t.academia.id||null};
+    r0.acad={n:String(t.academia.n||'').slice(0,120), id:t.academia.id||null};
     // coordenada do LUGAR (publica) pra quem ve poder abrir no mapa
     if(t.academia.lat!=null){ r0.acad.lat=t.academia.lat; r0.acad.lon=t.academia.lon; }
   }
@@ -10354,7 +10453,7 @@ const USERNAME = {
         try{
           const dono=await NET.get('/usernames/'+u);
           if(dono && dono!==S.auth.uid){ UI.toast('Esse nome de usuário já está em uso.'); this.disabled=false; this.textContent='Salvar'; return; }
-          if(atual && atual!==u){ try{ await NET.putD('/usernames/'+atual, null); }catch(e){} }
+          if(atual && atual!==u){ try{ await NET.putD('/usernames/'+atual, null); }catch(e){ errAnota(e,'L10417') } }
           await NET.putD('/usernames/'+u, S.auth.uid);
           if(!S.perfil) S.perfil={criado:agora()};
           S.perfil.user=u; S.perfil.atualizado=agora(); salva('perfil');
@@ -10492,14 +10591,14 @@ const FEED = {
     if(FEED._hidratado) return;
     try{ const c=JSON.parse(localStorage.getItem('tg_feedcache')||'null');
       if(c && c.amigos){ FEED.amigos=c.amigos; FEED.curt=c.curt||{}; FEED.com=c.com||{}; FEED.perfis=c.perfis||FEED.perfis; }
-    }catch(e){}
+    }catch(e){ errAnota(e,'L10555') }
     FEED._hidratado=true;
   },
   salvaCache(){
     try{ const donos=Object.keys(FEED.amigos); const amigos={};
       donos.forEach(d=>{ amigos[d]=(FEED.amigos[d]||[]).slice(0,25); });
       localStorage.setItem('tg_feedcache', JSON.stringify({amigos, curt:FEED.curt, com:FEED.com, perfis:FEED.perfis, ts:Date.now()}));
-    }catch(e){}
+    }catch(e){ errAnota(e,'L10562') }
   },
   async carrega(){
     if(!S.auth) return;
@@ -10635,7 +10734,7 @@ const SOCIALVIEW = {
       if(tipo==='seguindo' && S.auth && alvo===S.auth.uid) ids=Object.keys(S.social.seguindo||{});
       else ids=Object.keys(await NET.get('/'+tipo+'/'+alvo)||{});
       if(!FEED.perfis) FEED.perfis=await NET.get('/perfis')||{};
-    }catch(e){}
+    }catch(e){ errAnota(e,'L10698') }
     const linhas = ids.map(u=>{
       const pub=(FEED.perfis||{})[u]||{};
       const loc=(S.social.seguindo||{})[u]||{};        // o que guardei localmente ao seguir
@@ -10806,7 +10905,7 @@ TELAS.boasVindas = function(){
       this.textContent='Preparando…';
       S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
       TERMOS.marca();
-      try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
+      try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){ errAnota(e,'L10869') }
       this.textContent='Criar conta com e-mail';
       CONTA.folhaCriar();
     }},'Criar conta com e-mail'),
@@ -10815,7 +10914,7 @@ TELAS.boasVindas = function(){
       this.textContent='Preparando…';
       S.perfil={nome:n, criado:agora(), atualizado:agora()}; salva('perfil');
       TERMOS.marca();
-      try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){}
+      try{ if(!S.auth) await NET.signup(); NET.agenda('app/perfil', S.perfil); }catch(e){ errAnota(e,'L10878') }
       UI.vai('inicio',null,false);
     }},'Começar sem conta'),
     h('button',{class:'btn btn-mini',style:'background:none;border:none;color:var(--azul)',onclick:()=>CONTA.folhaEntrar()},
@@ -10825,24 +10924,24 @@ TELAS.boasVindas = function(){
 
 /* ---------- inicialização ---------- */
 (async function boot(){
-  try{ await BIB.carrega(); }catch(e){}
+  try{ await BIB.carrega(); }catch(e){ errAnota(e,'L10888') }
   $('#fantasma').remove();
   if(!S.perfil || !S.perfil.nome){ UI.vai('boasVindas',null,false); }
-  else if(!TERMOS.aceitou()){ setTimeout(()=>{ try{ TERMOS.folhaObrigatoria(); }catch(e){} }, 700); }
+  else if(!TERMOS.aceitou()){ setTimeout(()=>{ try{ TERMOS.folhaObrigatoria(); }catch(e){ errAnota(e,'L10891') } }, 700); }
   else if(S.ativo){ UI.vai('ativo',null,false); }
   else UI.vai('inicio',null,false);
   try{
     const erroLogin=sessionStorage.getItem('tg_login_erro');
     if(erroLogin){ sessionStorage.removeItem('tg_login_erro'); setTimeout(()=>UI.toast(erroLogin,true),500); }
-  }catch(e){}
+  }catch(e){ errAnota(e,'L10897') }
   // novidades: depois que a nuvem desceu, e nunca por cima dos termos
   setTimeout(()=>{ try{
     if(TERMOS.aceitou() && NOVIDADES.deveMostrar()) NOVIDADES.folha();
-  }catch(e){} }, 2600);
+  }catch(e){ errAnota(e,'L10901') } }, 2600);
   // rede em segundo plano
-  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){} await migraVisibilidadeFeed(); migraAlias(); migraCorrecoes(); migraZerarNoTreino(); NET.despacha(); try{ DUELO.boot(); }catch(e){} ROTPUB.syncTudo(); hidrataSocial(); limpaCustomsDuplicados(); corrigeTiposCustoms(); vinculaRidPorTitulo(); publicaCustomsIniciais(); corrigePastasOrfas(); recuperaExsOrfaos(); reconciliaRecordes(); reparaPRsFantasma(); migraRecordeCarga(); FOTOFIT.reparaFila(); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
-setTimeout(()=>{ try{ FPROG.migra(); }catch(e){} }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){} })();
-  if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
+  (async()=>{ try{ if(!S.auth && S.perfil) await NET.signup(); await NET.puxa(); try{ PRSPUB.publica(); }catch(e){ errAnota(e,'L10903') } await migraVisibilidadeFeed(); passo('migraAlias', ()=>migraAlias()); passo('migraCorrecoes', ()=>migraCorrecoes()); passo('migraZerarNoTreino', ()=>migraZerarNoTreino()); passo('despacha', ()=>NET.despacha()); passo('DUELO.boot', ()=>DUELO.boot()); passo('ROTPUB.syncTudo', ()=>ROTPUB.syncTudo()); passo('hidrataSocial', ()=>hidrataSocial()); passo('limpaCustomsDuplicados', ()=>limpaCustomsDuplicados()); passo('corrigeTiposCustoms', ()=>corrigeTiposCustoms()); passo('vinculaRidPorTitulo', ()=>vinculaRidPorTitulo()); passo('publicaCustomsIniciais', ()=>publicaCustomsIniciais()); passo('corrigePastasOrfas', ()=>corrigePastasOrfas()); passo('recuperaExsOrfaos', ()=>recuperaExsOrfaos()); passo('reconciliaRecordes', ()=>reconciliaRecordes()); passo('reparaPRsFantasma', ()=>reparaPRsFantasma()); passo('migraRecordeCarga', ()=>migraRecordeCarga()); passo('FOTOFIT.reparaFila', ()=>FOTOFIT.reparaFila()); setTimeout(()=>PUSH.renova(), 2500); setTimeout(()=>DESC.checaServidor(), 3000);
+setTimeout(()=>{ try{ FPROG.migra(); }catch(e){ errAnota(e,'L10904') } }, 6000); setTimeout(()=>autocuraNuvem(), 4000); }catch(e){ errAnota(e,'L10904') } })();
+  if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){ errAnota(e,'L10905') } }
 })();
 </script>
 </body>

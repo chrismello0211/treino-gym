@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as vm from 'node:vm';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const EXPECTED_VERSION = '11.39.1';
+const EXPECTED_VERSION = '11.40.0';
 const SITE_BASE = new URL('https://forgex.local/');
 const failures = [];
 const successes = [];
@@ -42,7 +42,10 @@ function parseJson(relativePath, source) {
   }
 }
 
-const indexHtml = read('index.html');
+const indexHtmlBruto = read('index.html');
+// Desde a 11.40 os tratamentos de erro vazios registram o erro (errAnota). Para as travas antigas, que citam
+// trechos com o tratamento vazio, o registro equivale ao vazio (o comportamento e' o mesmo: o erro e' tratado).
+const indexHtml = indexHtmlBruto.replace(/catch\((\w+)\)\{ errAnota\(\1,'L\d+'\) \}/g, 'catch($1){}');
 const swSource = read('sw.js');
 const manifest = parseJson('manifest.webmanifest', read('manifest.webmanifest'));
 const exercises = parseJson('exercicios.json', read('exercicios.json'));
@@ -198,7 +201,7 @@ check(!/\.navigate\s*\(/.test(swSource), 'notificacao nao recarrega o app', 'cli
     'as regras recusam ao dono o no inteiro de: ' + recusados.join(', ') + ' (a operacao atomica falharia)');
   check(indexHtml.includes("limpa['fotos/'+u+'/'+tid]=null") && indexHtml.includes("limpa['fotos/'+u+'/prog_'+id]=null"), 'fotos apagadas uma por uma na exclusao');
 }
-check(indexHtml.includes('CORE.zeraRecordes = function') && /onclick:\(\)=>\{[^}]*CORE\.zeraRecordes\(id\)/.test(indexHtml) && indexHtml.includes('migraZerarNoTreino(); NET.despacha()'),
+check(indexHtml.includes('CORE.zeraRecordes = function') && /onclick:\(\)=>\{[^}]*CORE\.zeraRecordes\(id\)/.test(indexHtml) && indexHtml.includes("passo('migraZerarNoTreino', ()=>migraZerarNoTreino());"),
   'zerar no meio do treino vira estreia (sem medalha automatica)', 'o treino em que se zerou precisa ser a 1a sessao depois do zerar');
 check(!indexHtml.includes("(!s.kg||!s.reps)){ UI.toast('Preencha kg e reps") && indexHtml.includes('semCargaExterna'),
   'serie sem carga pode ser marcada e nao gera recorde', 'como no Hevy: carga opcional, mas sem medalha de repeticao em exercicio de carga');
@@ -234,14 +237,27 @@ check(indexHtml.includes("if(bx[kk]!==undefined) return bx[kk]===ex? Number(b) :
 check(indexHtml.includes('ajuda(modo){') && indexHtml.includes('resumoPub(d, r){') && indexHtml.includes('DUELO.abreResumo(du.pub)') && indexHtml.includes("r0.duelo.pub=t.dueloInfo.pub") && indexHtml.includes('blocoRes(nome, badge, linhas){'), 'duelo: criterio explicado, resultado visivel pra quem segue (pelo feed) e visual novo', 'nao dava pra ver o duelo pela publicacao dos outros nem entender o criterio');
 check(!indexHtml.includes('SUSPEITO') && indexHtml.includes("if(val>0) v.push(val); });") && !indexHtml.includes('provável erro de digitação') && indexHtml.includes("d.resultado.v!==4) DUELO.fecha(d)"), 'duelo: nenhuma serie e descartada (o app nao supoe erro de digitacao); duelos refeitos', 'o filtro de 1,6x o normal jogava fora series de verdade');
 check(indexHtml.includes("const f=await NET.get('/duelos/'+d.id); if(f && f.id) d=f;") && indexHtml.includes("if(como==='desistiu' && d.a===DUELO.meu() && DUELO.outros(d).every(u=>!DUELO.entrou(d,u)))") && indexHtml.includes("x.a===S.auth.uid && x.status==='convite'") && indexHtml.includes('#duelo-barra .duelo-chip{max-width:100%'), 'duelo: aceitar confere o servidor, abandonar sozinho cancela, convite novo cancela os antigos, barra sem sobreposicao', 'o Chris entrou num duelo morto onde a Mari aparecia como desistiu');
-check(indexHtml.includes("(tp==='kg' && v===melhor[tp].v && reps>(Number(melhor[tp].s.reps)||0))") && indexHtml.includes('prs[e.exId].kg={v:info.v, tid:t.id, data:t.inicio, r:Number(info.s.reps)||0};') && indexHtml.includes('repsDoKg(exId, pk){') && indexHtml.includes('migraRecordeCarga();'), 'recorde de maior carga: empatou na carga, vale a serie com mais repeticoes (igual ao 1RM)', 'Rafael: maior carga mostrava 101x4 e o 1RM 101x6');
+check(indexHtml.includes("(tp==='kg' && v===melhor[tp].v && reps>(Number(melhor[tp].s.reps)||0))") && indexHtml.includes('prs[e.exId].kg={v:info.v, tid:t.id, data:t.inicio, r:Number(info.s.reps)||0};') && indexHtml.includes('repsDoKg(exId, pk){') && indexHtml.includes("passo('migraRecordeCarga', ()=>migraRecordeCarga());"), 'recorde de maior carga: empatou na carga, vale a serie com mais repeticoes (igual ao 1RM)', 'Rafael: maior carga mostrava 101x4 e o 1RM 101x6');
 check(indexHtml.includes('ARRASTAFOLHA.solta();') && indexHtml.includes('_limpaFolha(){') && indexHtml.includes('UI._confereFolha(0);') && indexHtml.includes('clearTimeout(UI._confT); UI._limpaFolha();'), 'menu nunca fica preso fora da tela (arrasto interrompido desfeito; abrir/fechar limpa; confere se ficou visivel)', 'iPhone: menu do exercicio sumia, tela escura e travada ate reabrir o app');
-check(indexHtml.includes('negado=/permission denied/i.test(tx') && indexHtml.includes('(r.status!==401 || negado)') && indexHtml.includes('const FOTOFIT = {') && indexHtml.includes('FOTOFIT.reparaFila();') && indexHtml.includes('const BASEFIX = {') && indexHtml.includes('#timerbar,#tabbar{translate:0 var(--lift,0px)}'), 'fila: recusa de regra nao fica pra sempre (foto e recomprimida); cronometro nao fica levantado no meio da tela', 'iPhone do Chris: foto recusada 809 vezes; cronometro no meio da tela');
+check(indexHtml.includes('negado=/permission denied/i.test(tx') && indexHtml.includes('(r.status!==401 || negado)') && indexHtml.includes('const FOTOFIT = {') && indexHtml.includes("passo('FOTOFIT.reparaFila', ()=>FOTOFIT.reparaFila());") && indexHtml.includes('const BASEFIX = {') && indexHtml.includes('#timerbar,#tabbar{translate:0 var(--lift,0px)}'), 'fila: recusa de regra nao fica pra sempre (foto e recomprimida); cronometro nao fica levantado no meio da tela', 'iPhone do Chris: foto recusada 809 vezes; cronometro no meio da tela');
 check(indexHtml.includes("if(sobre){ $('#folha').inert=false; FOLHA2.el.inert=true; }") && indexHtml.includes("FOLHA2.el.inert=false; $('#folha').inert=true;"), 'editar treino finalizado: a escolha de exercicio por cima da edicao recebe os toques (busca e itens)', 'Rafael e Chris: a busca fechava a lista e tocar num exercicio nao adicionava');
 check(indexHtml.includes("const iphoneApp = navigator.standalone===true && /iPhone|iPad|iPod/.test(navigator.userAgent||'');") && indexHtml.includes('(iphoneApp && !temFocoDeTexto() && lift>150 && lift<700)'), 'compensacao da base so no iPhone instalado e so no tamanho de teclado (Android perdia a barra de abas)', 'Android: barra de abas sumiu na 11.38.5');
 check(indexHtml.includes('#topo .btn-mini{min-height:44px;min-width:44px}') && indexHtml.includes('.srow input{min-height:44px}') && indexHtml.includes('.feed-mais{min-width:44px;min-height:44px') && indexHtml.includes(".stipo::after,.scheck::after{content:'';position:absolute;inset:-4px}"), 'alvos de toque de 44 pontos no treino em andamento e no feed', 'auditoria: 86 elementos abaixo do minimo no treino em andamento');
 check(indexHtml.includes('const IMGFALHA = {') && indexHtml.includes('el.replaceWith(ini);') && indexHtml.includes("class:'ex-hero-falha'"), 'imagem que nao carrega mostra substituto na hora (nunca o icone de imagem quebrada)', 'auditoria: icone de imagem quebrada sem internet');
 check(indexHtml.includes('salva(t, ex, confirmado){') && indexHtml.includes("'Voltar e preencher'"), 'editar treino: aviso antes de salvar com exercicio sem serie', 'auditoria: exercicio vazio sumia ao salvar sem aviso');
+check(indexHtmlBruto.includes('function errAnota(e, onde){') && !/catch\(\w+\)\{\s*\}/.test(indexHtmlBruto.replace(/catch\(_x\)\{\}/g,'')) && indexHtmlBruto.includes("Erros tratados (o app seguiu funcionando):"), 'nenhum erro e engolido em silencio: todo tratamento registra no diagnostico', 'auditoria: 175 tratamentos vazios');
+check(indexHtml.includes("passo('DUELO.boot', ()=>DUELO.boot());") && indexHtml.includes("passo('FOTOFIT.reparaFila', ()=>FOTOFIT.reparaFila());"), 'abertura com etapas isoladas (uma falha nao derruba as seguintes)', 'auditoria: uma rotina quebrando pulava todas as seguintes');
+check(indexHtml.includes("FEED._lotes={total:its.length") && indexHtml.includes('UI._rolagemAlvo = rolagem||0;'), 'Inicio: feed em lotes, respeitando a posicao do voltar', 'auditoria: 82 cartoes e 5.700 elementos de uma vez');
+check(indexHtml.includes('const _cs=cardSemana(destaque);') && indexHtml.includes('function cardSemana(semConvite){'), 'Inicio: um destaque por vez no topo (proximo treino sempre)', 'auditoria: tres chamados disputando o topo');
+check(indexHtml.includes('.fstat-k,.cab-ta .k,.pr-base,.anterior,.gtab.cab,.tab{font-size:12px!important}'), 'rotulos dos numeros com 12 px ou mais', 'auditoria: rotulos de 10 a 11,5 px');
+check(indexHtml.includes('const SUGCARGA = {') && indexHtml.includes('SUGCARGA.dica(e),'), 'carga sugerida (dupla progressao) no treino em andamento', 'auditoria: faltava sugerir a carga');
+check(indexHtml.includes('_ancora(){') && indexHtml.includes("UI.vai(ant[0], ant[1], false, ant[2]||0, ant[3]||null)") && !indexHtml.includes("class:'sug-x',style:'position:static"), 'voltar devolve ao mesmo cartao do feed; o x solto nao cobre o cartao inteiro', 'tocar em Usar/Ver relatorio caia no x de dispensar');
+check(indexHtml.includes('.feed-ex .thumb-ini{width:44px;height:44px') && indexHtml.includes('.reo-row .thumb-ini{width:38px;height:38px'), 'iniciais do mesmo tamanho da miniatura (o feed nao pula sem internet)', 'iniciais de 52 no lugar de miniatura de 44');
+{
+  let regras = null; try { regras = JSON.parse(read('regras-firebase.json')).rules; } catch (e) {}
+  const ok = !!regras && /<= 200/.test(JSON.stringify(regras.feed||{})) && /< 300000/.test(JSON.stringify(regras.exsPub||{})) && /<= 200/.test(JSON.stringify(regras.rotinasPub||{}));
+  check(ok, 'regras: limite de tamanho nos textos do feed, das fichas e dos exercicios publicos', 'auditoria: gravacoes sem limite');
+}
 {
   // o arquivo de regras tem que estar igual ao banco: sem as regras dos duelos, publica-lo quebraria os duelos
   let regras = null; try { regras = JSON.parse(read('regras-firebase.json')).rules; } catch (e) {}

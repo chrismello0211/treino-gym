@@ -24,7 +24,23 @@
       "$uid": {
         ".read": "auth != null",
         ".write": "auth.uid === $uid",
-        ".indexOn": "inicio"
+        ".indexOn": "inicio",
+        "$tid": {
+          "titulo": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          },
+          "nome": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
+          },
+          "user": {
+            ".validate": "newData.isString() && newData.val().length <= 40"
+          },
+          "acad": {
+            "n": {
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            }
+          }
+        }
       }
     },
     "seguindo": {
@@ -84,13 +100,26 @@
     "rotinasPub": {
       "$dono": {
         ".read": "auth != null",
-        ".write": "auth.uid === $dono"
+        ".write": "auth.uid === $dono",
+        "$rid": {
+          "titulo": {
+            ".validate": "newData.isString() && newData.val().length <= 200"
+          }
+        }
       }
     },
     "exsPub": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth.uid === $uid"
+        ".write": "auth.uid === $uid",
+        "$id": {
+          "n": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "foto": {
+            ".validate": "newData.isString() && newData.val().length < 300000"
+          }
+        }
       }
     },
     "denuncias": {

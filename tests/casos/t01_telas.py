@@ -40,6 +40,10 @@ def rodar(pw, R):
                 if p.evaluate("/Algo deu errado nesta tela/.test(document.getElementById('main').textContent)"): ruins.append(rot_tela + ': erro')
                 if p.evaluate("document.documentElement.scrollWidth>innerWidth+1"): ruins.append(rot_tela + ': vaza')
             R.ok('%s: %d telas abrem sem erro e sem vazar' % (nome, len(telas)), not ruins, ruins)
+            # topo do treino em andamento: nenhum numero ou rotulo cortado (os rotulos cresceram pra 12 px na 11.40)
+            p.evaluate("try{UI.fechaFolha();FOLHA2.fecha()}catch(e){}; S.ativo=%s; salva('ativo'); UI.vai('ativo',null,false)" % json.dumps(ativo)); p.wait_for_timeout(500)
+            cortados = p.evaluate("[...document.querySelectorAll('.cab-ta .k, .cab-ta .v')].filter(e=>e.scrollWidth>e.clientWidth+1).map(e=>e.textContent.trim())")
+            R.ok('%s: topo do treino sem numero ou rotulo cortado' % nome, not cortados, cortados)
             R.ok('%s: sem erros de JavaScript' % nome, not p.erros, p.erros[:2])
         finally:
             A.fecha()

@@ -24,7 +24,7 @@ def ex_por_nome(nome):
     for x in CATALOGO:
         if x['n'] == nome:
             return x['id']
-    raise SystemExit('exercicio fora do catalogo: ' + nome)
+    raise ValueError('exercicio fora do catalogo: ' + nome)   # ValueError (e nao SystemExit): falha so o caso, com relatorio
 
 
 def ex_de_peso(n, pular=0):

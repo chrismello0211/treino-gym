@@ -258,6 +258,7 @@ input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .aviso-pub{color:var(--warn);margin:-8px 2px 14px;line-height:1.45}
 .cartao-naopub{border:1px solid var(--warn)}
 .duelo-pessoa{min-width:0}
+.anterior.plano-alto{color:var(--brand);font-weight:700}
 /* as iniciais (quando a animacao nao carrega) tem o MESMO tamanho da miniatura em cada lugar: antes, no feed
    (44) e no reordenar (38) as iniciais tinham 52 e cada troca empurrava o cartao pra baixo */
 .feed-ex .thumb-ini{width:44px;height:44px;font-size:14px}
@@ -755,7 +756,7 @@ let DEBUG=false;
   window.__errbar_mostra=mostra;
 })();
 
-const APP_VER='11.44.0';
+const APP_VER='11.44.1';
 // Registro dos erros TRATADOS (antes engolidos em silencio): aparecem no diagnostico como "Erros tratados".
 // Funcao declarada (nao const): fica disponivel desde o inicio do script, inclusive em codigo que roda antes daqui.
 function errAnota(e, onde){
@@ -3203,6 +3204,33 @@ const ATIVO = {
     salva('ativo'); try{ SYNCATIVO.sobeJa(); }catch(e){ errAnota(e,'L3171') }
     UI.pilha=[]; UI.vai('ativo',null,false);
   },
+  // Referencia de cada serie (o que a caixa sugere e o ✓ assume se ficar vazia):
+  // 1) o que a pessoa fez nessa serie da ultima vez; 2) a carga-alvo da ficha, SE plausivel (ate 25% acima da
+  // maior carga dela no exercicio); 3) senao, a serie de cima deste treino.
+  // (Rafael: ficha com 160 kg na puxada, recorde 103: a caixa sugeria 160 e o ✓ sem digitar gravaria 160.)
+  planoAlto(e, s){
+    const p=Number(s && s._planKg); if(!(p>0)) return false;
+    const rec=Number(((((S.prs||{})[e.exId])||{}).kg||{}).v)||0;
+    const hoje=Math.max(0, ...(e.series||[]).filter(q=>q.ok).map(q=>Number(q.kg)||0));
+    const base=Math.max(rec, hoje);
+    return base>0 && p > base*1.25;
+  },
+  refDeCima(e, si){
+    for(let j=si-1;j>=0;j--){
+      const q=e.series[j]; if(!q || q.tipo==='W') continue;
+      if(q.kg!=='' && q.kg!=null) return {kg:q.kg, reps:(q.reps!=='' && q.reps!=null)? q.reps : null};
+      const a=ATIVO.serieAnterior(e.exId, j); if(a && a.kg!=null && a.kg!=='') return {kg:a.kg, reps:a.reps};
+      if(q._planKg!=null && !ATIVO.planoAlto(e, q)) return {kg:q._planKg, reps:q._planReps};
+    }
+    return null;
+  },
+  ref(e, si){
+    const s=e.series[si]||{}, ant=ATIVO.serieAnterior(e.exId, si), alto=ATIVO.planoAlto(e, s);
+    const cima=(!ant && alto)? ATIVO.refDeCima(e, si) : null;
+    const kg=(ant && ant.kg!=null && ant.kg!=='')? ant.kg : ((s._planKg!=null && !alto)? s._planKg : (cima? cima.kg : null));
+    const reps=(ant && ant.reps!=null && ant.reps!=='')? ant.reps : (s._planReps!=null? s._planReps : (cima? cima.reps : null));
+    return {ant, kg, reps, alto};
+  },
   serieAnterior(exId, si){
     const ts=Object.values(S.treinos).sort((a,b)=>b.inicio-a.inicio);
     for(const t of ts){
@@ -3217,9 +3245,8 @@ const ATIVO = {
     if(!s.ok){
       // se o campo está vazio mas há referência (o placeholder do anterior/planejado), assume ela ao dar check
       const si0 = e.series.indexOf(s);
-      const ant0 = ATIVO.serieAnterior(e.exId, si0);
-      const refKg0 = (ant0 && ant0.kg!=null && ant0.kg!=='') ? ant0.kg : (s._planKg!=null? s._planKg : null);
-      const refReps0 = (ant0 && ant0.reps!=null && ant0.reps!=='') ? ant0.reps : (s._planReps!=null? s._planReps : null);
+      const R0 = ATIVO.ref(e, si0);
+      const refKg0 = R0.kg, refReps0 = R0.reps;
       if((s.kg===''||s.kg==null) && refKg0!=null && !pcEx) s.kg=refKg0;
       if((s.reps===''||s.reps==null) && refReps0!=null) s.reps=refReps0;
       // carga e' opcional, como no Hevy: tem quem so acompanhe repeticoes. Serie
@@ -3690,21 +3717,19 @@ TELAS.ativo = function(){
     const pcEx = x.e==='peso-corporal' && x.t==='peso_reps';
     const ehTempo = x.t==='tempo';
     const ehCardio = ehTempo && x.g==='cardio';
-    const ant=ATIVO.serieAnterior(e.exId, si);
-    // o valor anterior serve só de referência (placeholder). O campo começa vazio;
-    // o que a pessoa não digitar não é gravado — igual ao Hevy.
-    const refKg = (ant && ant.kg!=null && ant.kg!=='') ? ant.kg : (s._planKg!=null? s._planKg : null);
-    const refReps = (ant && ant.reps!=null && ant.reps!=='') ? ant.reps : (s._planReps!=null? s._planReps : null);
+    // o valor de referencia so serve de sugestao (placeholder). O campo comeca vazio.
+    const R0=ATIVO.ref(e, si), ant=R0.ant, refKg=R0.kg, refReps=R0.reps;
     const phKg = refKg!=null ? String(fmtPeso(refKg, unEx(e))) : (pcEx?('+'+unEx(e)):unEx(e));
     const phReps = refReps!=null ? (ehTempo?fmtTempoCampo(refReps):String(refReps)) : (ehTempo?'00:00':'reps');
     const antSemCarga = ant && (ant.kg==null || ant.kg==='' || !(Number(ant.kg)>0));
-    const antTxt = ant ? (x.t==='peso_reps' ? (antSemCarga? ant.reps+' reps' : fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps) : (ehTempo? fmtTempoCampo(ant.reps) : ant.reps+' reps')) : '—';
+    // carga-alvo da ficha fora da realidade: mostra de onde veio, pra pessoa corrigir a ficha
+    const antTxt = ant ? (x.t==='peso_reps' ? (antSemCarga? ant.reps+' reps' : fmtPeso(ant.kg, unEx(e))+unEx(e)+' × '+ant.reps) : (ehTempo? fmtTempoCampo(ant.reps) : ant.reps+' reps')) : (R0.alto? 'ficha: '+fmtPeso(s._planKg, unEx(e))+unEx(e) : '—');
     const row=h('div',{class:'gtab srow'+(s.ok?' feita':'')},
       h('button',{class:'stipo '+s.tipo,'aria-label':'Série '+(numerada||1)+(s.pr&&s.pr.length?' com recorde; ver detalhes':'; ajustar tipo e RPE'),onclick:()=>{ if(s.pr && s.pr.length) folhaPRSerie(x,s,e); else if(!s.ok) tipoRpe(s); }},
         s.tipo==='N'?String(numerada||1):s.tipo,
         s.rpe? h('sup',{class:'rpe'},String(s.rpe)):null,
         (s.pr && s.pr.length)? h('sup',{class:'prm'},MEDALHA):null),
-      h('div',{class:'anterior'+(ant?' tem':''),onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
+      h('div',{class:'anterior'+(ant?' tem':'')+(R0.alto?' plano-alto':''),title:R0.alto?'Carga-alvo da ficha muito acima do seu recorde: corrija a ficha':null,onclick:()=>{ if(!s.ok && (ant || s._planKg!=null || s._planReps!=null)){ if(refKg!=null) s.kg=refKg; if(refReps!=null) s.reps=refReps; salva('ativo'); UI.refaz(); } }}, antTxt),
       x.t==='peso_reps'
         ? h('input',{type:'text',inputmode:'decimal','aria-label':'Carga da série '+(numerada||1)+' de '+x.n+' em '+unEx(e),value:(s.kg==null||s.kg===''?'':fmtPeso(s.kg, unEx(e))),placeholder:phKg,oninput:ev=>{ const raw=ev.target.value.replace(',','.'); s.kg = raw===''?'':(unEx(e)==='lb'? lbParaKg(raw) : raw); salva('ativo');ATIVO.pinta();},disabled:s.ok})
         : (ehTempo && !s.ok
@@ -3959,8 +3984,8 @@ function addAquecimento(e){
   if(x.t!=='peso_reps'){ UI.toast('Aquecimento automático é só pra exercícios com carga'); return; }
   if(e.series.some(s=>s.tipo==='W')){ UI.toast('Esse exercício já tem séries de aquecimento'); return; }
   let base=0;
-  const alvo=e.series.find(s=>s.tipo!=='W' && (s._planKg||s.kg));
-  if(alvo) base=Number(alvo._planKg||alvo.kg)||0;
+  const alvo=e.series.find(s=>s.tipo!=='W' && ((s._planKg && !ATIVO.planoAlto(e, s))||s.kg));
+  if(alvo) base=Number(alvo.kg||(!ATIVO.planoAlto(e, alvo) && alvo._planKg))||0;
   if(!base && S.prs[e.exId] && S.prs[e.exId].kg) base=Number(S.prs[e.exId].kg.v)||0;
   if(!base){ UI.toast('Preencha a carga da primeira série pra eu calcular o aquecimento'); return; }
   const arr=v=>Math.max(0,Math.round(v/2.5)*2.5);
@@ -8980,7 +9005,7 @@ function recuperaViewport(forcado){
   de.style.height='100.02%';
   requestAnimationFrame(()=>{
     de.style.height='';
-    window.scrollTo(0, y);
+    if(Date.now()-(window._rolouEm||0) > 300) window.scrollTo(0, y);   // a pessoa comecou a rolar: nao puxa de volta
     try{
       document.body.classList.remove('kb');
       de.style.setProperty('--kb','0px');
@@ -8990,16 +9015,22 @@ function recuperaViewport(forcado){
 (function(){
   if(!window.visualViewport) return;
   const vv=window.visualViewport;
-  let presoDesde=0;
+  let presoDesde=0, tecladoEm=0;
+  // a "tela presa" so acontece logo depois de um teclado fechar; e nunca se mexe na pagina durante uma rolagem
+  // (antes: no "elastico" do iPhone e na barra do navegador do Android a conta dava sobra, o app puxava a pagina
+  // de volta no meio da rolagem e a tela tremia)
+  window.addEventListener('scroll', ()=>{ window._rolouEm=Date.now(); }, {passive:true});
+  document.addEventListener('focusout', ()=>{ tecladoEm=Date.now(); });
   const aj=()=>{
-    const sobra=Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    const rolando = Date.now()-(window._rolouEm||0) < 900;
+    const sobra=Math.max(0, window.innerHeight - vv.height - Math.max(0, vv.offsetTop));   // offset negativo = elastico
     const comFoco=temFocoDeTexto();
     // sem campo em foco NAO existe teclado aberto: a sobra e' lixo de layout
     const kb = comFoco ? sobra : 0;
     document.documentElement.style.setProperty('--kb', kb+'px');
     document.body.classList.toggle('kb', kb>60);
-    BASEFIX.confere();
-    if(!comFoco && sobra>60){
+    if(!rolando) BASEFIX.confere();
+    if(!comFoco && sobra>60 && !rolando && Date.now()-tecladoEm < 6000){
       if(!presoDesde) presoDesde=Date.now();
       else if(Date.now()-presoDesde>500) { presoDesde=0; recuperaViewport(); }
     } else presoDesde=0;

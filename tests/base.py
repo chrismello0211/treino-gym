@@ -175,7 +175,8 @@ class Ambiente:
         self.nav = pw.chromium.launch()
         self.paginas = []
 
-    def celular(self, seed, largura=393, altura=852, ua=None, tela=None, standalone=False, android_app=False, externo=None, local=None):
+    def celular(self, seed, largura=393, altura=852, ua=None, tela=None, standalone=False, android_app=False, externo=None, local=None, antes=''):
+        # antes: codigo que roda antes do app carregar (ex.: simular a area visivel da tela)
         # local(route, url): intercepta arquivos do proprio app (ex.: simular animacao que nao carrega)
         opts = dict(viewport={'width': largura, 'height': altura}, is_mobile=True, has_touch=True)
         if ua: opts['user_agent'] = ua
@@ -190,7 +191,7 @@ class Ambiente:
                 return r.continue_()
             return (externo or self.fb.rota)(r, r.request)
         ctx.route('**/*', _rota)
-        extra = ''
+        extra = antes or ''
         if standalone:
             extra += "Object.defineProperty(navigator,'standalone',{get:()=>true});"
         if android_app:
